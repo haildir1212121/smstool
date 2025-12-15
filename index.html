@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>DMT/DELUXE - Dispatch Console</title>
+  <title>OmniChat - Dispatch Console</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -20,6 +20,9 @@
     .msg-sent { background:#4f46e5; color:#fff; border-radius:18px 18px 4px 18px; }
     .msg-received { background:#f1f5f9; color:#1e293b; border-radius:18px 18px 18px 4px; }
 
+    /* Show delete button on hover */
+    .msg-group:hover .delete-btn { opacity: 1; }
+
     .fade-in-up { animation: fadeInUp 0.25s ease-out forwards; }
     @keyframes fadeInUp { from { opacity:0; transform:translateY(8px);} to { opacity:1; transform:translateY(0);} }
   </style>
@@ -33,7 +36,7 @@
     <div class="h-16 px-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
       <div class="flex items-center gap-2 text-indigo-600">
         <i class="fa-solid fa-comments text-xl"></i>
-        <span class="font-bold text-lg tracking-tight">DLX/DMT</span>
+        <span class="font-bold text-lg tracking-tight">OmniChat</span>
       </div>
       <div class="flex gap-2 items-center">
         <button onclick="document.getElementById('csvInput').click()" class="p-2 text-slate-400 hover:text-indigo-600 transition" title="Import Contacts CSV">
@@ -128,9 +131,7 @@
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
-      <p class="text-xs text-slate-500 mb-4">
-        Review generated messages. Rows with missing data or no phone numbers are ignored.
-      </p>
+      <p class="text-xs text-slate-500 mb-4">Review generated messages. Rows with missing data or no phone numbers are ignored.</p>
       <div class="border rounded-lg overflow-hidden bg-slate-50">
         <div class="max-h-[50vh] overflow-auto">
           <table class="w-full text-xs">
@@ -149,9 +150,7 @@
         </div>
       </div>
       <div class="flex items-center justify-between mt-4">
-        <div class="text-xs text-slate-500">
-          <span id="assignmentsSummary">0 rows</span>
-        </div>
+        <div class="text-xs text-slate-500"><span id="assignmentsSummary">0 rows</span></div>
         <div class="flex gap-2">
           <button onclick="closeAssignmentsModal()" class="px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Close</button>
           <button id="sendAllAssignmentsBtn" onclick="sendAllAssignments()" class="px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Send All</button>
@@ -164,18 +163,9 @@
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
       <h3 class="text-lg font-bold text-slate-800 mb-4">New Conversation</h3>
       <div class="space-y-4">
-        <div>
-          <label class="block text-xs font-medium text-slate-500 uppercase mb-1">Phone Number</label>
-          <input type="tel" id="newContactPhone" class="w-full border border-slate-300 rounded-lg p-2.5" placeholder="+1XXXXXXXXXX">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-500 uppercase mb-1">Name</label>
-          <input type="text" id="newContactName" class="w-full border border-slate-300 rounded-lg p-2.5" placeholder="Jane Doe">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-500 uppercase mb-1">Tags</label>
-          <input type="text" id="newContactTags" class="w-full border border-slate-300 rounded-lg p-2.5" placeholder="VIP, Staff">
-        </div>
+        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Phone Number</label><input type="tel" id="newContactPhone" class="w-full border border-slate-300 rounded-lg p-2.5" placeholder="+1XXXXXXXXXX"></div>
+        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Name</label><input type="text" id="newContactName" class="w-full border border-slate-300 rounded-lg p-2.5" placeholder="Jane Doe"></div>
+        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Tags</label><input type="text" id="newContactTags" class="w-full border border-slate-300 rounded-lg p-2.5" placeholder="VIP, Staff"></div>
         <div class="flex gap-3 mt-6">
           <button onclick="closeNewMsgModal()" class="flex-1 px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg">Cancel</button>
           <button onclick="createThreadFromModal()" class="flex-1 px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Create</button>
@@ -189,15 +179,8 @@
       <h3 class="text-lg font-bold text-slate-800 mb-1">Thread Info</h3>
       <p id="threadInfoPhone" class="text-xs text-slate-400 mb-4">—</p>
       <div class="space-y-4">
-        <div>
-          <label class="block text-xs font-medium text-slate-500 uppercase mb-1">Name</label>
-          <input type="text" id="threadInfoName" class="w-full border border-slate-300 rounded-lg p-2.5">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-500 uppercase mb-1">Tags</label>
-          <input type="text" id="threadInfoTags" class="w-full border border-slate-300 rounded-lg p-2.5">
-        </div>
-        
+        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Name</label><input type="text" id="threadInfoName" class="w-full border border-slate-300 rounded-lg p-2.5"></div>
+        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Tags</label><input type="text" id="threadInfoTags" class="w-full border border-slate-300 rounded-lg p-2.5"></div>
         <div class="flex gap-3 mt-6 pt-4 border-t border-slate-100">
           <button onclick="deleteActiveThread()" class="flex-1 px-4 py-2 text-white bg-red-500 hover:bg-red-600 rounded-lg">Delete Thread</button>
           <div class="flex-1 flex gap-2">
@@ -217,6 +200,7 @@
   const TWILIO_SEND_URL   = `${SMS_BACKEND_BASE}/send-sms`;
   const TWILIO_GET_URL    = `${SMS_BACKEND_BASE}/get-messages`;
   const TWILIO_DELETE_URL = `${SMS_BACKEND_BASE}/delete-thread`;
+  const TWILIO_DELETE_MSG_URL = `${SMS_BACKEND_BASE}/delete-message`; // NEW
   
   const SHARED_ORG_ID = "dispatch_team_main";
 
@@ -232,7 +216,7 @@
 
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
   import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-  import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp, where, getDocs } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
@@ -248,7 +232,7 @@
     activeThread: null,
     lastInboundSidSeen: new Set(),
     openGroups: new Set(),
-    initialGroupSet: false, // FLAG TO PREVENT ACCORDION RE-OPENING
+    initialGroupSet: false, 
   };
 
   let assignmentsRows = []; 
@@ -277,7 +261,60 @@
   const getMsgsCol    = (id) => collection(db, "organizations", SHARED_ORG_ID, "threads", id, "messages");
 
   // ---------------------------
-  // 4. ASSIGNMENT PARSER
+  // 4. SMART POLLER
+  // ---------------------------
+  async function pollIncomingMessages() {
+    if(!store.uid) return;
+    try {
+        const res = await fetch(TWILIO_GET_URL);
+        const data = await res.json();
+        if(!data.success || !data.messages) return;
+        
+        for(let m of data.messages) {
+            if(store.lastInboundSidSeen.has(m.sid)) continue;
+            store.lastInboundSidSeen.add(m.sid);
+            
+            if(m.direction === 'inbound') {
+                const cleanPhone = normalizePhone(m.from);
+                if(cleanPhone.length > 5) {
+                    
+                    const q = query(getMsgsCol(cleanPhone), where("sid", "==", m.sid));
+                    const querySnap = await getDocs(q);
+                    
+                    if (querySnap.empty) {
+                        await upsertThread(m.from, cleanPhone, ["New"]); 
+                        
+                        await setDoc(doc(getMsgsCol(cleanPhone), m.sid), {
+                            body: m.body, 
+                            direction: "received", 
+                            createdAt: serverTimestamp(), 
+                            sid: m.sid
+                        });
+                        
+                        const threadRef = getThreadDoc(cleanPhone);
+                        const tSnap = await getDoc(threadRef);
+                        const currentUnread = tSnap.exists() ? (tSnap.data().unread || 0) : 0;
+                        
+                        const updates = { 
+                            lastMessageText: m.body, 
+                            lastMessageAtMs: Date.now()
+                        };
+                        
+                        if(store.activeThreadId !== cleanPhone) {
+                            updates.unread = currentUnread + 1;
+                        }
+
+                        await updateDoc(threadRef, updates);
+                        document.getElementById("notifSound").play().catch(()=>{});
+                    }
+                }
+            }
+        }
+    } catch(e) { console.error("Poll error", e); }
+  }
+
+  // ---------------------------
+  // 5. ASSIGNMENT PARSER
   // ---------------------------
   window.handleAssignmentsCsv = async function(input) {
     const file = input.files?.[0];
@@ -289,7 +326,6 @@
     const lines = text.split(/\r?\n/);
     if (lines.length < 4) { alert("CSV seems empty or invalid."); return; }
 
-    // 1. Find Date (Row 1 or Row 2)
     let dateStr = parseCsvLine(lines[0])[0]; 
     if(!dateStr || !/\d/.test(dateStr)) {
         const row2 = parseCsvLine(lines[1]);
@@ -298,62 +334,42 @@
     const dow = getDayOfWeek(dateStr); 
 
     const sectionMap = {
-        "eugene": "DLX-EUG",
-        "roseburg": "RBG",
-        "portland/i-84 corridor": "PDX",
-        "albany/corvallis/salem": "XLB",
-        "direct medical transport": "DMT",
-        "coast": "XCC"
+        "eugene": "DLX-EUG", "roseburg": "RBG", "portland/i-84 corridor": "PDX",
+        "albany/corvallis/salem": "XLB", "direct medical transport": "DMT", "coast": "XCC"
     };
-    
     let currentTag = "Auto-Assign"; 
-
     const contactsMap = await buildContactsMap();
     assignmentsRows = [];
 
-    // 3. Scan Rows
     for (let i = 0; i < lines.length; i++) {
         const parts = parseCsvLine(lines[i]);
         if (parts.length < 5) continue;
 
         const colE = (parts[4] || "").trim();
         const lowerE = colE.toLowerCase();
-        if (sectionMap[lowerE]) {
-            currentTag = sectionMap[lowerE];
-            continue; 
-        }
+        if (sectionMap[lowerE]) { currentTag = sectionMap[lowerE]; continue; }
 
-        const puTime = parts[0] || ""; // A
-        const city   = parts[1] || ""; // B
-        const client = parts[2] || ""; // C
-        let   phone  = parts[3] || ""; // D
-        const name   = parts[4] || ""; // E
-        const tablet = parts[6] || "?"; // G
+        const puTime = parts[0] || ""; 
+        const city   = parts[1] || ""; 
+        const client = parts[2] || ""; 
+        let   phone  = parts[3] || ""; 
+        const name   = parts[4] || ""; 
+        const tablet = parts[6] || "?"; 
 
         if (!puTime || !city || !client) continue; 
         if (!name || name.toLowerCase() === "name" || name.includes("Corridor")) continue;
 
-        if (!phone) {
-            const k = nameKey(name);
-            phone = contactsMap.get(k) || "";
-        }
+        if (!phone) { phone = contactsMap.get(nameKey(name)) || ""; }
         phone = normalizePhone(phone);
 
-        // Msg: "MONDAY: 730 pickup in eugene (test), be signed into your tablet @ 700 to receive ride."
         const msg = `${dow}: ${puTime} pickup in ${city} (${client}), be signed into your tablet @ ${tablet} to receive ride.`;
 
         assignmentsRows.push({
-            driverName: name,
-            phone: phone,
-            city: city,
-            puTime: puTime,
-            tablet: tablet,
-            message: msg,
-            tag: currentTag,
+            driverName: name, phone: phone, city: city, puTime: puTime,
+            tablet: tablet, message: msg, tag: currentTag,
             status: (phone && phone.length > 5) ? "READY" : "NO MATCH"
         });
     }
-
     renderAssignmentsPreview();
     openAssignmentsModal();
   };
@@ -371,18 +387,13 @@
     const tbody = document.getElementById("assignmentsPreview");
     const summary = document.getElementById("assignmentsSummary");
     tbody.innerHTML = "";
-
     const ready = assignmentsRows.filter(r => r.status === "READY").length;
-    
     assignmentsRows.forEach(row => {
         const tr = document.createElement("tr");
         const color = row.status === "READY" ? "text-green-600" : "text-red-500";
         tr.className = "hover:bg-slate-50 transition";
         tr.innerHTML = `
-            <td class="p-2 border-b">
-                <div class="font-bold text-slate-700">${escapeHtml(row.driverName)}</div>
-                <div class="text-[10px] text-indigo-500 font-mono">${row.tag}</div>
-            </td>
+            <td class="p-2 border-b"><div class="font-bold text-slate-700">${escapeHtml(row.driverName)}</div><div class="text-[10px] text-indigo-500 font-mono">${row.tag}</div></td>
             <td class="p-2 border-b font-mono text-slate-500">${row.phone || "—"}</td>
             <td class="p-2 border-b">${row.puTime}</td>
             <td class="p-2 border-b">${row.tablet}</td>
@@ -402,18 +413,14 @@
 
     btn.disabled = true;
     btn.innerText = "Sending...";
-
     let sent = 0;
     for (const row of readyRows) {
         try {
             await sendSmsApi(row.phone, row.message);
             await upsertThread(row.phone, row.driverName, [row.tag]);
-            const threadId = normalizePhone(row.phone);
-            await addMessageToFirestore(threadId, row.message, "sent");
+            await addMessageToFirestore(normalizePhone(row.phone), row.message, "sent");
             sent++;
-        } catch (e) {
-            console.error("Failed to send to", row.driverName, e);
-        }
+        } catch (e) { console.error("Failed to send to", row.driverName, e); }
     }
     alert(`Sent ${sent} messages.`);
     btn.disabled = false;
@@ -422,20 +429,17 @@
   };
 
   // ---------------------------
-  // 5. CONTACTS IMPORT
+  // 6. CONTACTS IMPORT
   // ---------------------------
   window.handleCsvUpload = async function(input) {
     const file = input.files?.[0];
     input.value = "";
     if (!file) return;
-
     const text = await file.text();
     const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
     if (lines.length < 2) { alert("CSV is empty."); return; }
-
     const headers = parseCsvLine(lines[0]).map(h => h.toLowerCase().trim());
     let nameIdx = -1, firstIdx = -1, lastIdx = -1, phoneIdx = -1, tagsIdx = -1;
-
     headers.forEach((h, i) => {
         if (h === "name" || h === "full name" || h === "display name") nameIdx = i;
         if (h === "first name" || h === "given name") firstIdx = i;
@@ -443,19 +447,14 @@
         if (h.includes("phone 1 - value") || h === "phone" || h === "mobile") phoneIdx = i;
         if (h === "labels" || h === "group" || h === "tags") tagsIdx = i;
     });
-
     const isSimple = (phoneIdx === -1);
     const startRow = isSimple ? 0 : 1;
     let count = 0;
-
     for (let i = startRow; i < lines.length; i++) {
         const parts = parseCsvLine(lines[i]);
         let name = "", phone = "", tagsStr = "";
-
         if (isSimple) {
-            if (parts.length >= 2) {
-                name = parts[0]; phone = parts[1]; tagsStr = parts[2] || "";
-            }
+            if (parts.length >= 2) { name = parts[0]; phone = parts[1]; tagsStr = parts[2] || ""; }
         } else {
             const first = (firstIdx !== -1) ? parts[firstIdx] : "";
             const last  = (lastIdx !== -1) ? parts[lastIdx] : "";
@@ -464,13 +463,9 @@
             if (phoneIdx !== -1) phone = parts[phoneIdx];
             if (tagsIdx !== -1) tagsStr = parts[tagsIdx];
         }
-
         if (name && phone) {
             const cleanPhone = normalizePhone(phone);
-            if (cleanPhone.length > 5) {
-                await upsertThread(cleanPhone, name, parseTags(tagsStr));
-                count++;
-            }
+            if (cleanPhone.length > 5) { await upsertThread(cleanPhone, name, parseTags(tagsStr)); count++; }
         }
     }
     alert(`Imported ${count} contacts.`);
@@ -483,9 +478,7 @@
             const map = new Map();
             snap.forEach(d => {
                 const data = d.data();
-                if (data.name && data.phone) {
-                    map.set(nameKey(data.name), data.phone);
-                }
+                if (data.name && data.phone) { map.set(nameKey(data.name), data.phone); }
             });
             resolve(map);
         });
@@ -499,20 +492,15 @@
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
       if (ch === '"') {
-        if (inQuotes && line[i+1] === '"') { cur += '"'; i++; }
-        else inQuotes = !inQuotes;
-      } else if (ch === ',' && !inQuotes) {
-        out.push(cur.trim()); cur = "";
-      } else {
-        cur += ch;
-      }
+        if (inQuotes && line[i+1] === '"') { cur += '"'; i++; } else inQuotes = !inQuotes;
+      } else if (ch === ',' && !inQuotes) { out.push(cur.trim()); cur = ""; } else { cur += ch; }
     }
     out.push(cur.trim());
     return out;
   }
 
   // ---------------------------
-  // 6. UI LOGIC (UPDATED SORTING)
+  // 7. UI LOGIC & THREADS
   // ---------------------------
   window.renderThreadList = function() {
     const listEl = document.getElementById("contactList");
@@ -528,7 +516,6 @@
         });
     });
 
-    // --- NEW SORTING LOGIC: UNREAD GROUPS FIRST ---
     const groupData = [...groups.entries()].map(([tag, threads]) => {
         const unreadCount = threads.reduce((acc, t) => acc + (t.unread || 0), 0);
         const maxTime = Math.max(...threads.map(t => t.lastMessageAtMs || 0));
@@ -536,23 +523,18 @@
     });
 
     groupData.sort((a, b) => {
-        // 1. Unread groups first
         if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
         if (b.unreadCount > 0 && a.unreadCount === 0) return 1;
-        // 2. Recency (Newest msg group first)
         if (b.maxTime !== a.maxTime) return b.maxTime - a.maxTime;
-        // 3. Alpha
         return a.tag.localeCompare(b.tag);
     });
 
-    // --- ACCORDION FIX: ONLY AUTO-OPEN ONCE ---
     if (!store.initialGroupSet && groupData.length > 0) {
         store.openGroups.add(groupData[0].tag);
         store.initialGroupSet = true;
     }
 
     groupData.forEach(({ tag, threads, unreadCount }) => {
-        // Filter by search
         const filtered = threads.filter(t => 
             !search || (t.name||"").toLowerCase().includes(search) || (t.phone||"").includes(search)
         );
@@ -580,8 +562,6 @@
         if(isOpen) {
             const container = document.createElement("div");
             container.className = "pl-2 pr-1 pb-2 space-y-1";
-            
-            // --- NEW THREAD SORT: UNREAD > TIME ---
             filtered.sort((a, b) => {
                 const aUnread = (a.unread||0) > 0;
                 const bUnread = (b.unread||0) > 0;
@@ -589,7 +569,6 @@
                 if(bUnread && !aUnread) return 1;
                 return (b.lastMessageAtMs||0) - (a.lastMessageAtMs||0);
             });
-
             filtered.forEach(t => {
                 const el = document.createElement("div");
                 const isActive = t.id === store.activeThreadId;
@@ -618,6 +597,7 @@
   };
 
   async function loadThread(threadId) {
+    if(unsubMessages) { unsubMessages(); unsubMessages = null; } 
     if(!threadId || store.activeThreadId === threadId) return;
     store.activeThreadId = threadId;
     store.activeThread = store.threads.find(t => t.id === threadId);
@@ -627,9 +607,9 @@
     document.getElementById("activeContactPhone").innerText = store.activeThread?.phone || "";
     document.getElementById("activeContactAvatar").innerText = initials(store.activeThread?.name || store.activeThread?.phone);
     
+    // MARK AS READ IMMEDIATELY
     try { await updateDoc(getThreadDoc(threadId), { unread: 0 }); } catch(e) {}
 
-    if(unsubMessages) unsubMessages();
     const q = query(getMsgsCol(threadId), orderBy("createdAt", "asc"));
     unsubMessages = onSnapshot(q, (snap) => {
         const div = document.getElementById("messageList");
@@ -639,9 +619,16 @@
             const el = document.createElement("div");
             el.className = `flex ${m.direction === 'sent' ? 'justify-end' : 'justify-start'} fade-in-up`;
             el.innerHTML = `
-                <div class="max-w-[75%] p-3 text-sm shadow-sm ${m.direction === 'sent' ? 'msg-sent' : 'msg-received'}">
-                    <p>${escapeHtml(m.body)}</p>
-                    <div class="text-[10px] opacity-70 mt-1 text-right">${formatTime(m.createdAt?.toMillis())}</div>
+                <div class="group relative max-w-[75%]">
+                    <div class="p-3 text-sm shadow-sm ${m.direction === 'sent' ? 'msg-sent' : 'msg-received'}">
+                        <p>${escapeHtml(m.body)}</p>
+                        <div class="text-[10px] opacity-70 mt-1 text-right flex justify-between items-center">
+                            <span>${formatTime(m.createdAt?.toMillis())}</span>
+                            <button onclick="window.deleteSingleMessage('${threadId}', '${d.id}', '${m.sid || ''}')" class="ml-2 text-red-300 hover:text-red-100 opacity-0 group-hover:opacity-100 transition" title="Delete Message">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             `;
             div.appendChild(el);
@@ -653,89 +640,51 @@
     renderThreadList();
   }
 
-  // --- DELETE FUNCTION ---
+  // --- DELETE THREAD ---
   window.deleteActiveThread = async function() {
     if (!store.activeThreadId) return;
     const thread = store.activeThread;
-    
     if (!confirm(`Permanently delete thread for ${thread.phone}?\nThis will remove history from Twilio and this dashboard.`)) return;
-
     const btn = document.querySelector("#threadInfoModal button.bg-red-500");
     const origText = btn.innerText;
     btn.disabled = true;
     btn.innerText = "Deleting...";
-
     try {
-        const res = await fetch(TWILIO_DELETE_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ phone: thread.phone })
-        });
-        
+        await fetch(TWILIO_DELETE_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone: thread.phone }) });
         await deleteDoc(getThreadDoc(store.activeThreadId));
-        
-        store.activeThreadId = null;
-        store.activeThread = null;
+        store.activeThreadId = null; store.activeThread = null;
         window.closeThreadInfo();
         document.getElementById("welcomeState").classList.remove("hidden");
         document.getElementById("messageList").innerHTML = "";
         document.getElementById("activeContactName").innerText = "Select a conversation";
         document.getElementById("activeContactPhone").innerText = "+1 ...";
         document.getElementById("activeContactAvatar").innerText = "?";
-        
         alert("Thread deleted.");
-    } catch(e) {
-        alert("Error deleting: " + e.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerText = origText;
-    }
+    } catch(e) { alert("Error deleting: " + e.message); } finally { btn.disabled = false; btn.innerText = origText; }
   };
 
-  window.sendMessage = async function() {
-    const input = document.getElementById("msgInput");
-    const text = input.value.trim();
-    if(!text || !store.activeThread) return;
-    input.value = "";
-    
+  // --- DELETE MESSAGE ---
+  window.deleteSingleMessage = async function(threadId, docId, sid) {
+    if(!confirm("Delete this message?")) return;
     try {
-        await sendSmsApi(store.activeThread.phone, text);
-        await addMessageToFirestore(store.activeThreadId, text, "sent");
-        scrollToBottom();
-    } catch(e) {
-        alert("Failed to send: " + e.message);
-    }
+        if(sid) {
+            fetch(TWILIO_DELETE_MSG_URL, { 
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sid: sid }) 
+            }).catch(e => console.log("Twilio delete skip:", e));
+        }
+        await deleteDoc(doc(getMsgsCol(threadId), docId));
+    } catch(e) { alert("Failed to delete: "+e.message); }
   };
 
-  window.createThreadFromModal = async function() {
-    const phone = document.getElementById("newContactPhone").value;
-    const name = document.getElementById("newContactName").value;
-    const tags = document.getElementById("newContactTags").value;
-    if(!phone) return alert("Phone required");
-    await upsertThread(phone, name, parseTags(tags));
-    window.closeNewMsgModal();
-    const cleanId = normalizePhone(phone);
-    loadThread(cleanId);
-  };
-
-  window.saveThreadInfo = async function() {
-    if(!store.activeThreadId) return;
-    const name = document.getElementById("threadInfoName").value;
-    const tags = document.getElementById("threadInfoTags").value;
-    await updateDoc(getThreadDoc(store.activeThreadId), { name: name, tags: parseTags(tags) });
-    window.closeThreadInfo();
-  };
-
-  // --- 7. BACKEND UTILS ---
+  // --- CORE UTILS ---
   async function upsertThread(phone, name, newTags) {
     const cleanPhone = normalizePhone(phone);
     if(!cleanPhone || cleanPhone.length < 5) return;
-
     const ref = getThreadDoc(cleanPhone);
     const snap = await getDoc(ref);
     if(snap.exists()) {
         const existingTags = snap.data().tags || [];
-        // Merge tags
         const merged = [...new Set([...existingTags, ...newTags])];
         await updateDoc(ref, { name, tags: merged });
     } else {
@@ -746,27 +695,57 @@
     }
   }
 
-  async function addMessageToFirestore(threadId, body, dir) {
-    if(!threadId) return;
-    await setDoc(doc(getMsgsCol(threadId)), {
-        body, direction: dir, createdAt: serverTimestamp(), sid: "local-"+Date.now()
+  async function addMessageToFirestore(threadId, body, dir, sid) {
+    if(!threadId) return false;
+    const docId = sid || "local-"+Date.now();
+    await setDoc(doc(getMsgsCol(threadId), docId), {
+        body, direction: dir, createdAt: serverTimestamp(), sid: docId
     });
     await updateDoc(getThreadDoc(threadId), {
         lastMessageText: body, lastMessageAtMs: Date.now()
     });
+    return true;
   }
+
+  window.sendMessage = async function() {
+    const input = document.getElementById("msgInput");
+    const text = input.value.trim();
+    if(!text || !store.activeThread) return;
+    input.value = "";
+    try {
+        await sendSmsApi(store.activeThread.phone, text);
+        await addMessageToFirestore(store.activeThreadId, text, "sent");
+        scrollToBottom();
+    } catch(e) { alert("Failed to send: " + e.message); }
+  };
 
   async function sendSmsApi(to, body) {
     const params = new URLSearchParams();
-    params.append("to", to);
-    params.append("body", body);
+    params.append("to", to); params.append("body", body);
     const res = await fetch(TWILIO_SEND_URL, { method: "POST", body: params });
     if(!res.ok) throw new Error("Twilio API Error");
   }
 
-  // --- 8. UI HELPERS ---
+  // --- UI TOGGLES ---
   window.openNewMsgModal = () => document.getElementById("newMsgModal").classList.remove("hidden");
   window.closeNewMsgModal = () => document.getElementById("newMsgModal").classList.add("hidden");
+  window.createThreadFromModal = async function() {
+    const phone = document.getElementById("newContactPhone").value;
+    const name = document.getElementById("newContactName").value;
+    const tags = document.getElementById("newContactTags").value;
+    if(!phone) return alert("Phone required");
+    await upsertThread(phone, name, parseTags(tags));
+    window.closeNewMsgModal();
+    const cleanId = normalizePhone(phone);
+    loadThread(cleanId);
+  };
+  window.saveThreadInfo = async function() {
+    if(!store.activeThreadId) return;
+    const name = document.getElementById("threadInfoName").value;
+    const tags = document.getElementById("threadInfoTags").value;
+    await updateDoc(getThreadDoc(store.activeThreadId), { name: name, tags: parseTags(tags) });
+    window.closeThreadInfo();
+  };
   window.openThreadInfo = () => {
     if(!store.activeThread) return;
     document.getElementById("threadInfoName").value = store.activeThread.name || "";
@@ -781,13 +760,9 @@
     document.getElementById("sidebar").classList.toggle("-translate-x-full");
     document.getElementById("mobileOverlay").classList.toggle("hidden");
   };
-  window.resetLocalUI = () => {
-    store.openGroups.clear();
-    renderThreadList();
-    alert("UI Reset");
-  };
+  window.resetLocalUI = () => { store.openGroups.clear(); renderThreadList(); alert("UI Reset"); };
 
-  // --- 9. INIT ---
+  // --- INIT ---
   async function init() {
     await signInAnonymously(auth);
     onAuthStateChanged(auth, (user) => {
@@ -803,33 +778,6 @@
         }
     });
   }
-
-  async function pollIncomingMessages() {
-    if(!store.uid) return;
-    try {
-        const res = await fetch(TWILIO_GET_URL);
-        const data = await res.json();
-        if(!data.success || !data.messages) return;
-        for(let m of data.messages) {
-            if(store.lastInboundSidSeen.has(m.sid)) continue;
-            store.lastInboundSidSeen.add(m.sid);
-            if(m.direction === 'inbound') {
-                const cleanPhone = normalizePhone(m.from);
-                if(cleanPhone.length > 5) { 
-                    await upsertThread(m.from, cleanPhone, ["New"]); 
-                    await addMessageToFirestore(cleanPhone, m.body, "received");
-                    const docRef = getThreadDoc(cleanPhone);
-                    const docSnap = await getDoc(docRef);
-                    if(docSnap.exists()) {
-                        await updateDoc(docRef, { unread: (docSnap.data().unread||0) + 1 });
-                    }
-                    document.getElementById("notifSound").play().catch(()=>{});
-                }
-            }
-        }
-    } catch(e) { console.error("Poll error", e); }
-  }
-
   init();
 </script>
 </body>
