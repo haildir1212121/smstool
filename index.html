@@ -20,9 +20,7 @@
     .msg-sent { background:#4f46e5; color:#fff; border-radius:18px 18px 4px 18px; }
     .msg-received { background:#f1f5f9; color:#1e293b; border-radius:18px 18px 18px 4px; }
 
-    /* Show delete button on hover */
     .msg-group:hover .delete-btn { opacity: 1; }
-
     .fade-in-up { animation: fadeInUp 0.25s ease-out forwards; }
     @keyframes fadeInUp { from { opacity:0; transform:translateY(8px);} to { opacity:1; transform:translateY(0);} }
   </style>
@@ -32,6 +30,14 @@
 
   <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3"></audio>
 
+  <div id="soundOverlay" class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center text-white" onclick="enableAudio()">
+    <div class="text-center p-6 bg-slate-800 rounded-xl shadow-2xl cursor-pointer hover:bg-slate-700 transition border border-slate-600">
+      <i class="fa-solid fa-volume-high text-4xl mb-4 text-indigo-400"></i>
+      <h2 class="text-xl font-bold mb-2">Enable Notifications</h2>
+      <p class="text-slate-400 text-sm">Click anywhere to enable sound & desktop alerts for incoming texts.</p>
+    </div>
+  </div>
+
   <aside class="w-full md:w-80 bg-white border-r border-slate-200 flex flex-col z-20 absolute md:relative h-full transition-transform duration-300 transform" id="sidebar">
     <div class="h-16 px-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
       <div class="flex items-center gap-2 text-indigo-600">
@@ -39,17 +45,17 @@
         <span class="font-bold text-lg tracking-tight">OmniChat</span>
       </div>
       <div class="flex gap-2 items-center">
-        <button onclick="document.getElementById('csvInput').click()" class="p-2 text-slate-400 hover:text-indigo-600 transition" title="Import Contacts CSV">
+        <button onclick="document.getElementById('csvInput').click()" class="p-2 text-slate-400 hover:text-indigo-600 transition" title="Import Contacts">
           <i class="fa-solid fa-file-import"></i>
         </button>
         <input type="file" id="csvInput" accept=".csv" class="hidden" onchange="handleCsvUpload(this)">
 
-        <button onclick="document.getElementById('assignmentsCsvInput').click()" class="p-2 text-slate-400 hover:text-indigo-600 transition" title="Upload Assignments CSV">
+        <button onclick="document.getElementById('assignmentsCsvInput').click()" class="p-2 text-slate-400 hover:text-indigo-600 transition" title="Blast Assignments">
           <i class="fa-solid fa-bullhorn"></i>
         </button>
         <input type="file" id="assignmentsCsvInput" accept=".csv" class="hidden" onchange="handleAssignmentsCsv(this)">
 
-        <button onclick="openNewMsgModal()" class="p-2 bg-indigo-100 text-indigo-600 rounded-full hover:bg-indigo-200 transition" title="New conversation">
+        <button onclick="openNewMsgModal()" class="p-2 bg-indigo-100 text-indigo-600 rounded-full hover:bg-indigo-200 transition" title="New">
           <i class="fa-solid fa-plus"></i>
         </button>
       </div>
@@ -60,9 +66,7 @@
         <i class="fa-solid fa-search absolute left-3 top-3 text-slate-400 text-sm"></i>
         <input type="text" id="searchContacts" onkeyup="renderThreadList()" placeholder="Search..." class="w-full bg-slate-100 text-sm pl-9 pr-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
       </div>
-      <div class="text-[10px] text-slate-400">
-        Shared DB: <span class="font-mono text-slate-600">dispatch_team_main</span>
-      </div>
+      <div class="text-[10px] text-slate-400">Status: <span id="statusIndicator" class="text-green-500 font-bold">Live</span></div>
     </div>
 
     <div class="flex-1 overflow-y-auto p-2 space-y-1" id="contactList"></div>
@@ -71,11 +75,9 @@
       <div id="userAvatar" class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">D</div>
       <div class="flex-1 overflow-hidden">
         <div id="userLine1" class="text-xs font-bold text-slate-700 truncate">Dispatch Team</div>
-        <div id="userLine2" class="text-[10px] text-slate-400 truncate">Online</div>
+        <div id="userLine2" class="text-[10px] text-slate-400 truncate">Online • Sound On</div>
       </div>
-      <button onclick="resetLocalUI()" class="text-slate-400 hover:text-red-500" title="Reset View">
-        <i class="fa-solid fa-rotate-left"></i>
-      </button>
+      <button onclick="resetLocalUI()" class="text-slate-400 hover:text-red-500" title="Reset View"><i class="fa-solid fa-rotate-left"></i></button>
     </div>
   </aside>
 
@@ -84,9 +86,7 @@
 
     <header class="h-16 px-4 border-b border-slate-100 flex items-center justify-between bg-white flex-shrink-0">
       <div class="flex items-center gap-3 min-w-0">
-        <button onclick="toggleMobileSidebar()" class="md:hidden text-slate-500 hover:text-indigo-600">
-          <i class="fa-solid fa-arrow-left text-lg"></i>
-        </button>
+        <button onclick="toggleMobileSidebar()" class="md:hidden text-slate-500 hover:text-indigo-600"><i class="fa-solid fa-arrow-left text-lg"></i></button>
         <div id="activeContactAvatar" class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-sm">?</div>
         <div class="min-w-0">
           <h2 id="activeContactName" class="font-bold text-slate-800 text-sm truncate">Select a conversation</h2>
@@ -97,9 +97,7 @@
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <button onclick="openThreadInfo()" class="text-slate-400 hover:text-indigo-600" title="Edit thread info">
-          <i class="fa-solid fa-circle-info"></i>
-        </button>
+        <button onclick="openThreadInfo()" class="text-slate-400 hover:text-indigo-600" title="Edit info"><i class="fa-solid fa-circle-info"></i></button>
       </div>
     </header>
 
@@ -127,23 +125,14 @@
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6">
       <div class="flex items-center justify-between mb-3">
         <h3 class="text-lg font-bold text-slate-800">Assignment Blast</h3>
-        <button onclick="closeAssignmentsModal()" class="text-slate-400 hover:text-slate-700">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
+        <button onclick="closeAssignmentsModal()" class="text-slate-400 hover:text-slate-700"><i class="fa-solid fa-xmark"></i></button>
       </div>
-      <p class="text-xs text-slate-500 mb-4">Review generated messages. Rows with missing data or no phone numbers are ignored.</p>
+      <p class="text-xs text-slate-500 mb-4">Review generated messages. Rows with missing data are ignored.</p>
       <div class="border rounded-lg overflow-hidden bg-slate-50">
         <div class="max-h-[50vh] overflow-auto">
           <table class="w-full text-xs">
             <thead class="bg-slate-200 text-slate-700 sticky top-0 font-bold">
-              <tr>
-                <th class="text-left p-2 w-32">Driver</th>
-                <th class="text-left p-2 w-24">Phone</th>
-                <th class="text-left p-2 w-24">PU Time</th>
-                <th class="text-left p-2 w-24">Tablet</th>
-                <th class="text-left p-2">Generated Message</th>
-                <th class="text-left p-2 w-20">Status</th>
-              </tr>
+              <tr><th class="text-left p-2 w-32">Driver</th><th class="text-left p-2 w-24">Phone</th><th class="text-left p-2 w-24">PU Time</th><th class="text-left p-2 w-24">Tablet</th><th class="text-left p-2">Generated Message</th><th class="text-left p-2 w-20">Status</th></tr>
             </thead>
             <tbody id="assignmentsPreview" class="divide-y divide-slate-200 bg-white"></tbody>
           </table>
@@ -231,7 +220,7 @@
     activeThreadId: null,
     activeThread: null,
     lastInboundSidSeen: new Set(),
-    deletedSids: new Set(), // NEW: BLOCKLIST FOR DELETED MESSAGES
+    deletedSids: new Set(),
     openGroups: new Set(),
     initialGroupSet: false, 
     isPolling: false 
@@ -263,26 +252,49 @@
   const getMsgsCol    = (id) => collection(db, "organizations", SHARED_ORG_ID, "threads", id, "messages");
 
   // ---------------------------
-  // 4. SMART POLLER (LOCKED & BLOCKED)
+  // 4. NOTIFICATIONS (AUDIO & DESKTOP)
+  // ---------------------------
+  window.enableAudio = function() {
+    const audio = document.getElementById("notifSound");
+    audio.play().then(() => {
+      audio.pause();
+      audio.currentTime = 0;
+      document.getElementById("soundOverlay").classList.add("hidden");
+      // Request Desktop Permission
+      if (Notification.permission !== "granted") { Notification.requestPermission(); }
+    }).catch(e => console.log("Audio failed", e));
+  };
+
+  function triggerNotification(text) {
+    // 1. Play Sound
+    document.getElementById("notifSound").play().catch(()=>{});
+    
+    // 2. Tab Alert
+    document.title = "(1) New Message!";
+    setTimeout(() => { document.title = "OmniChat - Dispatch Console"; }, 3000);
+
+    // 3. Desktop Alert
+    if (Notification.permission === "granted") {
+      new Notification("New SMS", { body: text, icon: "https://cdn-icons-png.flaticon.com/512/724/724715.png" });
+    }
+  }
+
+  // ---------------------------
+  // 5. SMART POLLER (LOCKED & BLOCKED)
   // ---------------------------
   async function pollIncomingMessages() {
     if(!store.uid) return;
-    if(store.isPolling) return; // TRAFFIC COP
-    
+    if(store.isPolling) return; 
     store.isPolling = true; 
 
     try {
         const res = await fetch(TWILIO_GET_URL);
         const data = await res.json();
-        if(!data.success || !data.messages) {
-            store.isPolling = false; return;
-        }
+        if(!data.success || !data.messages) { store.isPolling = false; return; }
         
         for(let m of data.messages) {
-            // 1. BLOCKLIST CHECK (Fixes "Zombie" messages)
+            // Blocklist & Session Check
             if(store.deletedSids.has(m.sid)) continue;
-
-            // 2. SESSION CHECK
             if(store.lastInboundSidSeen.has(m.sid)) continue;
             store.lastInboundSidSeen.add(m.sid);
             
@@ -290,7 +302,6 @@
                 const cleanPhone = normalizePhone(m.from);
                 if(cleanPhone.length > 5) {
                     
-                    // 3. DATABASE CHECK
                     const q = query(getMsgsCol(cleanPhone), where("sid", "==", m.sid));
                     const querySnap = await getDocs(q);
                     
@@ -298,27 +309,20 @@
                         await upsertThread(m.from, cleanPhone, ["New"]); 
                         
                         await setDoc(doc(getMsgsCol(cleanPhone), m.sid), {
-                            body: m.body, 
-                            direction: "received", 
-                            createdAt: serverTimestamp(), 
-                            sid: m.sid
+                            body: m.body, direction: "received", createdAt: serverTimestamp(), sid: m.sid
                         });
                         
                         const threadRef = getThreadDoc(cleanPhone);
                         const tSnap = await getDoc(threadRef);
                         const currentUnread = tSnap.exists() ? (tSnap.data().unread || 0) : 0;
                         
-                        const updates = { 
-                            lastMessageText: m.body, 
-                            lastMessageAtMs: Date.now()
-                        };
-                        
+                        const updates = { lastMessageText: m.body, lastMessageAtMs: Date.now() };
                         if(store.activeThreadId !== cleanPhone) {
                             updates.unread = currentUnread + 1;
                         }
 
                         await updateDoc(threadRef, updates);
-                        document.getElementById("notifSound").play().catch(()=>{});
+                        triggerNotification(m.body); // Trigger Alerts
                     }
                 }
             }
@@ -328,7 +332,7 @@
   }
 
   // ---------------------------
-  // 5. ASSIGNMENT PARSER
+  // 6. ASSIGNMENT PARSER
   // ---------------------------
   window.handleAssignmentsCsv = async function(input) {
     const file = input.files?.[0];
@@ -432,7 +436,6 @@
         try {
             await sendSmsApi(row.phone, row.message);
             await upsertThread(row.phone, row.driverName, [row.tag]);
-            // Outbound local add
             await addMessageToFirestore(normalizePhone(row.phone), row.message, "sent");
             sent++;
         } catch (e) { console.error("Failed to send to", row.driverName, e); }
@@ -444,7 +447,7 @@
   };
 
   // ---------------------------
-  // 6. CONTACTS IMPORT
+  // 7. CONTACTS IMPORT
   // ---------------------------
   window.handleCsvUpload = async function(input) {
     const file = input.files?.[0];
@@ -515,7 +518,7 @@
   }
 
   // ---------------------------
-  // 7. UI LOGIC & THREADS
+  // 8. UI LOGIC
   // ---------------------------
   window.renderThreadList = function() {
     const listEl = document.getElementById("contactList");
@@ -622,7 +625,6 @@
     document.getElementById("activeContactPhone").innerText = store.activeThread?.phone || "";
     document.getElementById("activeContactAvatar").innerText = initials(store.activeThread?.name || store.activeThread?.phone);
     
-    // FORCE READ STATUS
     try { await updateDoc(getThreadDoc(threadId), { unread: 0 }); } catch(e) {}
 
     const q = query(getMsgsCol(threadId), orderBy("createdAt", "asc"));
@@ -630,15 +632,10 @@
         const div = document.getElementById("messageList");
         div.innerHTML = "";
         
-        // --- VISUAL DEDUPLICATION MAP ---
         const seen = new Set();
-
         snap.forEach(d => {
             const m = d.data();
-            
-            // Unique fingerprint (Body + roughly Timestamp)
             const fingerprint = m.body + "-" + Math.floor((m.createdAt?.toMillis() || 0) / 1000);
-            
             if(seen.has(fingerprint)) return; 
             seen.add(fingerprint);
 
@@ -693,10 +690,9 @@
   window.deleteSingleMessage = async function(threadId, docId, sid) {
     if(!confirm("Delete this message?")) return;
     try {
-        // ADD TO BLOCKLIST IMMEDIATELY
         if(sid) {
             store.deletedSids.add(sid);
-            localStorage.setItem("deletedSids", JSON.stringify([...store.deletedSids])); // PERSIST
+            localStorage.setItem("deletedSids", JSON.stringify([...store.deletedSids])); 
             fetch(TWILIO_DELETE_MSG_URL, { 
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ sid: sid }) 
@@ -793,7 +789,7 @@
 
   // --- INIT ---
   async function init() {
-    // Load Deleted SIDs from LocalStorage
+    // Restore Blocklist
     try {
         const saved = localStorage.getItem("deletedSids");
         if(saved) store.deletedSids = new Set(JSON.parse(saved));
