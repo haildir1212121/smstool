@@ -276,7 +276,7 @@
   const getMsgsCol    = (id) => collection(db, "organizations", SHARED_ORG_ID, "threads", id, "messages");
 
   // ---------------------------
-  // 4. ASSIGNMENT PARSER (SMART TAGGING)
+  // 4. ASSIGNMENT PARSER (UPDATED FORMAT)
   // ---------------------------
   window.handleAssignmentsCsv = async function(input) {
     const file = input.files?.[0];
@@ -288,12 +288,15 @@
     const lines = text.split(/\r?\n/);
     if (lines.length < 4) { alert("CSV seems empty or invalid."); return; }
 
-    // 1. Get Date from A1
-    const row1 = parseCsvLine(lines[0]);
-    const dateStr = row1[0] || ""; 
+    // 1. Get Date
+    let dateStr = parseCsvLine(lines[0])[0]; 
+    if(!dateStr || !/\d/.test(dateStr)) {
+        const row2 = parseCsvLine(lines[1]);
+        if(row2[0] && /\d/.test(row2[0])) dateStr = row2[0];
+    }
     const dow = getDayOfWeek(dateStr); 
 
-    // 2. Setup Tag Mapping (Header Label -> Tag Code)
+    // 2. Setup Tags
     const sectionMap = {
         "eugene": "DLX-EUG",
         "roseburg": "RBG",
@@ -303,47 +306,41 @@
         "coast": "XCC"
     };
     
-    let currentTag = "Auto-Assign"; // Default
+    let currentTag = "Auto-Assign"; 
 
     const contactsMap = await buildContactsMap();
     assignmentsRows = [];
 
-    // 3. Scan Rows (Start at 1 to catch the first "Eugene" header)
-    for (let i = 1; i < lines.length; i++) {
+    // 3. Scan Rows
+    for (let i = 0; i < lines.length; i++) {
         const parts = parseCsvLine(lines[i]);
         if (parts.length < 5) continue;
 
-        // A=0, B=1, C=2, D=3, E=4 (Name/Header), G=6
         const colE = (parts[4] || "").trim();
-        
-        // --- CHECK FOR SECTION HEADER ---
         const lowerE = colE.toLowerCase();
         if (sectionMap[lowerE]) {
             currentTag = sectionMap[lowerE];
-            console.log(`Switched to tag: ${currentTag}`);
-            continue; // Skip the header row itself
+            continue; 
         }
 
-        // --- CHECK FOR DATA ROW ---
-        const puTime = parts[0] || "";
-        const city   = parts[1] || "";
-        const client = parts[2] || "";
-        const name   = parts[4] || ""; 
-        const tablet = parts[6] || "?"; 
-        let   phone  = parts[3] || "";
+        const puTime = parts[0] || ""; // A
+        const city   = parts[1] || ""; // B
+        const client = parts[2] || ""; // C
+        let   phone  = parts[3] || ""; // D
+        const name   = parts[4] || ""; // E
+        const tablet = parts[6] || "?"; // G
 
-        // Filter invalid rows
         if (!puTime || !city || !client) continue; 
         if (!name || name.toLowerCase() === "name" || name.includes("Corridor")) continue;
 
-        // Phone Lookup
         if (!phone) {
             const k = nameKey(name);
             phone = contactsMap.get(k) || "";
         }
         phone = normalizePhone(phone);
 
-        const msg = `${dow} Pickup @ ${puTime} in ${city} for ${client}, Be signed into your tablet @ ${tablet} to receive ride.`;
+        // NEW FORMAT: "{{WEEKDAY}}: {{Column A}} pickup in {{Column B}} ({{Column C}}), be signed into your tablet @ {{Column G}} to receive ride."
+        const msg = `${dow}: ${puTime} pickup in ${city} (${client}), be signed into your tablet @ ${tablet} to receive ride.`;
 
         assignmentsRows.push({
             driverName: name,
@@ -352,7 +349,7 @@
             puTime: puTime,
             tablet: tablet,
             message: msg,
-            tag: currentTag, // Store the detected tag
+            tag: currentTag,
             status: (phone && phone.length > 5) ? "READY" : "NO MATCH"
         });
     }
@@ -410,10 +407,8 @@
     for (const row of readyRows) {
         try {
             await sendSmsApi(row.phone, row.message);
-            
-            // Pass the DETECTED TAG (e.g., "DLX-EUG") instead of generic
+            // Apply Detected Tag
             await upsertThread(row.phone, row.driverName, [row.tag]);
-            
             const threadId = normalizePhone(row.phone);
             await addMessageToFirestore(threadId, row.message, "sent");
             sent++;
@@ -428,7 +423,7 @@
   };
 
   // ---------------------------
-  // 5. CSV UTILS
+  // 5. CONTACTS IMPORT
   // ---------------------------
   window.handleCsvUpload = async function(input) {
     const file = input.files?.[0];
@@ -714,7 +709,7 @@
     const snap = await getDoc(ref);
     if(snap.exists()) {
         const existingTags = snap.data().tags || [];
-        // Merge tags uniquely
+        // Merge tags
         const merged = [...new Set([...existingTags, ...newTags])];
         await updateDoc(ref, { name, tags: merged });
     } else {
@@ -800,16 +795,5 @@
                     const docRef = getThreadDoc(cleanPhone);
                     const docSnap = await getDoc(docRef);
                     if(docSnap.exists()) {
-                        await updateDoc(docRef, { unread: (docSnap.data().unread||0) + 1 });
-                    }
-                    document.getElementById("notifSound").play().catch(()=>{});
-                }
-            }
-        }
-    } catch(e) { console.error("Poll error", e); }
-  }
-
-  init();
-</script>
 </body>
 </html>
