@@ -231,9 +231,10 @@
     activeThreadId: null,
     activeThread: null,
     lastInboundSidSeen: new Set(),
+    deletedSids: new Set(), // NEW: BLOCKLIST FOR DELETED MESSAGES
     openGroups: new Set(),
     initialGroupSet: false, 
-    isPolling: false // TRAFFIC COP FLAG
+    isPolling: false 
   };
 
   let assignmentsRows = []; 
@@ -262,13 +263,13 @@
   const getMsgsCol    = (id) => collection(db, "organizations", SHARED_ORG_ID, "threads", id, "messages");
 
   // ---------------------------
-  // 4. SMART POLLER (LOCKED)
+  // 4. SMART POLLER (LOCKED & BLOCKED)
   // ---------------------------
   async function pollIncomingMessages() {
     if(!store.uid) return;
-    if(store.isPolling) return; // BUSY, SKIP THIS TURN
+    if(store.isPolling) return; // TRAFFIC COP
     
-    store.isPolling = true; // LOCK
+    store.isPolling = true; 
 
     try {
         const res = await fetch(TWILIO_GET_URL);
@@ -278,6 +279,10 @@
         }
         
         for(let m of data.messages) {
+            // 1. BLOCKLIST CHECK (Fixes "Zombie" messages)
+            if(store.deletedSids.has(m.sid)) continue;
+
+            // 2. SESSION CHECK
             if(store.lastInboundSidSeen.has(m.sid)) continue;
             store.lastInboundSidSeen.add(m.sid);
             
@@ -285,16 +290,14 @@
                 const cleanPhone = normalizePhone(m.from);
                 if(cleanPhone.length > 5) {
                     
-                    // IDEMPOTENCY CHECK: Use SID as key. Firestore rejects if exists? No, setDoc overwrites.
-                    // But we check first to avoid resetting unread count unnecessarily.
-                    const docId = m.sid;
-                    const msgRef = doc(getMsgsCol(cleanPhone), docId);
-                    const docSnap = await getDoc(msgRef);
-
-                    if (!docSnap.exists()) {
+                    // 3. DATABASE CHECK
+                    const q = query(getMsgsCol(cleanPhone), where("sid", "==", m.sid));
+                    const querySnap = await getDocs(q);
+                    
+                    if (querySnap.empty) {
                         await upsertThread(m.from, cleanPhone, ["New"]); 
                         
-                        await setDoc(msgRef, {
+                        await setDoc(doc(getMsgsCol(cleanPhone), m.sid), {
                             body: m.body, 
                             direction: "received", 
                             createdAt: serverTimestamp(), 
@@ -321,7 +324,7 @@
             }
         }
     } catch(e) { console.error("Poll error", e); }
-    finally { store.isPolling = false; } // UNLOCK
+    finally { store.isPolling = false; } 
   }
 
   // ---------------------------
@@ -429,7 +432,7 @@
         try {
             await sendSmsApi(row.phone, row.message);
             await upsertThread(row.phone, row.driverName, [row.tag]);
-            // For outbound, we use local-timestamp as ID
+            // Outbound local add
             await addMessageToFirestore(normalizePhone(row.phone), row.message, "sent");
             sent++;
         } catch (e) { console.error("Failed to send to", row.driverName, e); }
@@ -512,7 +515,7 @@
   }
 
   // ---------------------------
-  // 7. UI LOGIC
+  // 7. UI LOGIC & THREADS
   // ---------------------------
   window.renderThreadList = function() {
     const listEl = document.getElementById("contactList");
@@ -619,7 +622,7 @@
     document.getElementById("activeContactPhone").innerText = store.activeThread?.phone || "";
     document.getElementById("activeContactAvatar").innerText = initials(store.activeThread?.name || store.activeThread?.phone);
     
-    // FORCE READ STATUS TO DB IMMEDIATELY
+    // FORCE READ STATUS
     try { await updateDoc(getThreadDoc(threadId), { unread: 0 }); } catch(e) {}
 
     const q = query(getMsgsCol(threadId), orderBy("createdAt", "asc"));
@@ -633,11 +636,10 @@
         snap.forEach(d => {
             const m = d.data();
             
-            // Generate a unique fingerprint for this session (Body + roughly Timestamp)
-            // We ignore milliseconds delta to catch race conditions
+            // Unique fingerprint (Body + roughly Timestamp)
             const fingerprint = m.body + "-" + Math.floor((m.createdAt?.toMillis() || 0) / 1000);
             
-            if(seen.has(fingerprint)) return; // Skip visual duplicate
+            if(seen.has(fingerprint)) return; 
             seen.add(fingerprint);
 
             const el = document.createElement("div");
@@ -664,6 +666,7 @@
     renderThreadList();
   }
 
+  // --- DELETE THREAD ---
   window.deleteActiveThread = async function() {
     if (!store.activeThreadId) return;
     const thread = store.activeThread;
@@ -686,10 +689,14 @@
     } catch(e) { alert("Error deleting: " + e.message); } finally { btn.disabled = false; btn.innerText = origText; }
   };
 
+  // --- DELETE MESSAGE ---
   window.deleteSingleMessage = async function(threadId, docId, sid) {
     if(!confirm("Delete this message?")) return;
     try {
+        // ADD TO BLOCKLIST IMMEDIATELY
         if(sid) {
+            store.deletedSids.add(sid);
+            localStorage.setItem("deletedSids", JSON.stringify([...store.deletedSids])); // PERSIST
             fetch(TWILIO_DELETE_MSG_URL, { 
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ sid: sid }) 
@@ -699,6 +706,7 @@
     } catch(e) { alert("Failed to delete: "+e.message); }
   };
 
+  // --- CORE UTILS ---
   async function upsertThread(phone, name, newTags) {
     const cleanPhone = normalizePhone(phone);
     if(!cleanPhone || cleanPhone.length < 5) return;
@@ -785,6 +793,12 @@
 
   // --- INIT ---
   async function init() {
+    // Load Deleted SIDs from LocalStorage
+    try {
+        const saved = localStorage.getItem("deletedSids");
+        if(saved) store.deletedSids = new Set(JSON.parse(saved));
+    } catch(e) {}
+
     await signInAnonymously(auth);
     onAuthStateChanged(auth, (user) => {
         if(user) {
