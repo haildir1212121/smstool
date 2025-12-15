@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>DLX-DMT - Dispatch Console</title>
+  <title>OmniChat - Dispatch Console</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -33,7 +33,7 @@
     <div class="h-16 px-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
       <div class="flex items-center gap-2 text-indigo-600">
         <i class="fa-solid fa-comments text-xl"></i>
-        <span class="font-bold text-lg tracking-tight">DLX/DMT</span>
+        <span class="font-bold text-lg tracking-tight">OmniChat</span>
       </div>
       <div class="flex gap-2 items-center">
         <button onclick="document.getElementById('csvInput').click()" class="p-2 text-slate-400 hover:text-indigo-600 transition" title="Import Contacts CSV">
@@ -248,6 +248,7 @@
     activeThread: null,
     lastInboundSidSeen: new Set(),
     openGroups: new Set(),
+    initialGroupSet: false, // FLAG TO PREVENT ACCORDION RE-OPENING
   };
 
   let assignmentsRows = []; 
@@ -276,7 +277,7 @@
   const getMsgsCol    = (id) => collection(db, "organizations", SHARED_ORG_ID, "threads", id, "messages");
 
   // ---------------------------
-  // 4. ASSIGNMENT PARSER (UPDATED FORMAT)
+  // 4. ASSIGNMENT PARSER
   // ---------------------------
   window.handleAssignmentsCsv = async function(input) {
     const file = input.files?.[0];
@@ -288,7 +289,7 @@
     const lines = text.split(/\r?\n/);
     if (lines.length < 4) { alert("CSV seems empty or invalid."); return; }
 
-    // 1. Get Date
+    // 1. Find Date (Row 1 or Row 2)
     let dateStr = parseCsvLine(lines[0])[0]; 
     if(!dateStr || !/\d/.test(dateStr)) {
         const row2 = parseCsvLine(lines[1]);
@@ -296,7 +297,6 @@
     }
     const dow = getDayOfWeek(dateStr); 
 
-    // 2. Setup Tags
     const sectionMap = {
         "eugene": "DLX-EUG",
         "roseburg": "RBG",
@@ -339,7 +339,7 @@
         }
         phone = normalizePhone(phone);
 
-        // NEW FORMAT: "{{WEEKDAY}}: {{Column A}} pickup in {{Column B}} ({{Column C}}), be signed into your tablet @ {{Column G}} to receive ride."
+        // Msg: "MONDAY: 730 pickup in eugene (test), be signed into your tablet @ 700 to receive ride."
         const msg = `${dow}: ${puTime} pickup in ${city} (${client}), be signed into your tablet @ ${tablet} to receive ride.`;
 
         assignmentsRows.push({
@@ -407,7 +407,6 @@
     for (const row of readyRows) {
         try {
             await sendSmsApi(row.phone, row.message);
-            // Apply Detected Tag
             await upsertThread(row.phone, row.driverName, [row.tag]);
             const threadId = normalizePhone(row.phone);
             await addMessageToFirestore(threadId, row.message, "sent");
@@ -513,7 +512,7 @@
   }
 
   // ---------------------------
-  // 6. UI LOGIC
+  // 6. UI LOGIC (UPDATED SORTING)
   // ---------------------------
   window.renderThreadList = function() {
     const listEl = document.getElementById("contactList");
@@ -529,20 +528,38 @@
         });
     });
 
-    const sortedGroups = [...groups.entries()].sort((a,b) => a[0].localeCompare(b[0]));
-    if(store.openGroups.size === 0 && sortedGroups.length > 0) {
-        store.openGroups.add(sortedGroups[0][0]);
+    // --- NEW SORTING LOGIC: UNREAD GROUPS FIRST ---
+    const groupData = [...groups.entries()].map(([tag, threads]) => {
+        const unreadCount = threads.reduce((acc, t) => acc + (t.unread || 0), 0);
+        const maxTime = Math.max(...threads.map(t => t.lastMessageAtMs || 0));
+        return { tag, threads, unreadCount, maxTime };
+    });
+
+    groupData.sort((a, b) => {
+        // 1. Unread groups first
+        if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
+        if (b.unreadCount > 0 && a.unreadCount === 0) return 1;
+        // 2. Recency (Newest msg group first)
+        if (b.maxTime !== a.maxTime) return b.maxTime - a.maxTime;
+        // 3. Alpha
+        return a.tag.localeCompare(b.tag);
+    });
+
+    // --- ACCORDION FIX: ONLY AUTO-OPEN ONCE ---
+    if (!store.initialGroupSet && groupData.length > 0) {
+        store.openGroups.add(groupData[0].tag);
+        store.initialGroupSet = true;
     }
 
-    sortedGroups.forEach(([tag, threads]) => {
+    groupData.forEach(({ tag, threads, unreadCount }) => {
+        // Filter by search
         const filtered = threads.filter(t => 
             !search || (t.name||"").toLowerCase().includes(search) || (t.phone||"").includes(search)
         );
         if(!filtered.length) return;
 
         const isOpen = store.openGroups.has(tag);
-        const groupUnread = filtered.reduce((acc, t) => acc + (t.unread || 0), 0);
-        const badge = groupUnread > 0 ? `<span class="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">${groupUnread}</span>` : "";
+        const badge = unreadCount > 0 ? `<span class="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">${unreadCount}</span>` : "";
 
         const header = document.createElement("button");
         header.className = "w-full text-left px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition flex items-center justify-between gap-3 mb-1";
@@ -563,7 +580,16 @@
         if(isOpen) {
             const container = document.createElement("div");
             container.className = "pl-2 pr-1 pb-2 space-y-1";
-            filtered.sort((a,b) => (b.lastMessageAtMs||0) - (a.lastMessageAtMs||0));
+            
+            // --- NEW THREAD SORT: UNREAD > TIME ---
+            filtered.sort((a, b) => {
+                const aUnread = (a.unread||0) > 0;
+                const bUnread = (b.unread||0) > 0;
+                if(aUnread && !bUnread) return -1;
+                if(bUnread && !aUnread) return 1;
+                return (b.lastMessageAtMs||0) - (a.lastMessageAtMs||0);
+            });
+
             filtered.forEach(t => {
                 const el = document.createElement("div");
                 const isActive = t.id === store.activeThreadId;
@@ -795,5 +821,16 @@
                     const docRef = getThreadDoc(cleanPhone);
                     const docSnap = await getDoc(docRef);
                     if(docSnap.exists()) {
+                        await updateDoc(docRef, { unread: (docSnap.data().unread||0) + 1 });
+                    }
+                    document.getElementById("notifSound").play().catch(()=>{});
+                }
+            }
+        }
+    } catch(e) { console.error("Poll error", e); }
+  }
+
+  init();
+</script>
 </body>
 </html>
