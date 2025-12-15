@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>OmniChat - Dispatch Console</title>
+  <title>DLX/DMT</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -34,10 +34,10 @@
     <div class="h-16 px-2 border-b border-slate-100 flex items-center justify-between bg-slate-50">
       <div class="flex items-center gap-2 text-indigo-600 pl-2">
         <i class="fa-solid fa-comments text-xl"></i>
-        <span class="font-bold text-lg tracking-tight hidden md:inline">OmniChat</span>
+        <span class="font-bold text-lg tracking-tight hidden md:inline">DLX/DMT</span>
       </div>
       <div class="flex gap-1 items-center">
-        
+
         <button onclick="document.getElementById('broadcastCsvInput').click()" class="flex flex-col items-center justify-center w-10 h-10 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition" title="Broadcast to All">
           <i class="fa-solid fa-bullhorn text-sm mb-0.5"></i>
           <span class="text-[8px] font-bold uppercase leading-none">Blast</span>
@@ -61,6 +61,24 @@
         <i class="fa-solid fa-search absolute left-3 top-3 text-slate-400 text-sm"></i>
         <input type="text" id="searchContacts" onkeyup="renderThreadList()" placeholder="Search..." class="w-full bg-slate-100 text-sm pl-9 pr-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
       </div>
+
+      <!-- NEW: filter buttons -->
+      <div class="flex items-center gap-2">
+        <button onclick="toggleUnreadOnly()" id="unreadOnlyBtn"
+          class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+          title="Show only threads with unread messages">
+          Unread
+        </button>
+        <button onclick="togglePinnedOnly()" id="pinnedOnlyBtn"
+          class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+          title="Show only pinned threads">
+          Pinned
+        </button>
+      </div>
+
+      <!-- NEW: tag chips -->
+      <div id="tagChips" class="pt-1 flex flex-wrap gap-2"></div>
+
       <div class="text-[10px] text-slate-400 flex justify-between">
         <span>Shared DB: <span class="font-mono text-slate-600">dispatch_main</span></span>
         <button onclick="document.getElementById('csvInput').click()" class="hover:text-indigo-600" title="Import Contacts">Import CSV</button>
@@ -99,7 +117,18 @@
           </div>
         </div>
       </div>
+
+      <!-- NEW: header actions -->
       <div class="flex items-center gap-3">
+        <button onclick="openThreadSearch()" class="text-slate-400 hover:text-indigo-600" title="Search this thread">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
+        <button onclick="exportActiveThreadCsv()" class="text-slate-400 hover:text-indigo-600" title="Export thread CSV">
+          <i class="fa-solid fa-file-csv"></i>
+        </button>
+        <button onclick="openSettingsModal()" class="text-slate-400 hover:text-indigo-600" title="Settings">
+          <i class="fa-solid fa-gear"></i>
+        </button>
         <button onclick="openThreadInfo()" class="text-slate-400 hover:text-indigo-600" title="Edit thread info">
           <i class="fa-solid fa-circle-info"></i>
         </button>
@@ -114,14 +143,28 @@
       <div id="messageList" class="space-y-4 pb-2"></div>
     </div>
 
+    <!-- NEW: upgraded composer (quick replies + enter-to-send + draft hint) -->
     <div class="p-4 bg-white border-t border-slate-100 flex-shrink-0">
-      <div class="max-w-4xl mx-auto relative flex items-end gap-2">
-        <div class="relative flex-1">
-          <textarea id="msgInput" rows="1" class="w-full bg-slate-100 border-0 rounded-2xl px-4 py-3 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition resize-none max-h-32" placeholder="Type a message..."></textarea>
+      <div class="max-w-4xl mx-auto flex flex-col gap-2">
+        <div id="quickRepliesRow" class="flex flex-wrap gap-2"></div>
+
+        <div class="relative flex items-end gap-2">
+          <div class="relative flex-1">
+            <textarea id="msgInput" rows="1"
+              class="w-full bg-slate-100 border-0 rounded-2xl px-4 py-3 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition resize-none max-h-48"
+              placeholder="Type a message..."></textarea>
+          </div>
+          <button onclick="sendMessage()" id="sendBtn"
+            class="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition shadow-md flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Send (Enter)">
+            <i class="fa-solid fa-paper-plane"></i>
+          </button>
         </div>
-        <button onclick="sendMessage()" id="sendBtn" class="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition shadow-md flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
-          <i class="fa-solid fa-paper-plane"></i>
-        </button>
+
+        <div class="text-[10px] text-slate-400 flex items-center justify-between">
+          <span>Enter = send • Shift+Enter = newline</span>
+          <span id="draftHint" class="opacity-0 transition">Draft saved</span>
+        </div>
       </div>
     </div>
   </main>
@@ -137,7 +180,7 @@
       <p class="text-xs text-slate-500 mb-4 flex-shrink-0">
         The system detected the following drivers. Rows with missing trip info (Time, City, Client) are marked as <span class="font-bold text-slate-400">NO TRIP DATA</span>.
       </p>
-      
+
       <div class="border rounded-lg overflow-hidden bg-slate-50 flex-1 relative min-h-[300px]">
         <div class="absolute inset-0 overflow-auto">
           <table class="w-full text-xs">
@@ -172,12 +215,12 @@
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
-      
+
       <div class="flex-shrink-0 mb-4 bg-indigo-50 p-4 rounded-lg border border-indigo-100">
         <label class="block text-xs font-bold text-indigo-900 mb-2 uppercase">Message to All Drivers</label>
-        <textarea id="broadcastMsgInput" oninput="updateBroadcastPreview(this.value)" 
-            class="w-full text-sm p-3 border border-indigo-200 rounded-md focus:ring-2 focus:ring-indigo-500 transition resize-none"
-            rows="3" placeholder="Type your announcement here..."></textarea>
+        <textarea id="broadcastMsgInput" oninput="updateBroadcastPreview(this.value)"
+          class="w-full text-sm p-3 border border-indigo-200 rounded-md focus:ring-2 focus:ring-indigo-500 transition resize-none"
+          rows="3" placeholder="Type your announcement here..."></textarea>
       </div>
 
       <div class="border rounded-lg overflow-hidden bg-slate-50 flex-1 relative min-h-[200px]">
@@ -195,7 +238,7 @@
           </table>
         </div>
       </div>
-      
+
       <div class="flex items-center justify-between mt-4 flex-shrink-0">
         <div class="text-xs text-slate-500"><span id="broadcastSummary">0 recipients</span></div>
         <div class="flex gap-2">
@@ -231,10 +274,67 @@
         <div class="flex gap-3 mt-6 pt-4 border-t border-slate-100">
           <button onclick="deleteActiveThread()" class="flex-1 px-4 py-2 text-white bg-red-500 hover:bg-red-600 rounded-lg">Delete</button>
           <div class="flex-1 flex gap-2">
-             <button onclick="closeThreadInfo()" class="flex-1 px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg">Close</button>
-             <button onclick="saveThreadInfo()" class="flex-1 px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Save</button>
+            <button onclick="closeThreadInfo()" class="flex-1 px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg">Close</button>
+            <button onclick="saveThreadInfo()" class="flex-1 px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Save</button>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEW: Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-xl p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-slate-800">Settings</h3>
+        <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-slate-700">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <div class="text-xs font-bold text-slate-500 uppercase">Canned Replies (one per line)</div>
+        <textarea id="cannedRepliesInput" rows="7"
+          class="w-full text-sm p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none"
+          placeholder="Example:
+On my way.
+Running 5 minutes late.
+Please sign into your tablet now."></textarea>
+
+        <div class="flex gap-2 pt-2">
+          <button onclick="closeSettingsModal()" class="px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Close</button>
+          <button onclick="saveSettings()" class="px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEW: Thread Search Modal -->
+  <div id="threadSearchModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl p-6 flex flex-col max-h-[85vh]">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-bold text-slate-800">Search Thread</h3>
+        <button onclick="closeThreadSearch()" class="text-slate-400 hover:text-slate-700">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="flex gap-2 mb-3">
+        <input id="threadSearchInput" type="text"
+          class="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+          placeholder="Search messages (e.g., 'tablet', 'pickup', 'late')"
+          onkeydown="if(event.key==='Enter'){runThreadSearch();}">
+        <button onclick="runThreadSearch()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold">Search</button>
+      </div>
+
+      <div class="border rounded-lg overflow-hidden bg-slate-50 flex-1 relative min-h-[220px]">
+        <div class="absolute inset-0 overflow-auto">
+          <div id="threadSearchResults" class="divide-y divide-slate-200 bg-white"></div>
+        </div>
+      </div>
+
+      <div class="pt-3 flex justify-end">
+        <button onclick="closeThreadSearch()" class="px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Close</button>
       </div>
     </div>
   </div>
@@ -251,14 +351,49 @@
 
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
   import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-  import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp, where, getDocs } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+  import {
+    getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, getDoc,
+    onSnapshot, query, orderBy, serverTimestamp, where, getDocs, limit
+  } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  let store = { uid: null, threads: [], activeThreadId: null, activeThread: null, lastInboundSidSeen: new Set(), deletedSids: new Set(), openGroups: new Set(), initialGroupSet: false, isPolling: false };
-  let assignmentsRows = []; let broadcastRows = []; let unsubThreads = null; let unsubMessages = null; let pollTimer = null;
+  // NEW: pinned/drafts/settings/filters
+  const LS = {
+    pinned: "omnichat_pinned",
+    drafts: "omnichat_drafts",
+    canned: "omnichat_canned",
+    filters: "omnichat_filters",
+    deletedSids: "deletedSids"
+  };
+
+  let store = {
+    uid: null,
+    threads: [],
+    activeThreadId: null,
+    activeThread: null,
+    lastInboundSidSeen: new Set(),
+    deletedSids: new Set(),
+    openGroups: new Set(),
+    initialGroupSet: false,
+    isPolling: false,
+
+    // NEW
+    pinned: new Set(),
+    onlyUnread: false,
+    onlyPinned: false,
+    tagFilter: new Set(),
+    drafts: {},
+    cannedReplies: []
+  };
+
+  let assignmentsRows = [];
+  let broadcastRows = [];
+  let unsubThreads = null;
+  let unsubMessages = null;
+  let pollTimer = null;
 
   // HELPERS
   const escapeHtml = (text) => { const div = document.createElement("div"); div.textContent = text ?? ""; return div.innerHTML; };
@@ -267,44 +402,116 @@
   const normalizePhone = (raw) => (raw || "").toString().replace(/[^0-9+]/g, "").trim();
   const formatTime = (ms) => (!ms) ? "" : new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const nameKey = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const safeId = (s) => (s || "").toString().replace(/[^a-zA-Z0-9_-]/g, "");
+
+  function autosizeTextarea(el) {
+    if(!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 192) + "px";
+  }
+
+  function toastDraftSaved() {
+    const el = document.getElementById("draftHint");
+    if(!el) return;
+    el.classList.remove("opacity-0");
+    clearTimeout(toastDraftSaved._t);
+    toastDraftSaved._t = setTimeout(()=> el.classList.add("opacity-0"), 700);
+  }
 
   // DB PATHS
   const getThreadsCol = () => collection(db, "organizations", SHARED_ORG_ID, "threads");
   const getThreadDoc = (id) => doc(db, "organizations", SHARED_ORG_ID, "threads", id);
   const getMsgsCol = (id) => collection(db, "organizations", SHARED_ORG_ID, "threads", id, "messages");
 
+  // LOCAL SETTINGS
+  function loadLocalSettings() {
+    try {
+      const s = localStorage.getItem(LS.deletedSids);
+      if(s) store.deletedSids = new Set(JSON.parse(s));
+    } catch {}
+
+    try {
+      const p = JSON.parse(localStorage.getItem(LS.pinned) || "[]");
+      store.pinned = new Set(Array.isArray(p) ? p : []);
+    } catch {}
+
+    try {
+      const d = JSON.parse(localStorage.getItem(LS.drafts) || "{}");
+      store.drafts = (d && typeof d === "object") ? d : {};
+    } catch {}
+
+    try {
+      const c = JSON.parse(localStorage.getItem(LS.canned) || "[]");
+      store.cannedReplies = Array.isArray(c) ? c.slice(0, 20) : [];
+    } catch {}
+
+    try {
+      const f = JSON.parse(localStorage.getItem(LS.filters) || "{}");
+      store.onlyUnread = !!f.onlyUnread;
+      store.onlyPinned = !!f.onlyPinned;
+      store.tagFilter = new Set(Array.isArray(f.tagFilter) ? f.tagFilter : []);
+    } catch {}
+
+    if(!store.cannedReplies.length) {
+      store.cannedReplies = [
+        "Please sign into your tablet now.",
+        "Copy. Thank you.",
+        "Running about 5 minutes behind.",
+        "Call dispatch when you arrive.",
+        "Make sure you’re in the correct city zone."
+      ];
+    }
+  }
+
+  function saveLocalSettings() {
+    localStorage.setItem(LS.deletedSids, JSON.stringify([...store.deletedSids]));
+    localStorage.setItem(LS.pinned, JSON.stringify([...store.pinned]));
+    localStorage.setItem(LS.drafts, JSON.stringify(store.drafts || {}));
+    localStorage.setItem(LS.canned, JSON.stringify(store.cannedReplies || []));
+    localStorage.setItem(LS.filters, JSON.stringify({
+      onlyUnread: store.onlyUnread,
+      onlyPinned: store.onlyPinned,
+      tagFilter: [...store.tagFilter]
+    }));
+  }
+
   // POLL
   async function pollIncomingMessages() {
     if(!store.uid || store.isPolling) return;
-    store.isPolling = true; 
+    store.isPolling = true;
     try {
-        const res = await fetch(TWILIO_GET_URL);
-        const data = await res.json();
-        if(!data.success || !data.messages) { store.isPolling = false; return; }
-        for(let m of data.messages) {
-            if(store.deletedSids.has(m.sid) || store.lastInboundSidSeen.has(m.sid)) continue;
-            store.lastInboundSidSeen.add(m.sid);
-            if(m.direction === 'inbound') {
-                const cleanPhone = normalizePhone(m.from);
-                if(cleanPhone.length > 5) {
-                    const q = query(getMsgsCol(cleanPhone), where("sid", "==", m.sid));
-                    const querySnap = await getDocs(q);
-                    if (querySnap.empty) {
-                        await upsertThread(m.from, cleanPhone, ["New"]); 
-                        await setDoc(doc(getMsgsCol(cleanPhone), m.sid), { body: m.body, direction: "received", createdAt: serverTimestamp(), sid: m.sid });
-                        const threadRef = getThreadDoc(cleanPhone);
-                        const tSnap = await getDoc(threadRef);
-                        const currentUnread = tSnap.exists() ? (tSnap.data().unread || 0) : 0;
-                        const updates = { lastMessageText: m.body, lastMessageAtMs: Date.now() };
-                        if(store.activeThreadId !== cleanPhone) { updates.unread = currentUnread + 1; }
-                        await updateDoc(threadRef, updates);
-                        document.getElementById("notifSound").play().catch(()=>{});
-                    }
-                }
+      const res = await fetch(TWILIO_GET_URL);
+      const data = await res.json();
+      if(!data.success || !data.messages) { store.isPolling = false; return; }
+
+      for(let m of data.messages) {
+        if(store.deletedSids.has(m.sid) || store.lastInboundSidSeen.has(m.sid)) continue;
+        store.lastInboundSidSeen.add(m.sid);
+
+        if(m.direction === 'inbound') {
+          const cleanPhone = normalizePhone(m.from);
+          if(cleanPhone.length > 5) {
+            const q = query(getMsgsCol(cleanPhone), where("sid", "==", m.sid));
+            const querySnap = await getDocs(q);
+            if (querySnap.empty) {
+              await upsertThread(m.from, cleanPhone, ["New"]);
+              await setDoc(doc(getMsgsCol(cleanPhone), m.sid), { body: m.body, direction: "received", createdAt: serverTimestamp(), sid: m.sid });
+
+              const threadRef = getThreadDoc(cleanPhone);
+              const tSnap = await getDoc(threadRef);
+              const currentUnread = tSnap.exists() ? (tSnap.data().unread || 0) : 0;
+
+              const updates = { lastMessageText: m.body, lastMessageAtMs: Date.now() };
+              if(store.activeThreadId !== cleanPhone) { updates.unread = currentUnread + 1; }
+              await updateDoc(threadRef, updates);
+
+              document.getElementById("notifSound").play().catch(()=>{});
             }
+          }
         }
+      }
     } catch(e) { console.error("Poll error", e); }
-    finally { store.isPolling = false; } 
+    finally { store.isPolling = false; }
   }
 
   // --- TRIP ASSIGNMENTS ---
@@ -313,40 +520,41 @@
     const text = await file.text(); const lines = text.split(/\r?\n/);
     if (lines.length < 4) { alert("CSV seems empty."); return; }
 
-    let dateStr = parseCsvLine(lines[0])[0]; 
+    let dateStr = parseCsvLine(lines[0])[0];
     if(!dateStr || !/\d/.test(dateStr)) { const row2 = parseCsvLine(lines[1]); if(row2[0] && /\d/.test(row2[0])) dateStr = row2[0]; }
-    const dow = getDayOfWeek(dateStr); 
+    const dow = getDayOfWeek(dateStr);
 
     const sectionMap = { "eugene": "DLX-EUG", "roseburg": "RBG", "portland/i-84 corridor": "PDX", "albany/corvallis/salem": "XLB", "direct medical transport": "DMT", "coast": "XCC" };
-    let currentTag = "Auto-Assign"; 
+    let currentTag = "Auto-Assign";
     const contactsMap = await buildContactsMap();
     assignmentsRows = [];
 
     for (let i = 0; i < lines.length; i++) {
-        const parts = parseCsvLine(lines[i]);
-        if (parts.length < 5) continue;
-        const colE = (parts[4] || "").trim();
-        const lowerE = colE.toLowerCase();
-        if (sectionMap[lowerE]) { currentTag = sectionMap[lowerE]; continue; }
+      const parts = parseCsvLine(lines[i]);
+      if (parts.length < 5) continue;
 
-        const puTime = parts[0] || ""; const city = parts[1] || ""; const client = parts[2] || ""; 
-        let phone = parts[3] || ""; const name = parts[4] || ""; const tablet = parts[6] || "?"; 
+      const colE = (parts[4] || "").trim();
+      const lowerE = colE.toLowerCase();
+      if (sectionMap[lowerE]) { currentTag = sectionMap[lowerE]; continue; }
 
-        if (!name || name.toLowerCase() === "name" || name.includes("Corridor")) continue; 
+      const puTime = parts[0] || ""; const city = parts[1] || ""; const client = parts[2] || "";
+      let phone = parts[3] || ""; const name = parts[4] || ""; const tablet = parts[6] || "?";
 
-        if (!phone) { phone = contactsMap.get(nameKey(name)) || ""; }
-        phone = normalizePhone(phone);
+      if (!name || name.toLowerCase() === "name" || name.includes("Corridor")) continue;
 
-        const hasTrip = (puTime && city && client);
-        const msg = hasTrip 
-            ? `${dow}: ${puTime} pickup in ${city} (${client}), be signed into your tablet @ ${tablet} to receive ride.` 
-            : "(No Trip Data)";
+      if (!phone) { phone = contactsMap.get(nameKey(name)) || ""; }
+      phone = normalizePhone(phone);
 
-        assignmentsRows.push({
-            driverName: name, phone: phone, 
-            message: msg, tag: currentTag,
-            status: (!hasTrip) ? "NO TRIP DATA" : (phone && phone.length > 5) ? "READY" : "NO MATCH"
-        });
+      const hasTrip = (puTime && city && client);
+      const msg = hasTrip
+        ? `${dow}: ${puTime} pickup in ${city} (${client}), be signed into your tablet @ ${tablet} to receive ride.`
+        : "(No Trip Data)";
+
+      assignmentsRows.push({
+        driverName: name, phone: phone,
+        message: msg, tag: currentTag,
+        status: (!hasTrip) ? "NO TRIP DATA" : (phone && phone.length > 5) ? "READY" : "NO MATCH"
+      });
     }
     renderAssignmentsPreview();
     openAssignmentsModal();
@@ -356,31 +564,31 @@
   window.handleBroadcastCsv = async function(input) {
     const file = input.files?.[0]; input.value = ""; if (!file || !store.uid) return;
     const text = await file.text(); const lines = text.split(/\r?\n/);
-    
+
     const sectionMap = { "eugene": "DLX-EUG", "roseburg": "RBG", "portland/i-84 corridor": "PDX", "albany/corvallis/salem": "XLB", "direct medical transport": "DMT", "coast": "XCC" };
-    let currentTag = "Auto-Assign"; 
+    let currentTag = "Auto-Assign";
     const contactsMap = await buildContactsMap();
     broadcastRows = [];
 
     for (let i = 0; i < lines.length; i++) {
-        const parts = parseCsvLine(lines[i]);
-        if (parts.length < 5) continue;
-        const colE = (parts[4] || "").trim();
-        if (sectionMap[colE.toLowerCase()]) { currentTag = sectionMap[colE.toLowerCase()]; continue; }
+      const parts = parseCsvLine(lines[i]);
+      if (parts.length < 5) continue;
 
-        const name = parts[4] || ""; let phone = parts[3] || ""; 
-        if (!name || name.toLowerCase() === "name" || name.includes("Corridor")) continue;
+      const colE = (parts[4] || "").trim();
+      if (sectionMap[colE.toLowerCase()]) { currentTag = sectionMap[colE.toLowerCase()]; continue; }
 
-        if (!phone) { phone = contactsMap.get(nameKey(name)) || ""; }
-        phone = normalizePhone(phone);
+      const name = parts[4] || ""; let phone = parts[3] || "";
+      if (!name || name.toLowerCase() === "name" || name.includes("Corridor")) continue;
 
-        // Include even if NO TRIP, as long as it's a driver
-        broadcastRows.push({
-            driverName: name, phone: phone, tag: currentTag,
-            status: (phone && phone.length > 5) ? "READY" : "NO MATCH"
-        });
+      if (!phone) { phone = contactsMap.get(nameKey(name)) || ""; }
+      phone = normalizePhone(phone);
+
+      broadcastRows.push({
+        driverName: name, phone: phone, tag: currentTag,
+        status: (phone && phone.length > 5) ? "READY" : "NO MATCH"
+      });
     }
-    
+
     document.getElementById("broadcastMsgInput").value = "";
     updateBroadcastPreview("");
     document.getElementById("broadcastModal").classList.remove("hidden");
@@ -392,18 +600,20 @@
     const summary = document.getElementById("broadcastSummary");
     tbody.innerHTML = "";
     const readyCount = broadcastRows.filter(r => r.status === "READY").length;
+
     broadcastRows.forEach(row => {
-        const tr = document.createElement("tr");
-        const color = row.status === "READY" ? "text-green-600 font-bold" : "text-red-400";
-        tr.className = "hover:bg-slate-50 transition";
-        tr.innerHTML = `
-            <td class="p-3 border-b"><div class="font-bold text-slate-700">${escapeHtml(row.driverName)}</div><div class="text-[10px] text-indigo-500 font-mono">${row.tag}</div></td>
-            <td class="p-3 border-b font-mono text-slate-500">${row.phone || "—"}</td>
-            <td class="p-3 border-b text-xs text-slate-600 italic">${escapeHtml(text)}</td>
-            <td class="p-3 border-b text-xs uppercase ${color}">${row.status}</td>
-        `;
-        tbody.appendChild(tr);
+      const tr = document.createElement("tr");
+      const color = row.status === "READY" ? "text-green-600 font-bold" : "text-red-400";
+      tr.className = "hover:bg-slate-50 transition";
+      tr.innerHTML = `
+        <td class="p-3 border-b"><div class="font-bold text-slate-700">${escapeHtml(row.driverName)}</div><div class="text-[10px] text-indigo-500 font-mono">${row.tag}</div></td>
+        <td class="p-3 border-b font-mono text-slate-500">${row.phone || "—"}</td>
+        <td class="p-3 border-b text-xs text-slate-600 italic">${escapeHtml(text)}</td>
+        <td class="p-3 border-b text-xs uppercase ${color}">${row.status}</td>
+      `;
+      tbody.appendChild(tr);
     });
+
     summary.innerText = `Targeting ${readyCount} drivers.`;
   };
 
@@ -413,15 +623,18 @@
     const readyRows = broadcastRows.filter(r => r.status === "READY");
     if(!readyRows.length) return alert("No valid drivers found.");
     if(!confirm(`Send broadcast to ${readyRows.length} drivers?\nMessage: "${text}"`)) return;
-    const btn = document.getElementById("sendBroadcastBtn"); btn.disabled = true; btn.innerText = "Sending...";
+
+    const btn = document.getElementById("sendBroadcastBtn");
+    btn.disabled = true; btn.innerText = "Sending...";
     let sent = 0;
+
     for(const row of readyRows) {
-        try {
-            await sendSmsApi(row.phone, text);
-            await upsertThread(row.phone, row.driverName, [row.tag]);
-            await addMessageToFirestore(normalizePhone(row.phone), text, "sent");
-            sent++;
-        } catch(e) { console.error("Broadcast fail", row.driverName, e); }
+      try {
+        await sendSmsApi(row.phone, text);
+        await upsertThread(row.phone, row.driverName, [row.tag]);
+        await addMessageToFirestore(normalizePhone(row.phone), text, "sent");
+        sent++;
+      } catch(e) { console.error("Broadcast fail", row.driverName, e); }
     }
     alert(`Broadcast sent to ${sent} drivers.`);
     btn.disabled = false; btn.innerText = "Send Broadcast";
@@ -435,7 +648,11 @@
   // UTILS
   function getDayOfWeek(dateStr) {
     if(!dateStr) return "TODAY";
-    try { const d = new Date(dateStr); if(isNaN(d.getTime())) return "TODAY"; return d.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase(); } catch(e) { return "TODAY"; }
+    try {
+      const d = new Date(dateStr);
+      if(isNaN(d.getTime())) return "TODAY";
+      return d.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+    } catch(e) { return "TODAY"; }
   }
 
   window.renderAssignmentsPreview = function() {
@@ -443,20 +660,22 @@
     const summary = document.getElementById("assignmentsSummary");
     tbody.innerHTML = "";
     const ready = assignmentsRows.filter(r => r.status === "READY").length;
+
     assignmentsRows.forEach(row => {
-        const tr = document.createElement("tr");
-        const isReady = row.status === "READY";
-        const color = isReady ? "text-green-600 font-bold" : (row.status === "NO TRIP DATA" ? "text-slate-400 font-medium" : "text-red-400 font-bold");
-        const msgClass = row.status === "NO TRIP DATA" ? "text-slate-300 italic" : "text-slate-600";
-        tr.className = "hover:bg-slate-50 transition";
-        tr.innerHTML = `
-            <td class="p-3 border-b"><div class="font-bold text-slate-700">${escapeHtml(row.driverName)}</div><div class="text-[10px] text-indigo-500 font-mono">${row.tag}</div></td>
-            <td class="p-3 border-b font-mono text-slate-500">${row.phone || "—"}</td>
-            <td class="p-3 border-b text-[11px] leading-tight ${msgClass}">${escapeHtml(row.message)}</td>
-            <td class="p-3 border-b text-xs uppercase ${color}">${row.status}</td>
-        `;
-        tbody.appendChild(tr);
+      const tr = document.createElement("tr");
+      const isReady = row.status === "READY";
+      const color = isReady ? "text-green-600 font-bold" : (row.status === "NO TRIP DATA" ? "text-slate-400 font-medium" : "text-red-400 font-bold");
+      const msgClass = row.status === "NO TRIP DATA" ? "text-slate-300 italic" : "text-slate-600";
+      tr.className = "hover:bg-slate-50 transition";
+      tr.innerHTML = `
+        <td class="p-3 border-b"><div class="font-bold text-slate-700">${escapeHtml(row.driverName)}</div><div class="text-[10px] text-indigo-500 font-mono">${row.tag}</div></td>
+        <td class="p-3 border-b font-mono text-slate-500">${row.phone || "—"}</td>
+        <td class="p-3 border-b text-[11px] leading-tight ${msgClass}">${escapeHtml(row.message)}</td>
+        <td class="p-3 border-b text-xs uppercase ${color}">${row.status}</td>
+      `;
+      tbody.appendChild(tr);
     });
+
     summary.innerText = `Detected ${assignmentsRows.length} drivers. ${ready} trips ready.`;
   };
 
@@ -464,16 +683,20 @@
     const readyRows = assignmentsRows.filter(r => r.status === "READY");
     if (!readyRows.length) return alert("No valid trips to send.");
     if (!confirm(`Send SMS to ${readyRows.length} drivers?`)) return;
-    const btn = document.getElementById("sendAllAssignmentsBtn"); btn.disabled = true; btn.innerText = "Sending...";
+
+    const btn = document.getElementById("sendAllAssignmentsBtn");
+    btn.disabled = true; btn.innerText = "Sending...";
     let sent = 0;
+
     for (const row of readyRows) {
-        try {
-            await sendSmsApi(row.phone, row.message);
-            await upsertThread(row.phone, row.driverName, [row.tag]);
-            await addMessageToFirestore(normalizePhone(row.phone), row.message, "sent");
-            sent++;
-        } catch (e) { console.error("Failed", row.driverName, e); }
+      try {
+        await sendSmsApi(row.phone, row.message);
+        await upsertThread(row.phone, row.driverName, [row.tag]);
+        await addMessageToFirestore(normalizePhone(row.phone), row.message, "sent");
+        sent++;
+      } catch (e) { console.error("Failed", row.driverName, e); }
     }
+
     alert(`Sent ${sent} messages.`);
     btn.disabled = false; btn.innerText = "Send Trips";
     closeAssignmentsModal();
@@ -483,101 +706,641 @@
     const file = input.files?.[0]; input.value = ""; if (!file) return;
     const text = await file.text(); const lines = text.split(/\r?\n/).filter(l => l.trim());
     let count = 0;
+
     for(let l of lines) {
-        const parts = parseCsvLine(l);
-        if(parts.length >= 2 && parts[0].toLowerCase() !== "first name") {
-            let name = parts[0], phone = parts[1];
-            if(parts.length > 5) { name = parts[0] + " " + parts[2]; phone = parts[18] || parts[35]; }
-            if(normalizePhone(phone).length>5) { await upsertThread(phone, name, []); count++; }
-        }
+      const parts = parseCsvLine(l);
+      if(parts.length >= 2 && parts[0].toLowerCase() !== "first name") {
+        let name = parts[0], phone = parts[1];
+        if(parts.length > 5) { name = parts[0] + " " + parts[2]; phone = parts[18] || parts[35]; }
+        if(normalizePhone(phone).length>5) { await upsertThread(phone, name, []); count++; }
+      }
     }
     alert(`Imported ${count} contacts (estimated).`);
   };
 
   async function buildContactsMap() {
-    const q = query(getThreadsCol()); return new Promise(r => onSnapshot(q, s => {
-        const m = new Map(); s.forEach(d => { if(d.data().phone) m.set(nameKey(d.data().name), d.data().phone); }); r(m);
+    const q = query(getThreadsCol());
+    return new Promise(r => onSnapshot(q, s => {
+      const m = new Map();
+      s.forEach(d => { if(d.data().phone) m.set(nameKey(d.data().name), d.data().phone); });
+      r(m);
     }));
   }
+
   function parseCsvLine(line) {
     const out = []; let cur = "", inQ = false;
-    for(let c of line) { if(c === '"') { inQ = !inQ; } else if(c === ',' && !inQ) { out.push(cur.trim()); cur = ""; } else cur += c; }
-    out.push(cur.trim()); return out;
+    for(let c of line) {
+      if(c === '"') { inQ = !inQ; }
+      else if(c === ',' && !inQ) { out.push(cur.trim()); cur = ""; }
+      else cur += c;
+    }
+    out.push(cur.trim());
+    return out;
   }
 
-  // THREAD LIST + UI
+  // NEW: Filters UI
+  function updateFilterButtons() {
+    const u = document.getElementById("unreadOnlyBtn");
+    const p = document.getElementById("pinnedOnlyBtn");
+    if(u) u.className = store.onlyUnread
+      ? "px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition"
+      : "px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition";
+    if(p) p.className = store.onlyPinned
+      ? "px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition"
+      : "px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition";
+  }
+
+  window.toggleUnreadOnly = function() {
+    store.onlyUnread = !store.onlyUnread;
+    saveLocalSettings();
+    updateFilterButtons();
+    renderThreadList();
+  };
+
+  window.togglePinnedOnly = function() {
+    store.onlyPinned = !store.onlyPinned;
+    saveLocalSettings();
+    updateFilterButtons();
+    renderThreadList();
+  };
+
+  function renderTagChips() {
+    const wrap = document.getElementById("tagChips");
+    if(!wrap) return;
+    wrap.innerHTML = "";
+
+    const counts = new Map();
+    store.threads.forEach(t => {
+      const tags = (t.tags && t.tags.length) ? t.tags : ["Untagged"];
+      tags.forEach(tag => counts.set(tag, (counts.get(tag) || 0) + 1));
+    });
+
+    const tagsSorted = [...counts.entries()]
+      .sort((a,b)=> b[1]-a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 14);
+
+    const allChip = document.createElement("button");
+    allChip.className = store.tagFilter.size === 0
+      ? "px-3 py-1 rounded-full text-xs font-semibold bg-indigo-600 text-white"
+      : "px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700";
+    allChip.textContent = "All";
+    allChip.onclick = () => {
+      store.tagFilter.clear();
+      saveLocalSettings();
+      renderTagChips();
+      renderThreadList();
+    };
+    wrap.appendChild(allChip);
+
+    tagsSorted.forEach(([tag, n]) => {
+      const on = store.tagFilter.has(tag);
+      const b = document.createElement("button");
+      b.className = on
+        ? "px-3 py-1 rounded-full text-xs font-semibold bg-indigo-600 text-white"
+        : "px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700";
+      b.innerHTML = `${escapeHtml(tag)} <span class="text-[10px] opacity-70 ml-1">${n}</span>`;
+      b.onclick = () => {
+        if(store.tagFilter.has(tag)) store.tagFilter.delete(tag);
+        else store.tagFilter.add(tag);
+        saveLocalSettings();
+        renderTagChips();
+        renderThreadList();
+      };
+      wrap.appendChild(b);
+    });
+  }
+
+  // THREAD LIST + UI (upgraded: pinned + filters)
   window.renderThreadList = function() {
-    const listEl = document.getElementById("contactList"); const search = document.getElementById("searchContacts")?.value.toLowerCase().trim(); listEl.innerHTML = "";
-    const groups = new Map(); store.threads.forEach(t => { const tags = (t.tags && t.tags.length) ? t.tags : ["Untagged"]; tags.forEach(tag => { if(!groups.has(tag)) groups.set(tag, []); groups.get(tag).push(t); }); });
-    const groupData = [...groups.entries()].map(([tag, threads]) => ({ tag, threads, unreadCount: threads.reduce((acc, t) => acc + (t.unread || 0), 0), maxTime: Math.max(...threads.map(t => t.lastMessageAtMs || 0)) }));
-    groupData.sort((a, b) => { if (a.unreadCount > 0 && b.unreadCount === 0) return -1; if (b.unreadCount > 0 && a.unreadCount === 0) return 1; if (b.maxTime !== a.maxTime) return b.maxTime - a.maxTime; return a.tag.localeCompare(b.tag); });
-    if (!store.initialGroupSet && groupData.length > 0) { store.openGroups.add(groupData[0].tag); store.initialGroupSet = true; }
+    updateFilterButtons();
+    renderTagChips();
+
+    const listEl = document.getElementById("contactList");
+    const search = document.getElementById("searchContacts")?.value.toLowerCase().trim();
+    listEl.innerHTML = "";
+
+    const groups = new Map();
+    store.threads.forEach(t => {
+      const tags = (t.tags && t.tags.length) ? t.tags : ["Untagged"];
+      tags.forEach(tag => {
+        if(!groups.has(tag)) groups.set(tag, []);
+        groups.get(tag).push(t);
+      });
+    });
+
+    const groupData = [...groups.entries()].map(([tag, threads]) => ({
+      tag,
+      threads,
+      unreadCount: threads.reduce((acc, t) => acc + (t.unread || 0), 0),
+      maxTime: Math.max(...threads.map(t => t.lastMessageAtMs || 0))
+    }));
+
+    groupData.sort((a, b) => {
+      if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
+      if (b.unreadCount > 0 && a.unreadCount === 0) return 1;
+      if (b.maxTime !== a.maxTime) return b.maxTime - a.maxTime;
+      return a.tag.localeCompare(b.tag);
+    });
+
+    if (!store.initialGroupSet && groupData.length > 0) {
+      store.openGroups.add(groupData[0].tag);
+      store.initialGroupSet = true;
+    }
+
     groupData.forEach(({ tag, threads, unreadCount }) => {
-        const filtered = threads.filter(t => !search || (t.name||"").toLowerCase().includes(search) || (t.phone||"").includes(search)); if(!filtered.length) return;
-        const isOpen = store.openGroups.has(tag); const badge = unreadCount > 0 ? `<span class="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">${unreadCount}</span>` : "";
-        const header = document.createElement("button"); header.className = "w-full text-left px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition flex items-center justify-between gap-3 mb-1";
-        header.innerHTML = `<div class="flex items-center gap-2"><i class="fa-solid ${isOpen ? 'fa-chevron-down' : 'fa-chevron-right'} text-slate-400 text-xs"></i><span class="font-semibold text-sm text-slate-800">${escapeHtml(tag)}</span>${badge}</div><div class="text-[10px] text-slate-400">${filtered.length}</div>`;
-        header.onclick = () => { if(isOpen) store.openGroups.delete(tag); else store.openGroups.add(tag); renderThreadList(); };
-        listEl.appendChild(header);
-        if(isOpen) {
-            const container = document.createElement("div"); container.className = "pl-2 pr-1 pb-2 space-y-1";
-            filtered.sort((a, b) => { const aUnread = (a.unread||0) > 0; const bUnread = (b.unread||0) > 0; if(aUnread && !bUnread) return -1; if(bUnread && !aUnread) return 1; return (b.lastMessageAtMs||0) - (a.lastMessageAtMs||0); });
-            filtered.forEach(t => {
-                const el = document.createElement("div"); const isActive = t.id === store.activeThreadId;
-                el.className = `p-3 rounded-xl cursor-pointer flex gap-3 items-center transition ${isActive ? "bg-indigo-50 border border-indigo-100" : "hover:bg-slate-50 border border-transparent"}`;
-                el.onclick = () => loadThread(t.id);
-                el.innerHTML = `<div class="relative"><div class="w-12 h-12 rounded-full bg-slate-400 flex items-center justify-center text-white font-bold text-sm">${escapeHtml(initials(t.name || t.phone))}</div>${t.unread > 0 ? `<div class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full border-2 border-white flex items-center justify-center text-white text-[10px] font-bold">${t.unread}</div>` : ""}</div><div class="flex-1 min-w-0"><div class="flex justify-between items-baseline mb-0.5"><span class="font-semibold text-sm text-slate-800 truncate">${escapeHtml(t.name || t.phone)}</span><span class="text-[10px] text-slate-400 font-medium">${formatTime(t.lastMessageAtMs)}</span></div><p class="text-xs text-slate-500 truncate ${t.unread > 0 ? "font-bold text-slate-700" : ""}">${escapeHtml(t.lastMessageText || "No messages")}</p></div>`;
-                container.appendChild(el);
-            });
-            listEl.appendChild(container);
-        }
+      // apply tag filter
+      if(store.tagFilter.size > 0 && !store.tagFilter.has(tag)) return;
+
+      // apply thread-level filters
+      let filtered = threads.slice();
+
+      if(store.onlyUnread) filtered = filtered.filter(t => (t.unread || 0) > 0);
+      if(store.onlyPinned) filtered = filtered.filter(t => store.pinned.has(t.id));
+      if(search) filtered = filtered.filter(t =>
+        (t.name||"").toLowerCase().includes(search) || (t.phone||"").includes(search)
+      );
+      if(!filtered.length) return;
+
+      const isOpen = store.openGroups.has(tag);
+      const badge = unreadCount > 0 ? `<span class="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">${unreadCount}</span>` : "";
+
+      const header = document.createElement("button");
+      header.className = "w-full text-left px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition flex items-center justify-between gap-3 mb-1";
+      header.innerHTML = `<div class="flex items-center gap-2"><i class="fa-solid ${isOpen ? 'fa-chevron-down' : 'fa-chevron-right'} text-slate-400 text-xs"></i><span class="font-semibold text-sm text-slate-800">${escapeHtml(tag)}</span>${badge}</div><div class="text-[10px] text-slate-400">${filtered.length}</div>`;
+      header.onclick = () => { if(isOpen) store.openGroups.delete(tag); else store.openGroups.add(tag); renderThreadList(); };
+      listEl.appendChild(header);
+
+      if(isOpen) {
+        const container = document.createElement("div");
+        container.className = "pl-2 pr-1 pb-2 space-y-1";
+
+        filtered.sort((a, b) => {
+          const aPinned = store.pinned.has(a.id);
+          const bPinned = store.pinned.has(b.id);
+          if(aPinned && !bPinned) return -1;
+          if(bPinned && !aPinned) return 1;
+
+          const aUnread = (a.unread||0) > 0;
+          const bUnread = (b.unread||0) > 0;
+          if(aUnread && !bUnread) return -1;
+          if(bUnread && !aUnread) return 1;
+
+          return (b.lastMessageAtMs||0) - (a.lastMessageAtMs||0);
+        });
+
+        filtered.forEach(t => {
+          const el = document.createElement("div");
+          const isActive = t.id === store.activeThreadId;
+          const isPinned = store.pinned.has(t.id);
+
+          el.className = `p-3 rounded-xl cursor-pointer flex gap-3 items-center transition ${isActive ? "bg-indigo-50 border border-indigo-100" : "hover:bg-slate-50 border border-transparent"}`;
+
+          // click row loads thread; click star toggles pin
+          el.onclick = (e) => {
+            const target = e.target;
+            if(target && (target.closest && target.closest(".pin-btn"))) return;
+            loadThread(t.id);
+          };
+
+          el.innerHTML = `
+            <div class="relative">
+              <div class="w-12 h-12 rounded-full bg-slate-400 flex items-center justify-center text-white font-bold text-sm">${escapeHtml(initials(t.name || t.phone))}</div>
+              ${(t.unread > 0) ? `<div class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full border-2 border-white flex items-center justify-center text-white text-[10px] font-bold">${t.unread}</div>` : ""}
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex justify-between items-baseline mb-0.5 gap-2">
+                <span class="font-semibold text-sm text-slate-800 truncate">${escapeHtml(t.name || t.phone)}</span>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                  <button class="pin-btn text-slate-300 hover:text-amber-500 transition" title="Pin"
+                    onclick="togglePinThread('${escapeHtml(t.id)}')">
+                    <i class="fa-solid fa-star ${isPinned ? "text-amber-500" : ""}"></i>
+                  </button>
+                  <span class="text-[10px] text-slate-400 font-medium">${formatTime(t.lastMessageAtMs)}</span>
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 truncate ${(t.unread > 0) ? "font-bold text-slate-700" : ""}">${escapeHtml(t.lastMessageText || "No messages")}</p>
+            </div>
+          `;
+
+          container.appendChild(el);
+        });
+
+        listEl.appendChild(container);
+      }
     });
   };
 
+  window.togglePinThread = function(threadId) {
+    // threadId may be html-escaped; find raw match by id in store.threads
+    const t = store.threads.find(x => x.id === threadId) || store.threads.find(x => safeId(x.id) === safeId(threadId));
+    const id = t?.id || threadId;
+    if(store.pinned.has(id)) store.pinned.delete(id);
+    else store.pinned.add(id);
+    saveLocalSettings();
+    renderThreadList();
+  };
+
   async function loadThread(threadId) {
-    if(unsubMessages) { unsubMessages(); unsubMessages = null; } 
-    store.activeThreadId = threadId; store.activeThread = store.threads.find(t => t.id === threadId);
+    if(unsubMessages) { unsubMessages(); unsubMessages = null; }
+
+    // save previous draft before switching
+    persistDraftFromUI();
+
+    store.activeThreadId = threadId;
+    store.activeThread = store.threads.find(t => t.id === threadId);
+
     document.getElementById("welcomeState").classList.add("hidden");
     document.getElementById("activeContactName").innerText = store.activeThread?.name || "Unknown";
     document.getElementById("activeContactPhone").innerText = store.activeThread?.phone || "";
     document.getElementById("activeContactAvatar").innerText = initials(store.activeThread?.name);
+
+    // show tags in header
+    const tagsEl = document.getElementById("activeTags");
+    if(tagsEl) {
+      const tags = (store.activeThread?.tags && store.activeThread.tags.length) ? store.activeThread.tags : [];
+      tagsEl.innerHTML = tags.slice(0, 10).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">${escapeHtml(t)}</span>`).join("");
+    }
+
     try { await updateDoc(getThreadDoc(threadId), { unread: 0 }); } catch(e) {}
+
     const q = query(getMsgsCol(threadId), orderBy("createdAt", "asc"));
     unsubMessages = onSnapshot(q, s => {
-        const div = document.getElementById("messageList"); div.innerHTML = ""; const seen = new Set();
-        s.forEach(d => {
-            const m = d.data(); const fps = m.body + Math.floor((m.createdAt?.toMillis()||0)/1000); if(seen.has(fps)) return; seen.add(fps);
-            const el = document.createElement("div"); el.className = `flex ${m.direction==='sent'?'justify-end':'justify-start'} fade-in-up`;
-            el.innerHTML = `<div class="group relative max-w-[75%]"><div class="p-3 text-sm shadow-sm ${m.direction==='sent'?'msg-sent':'msg-received'}"><p>${escapeHtml(m.body)}</p><div class="text-[10px] opacity-70 mt-1 text-right flex justify-between items-center"><span>${formatTime(m.createdAt?.toMillis())}</span><button onclick="window.deleteSingleMessage('${threadId}','${d.id}','${m.sid||''}')" class="ml-2 text-red-300 hover:text-red-100 opacity-0 group-hover:opacity-100 transition"><i class="fa-solid fa-trash"></i></button></div></div></div>`;
-            div.appendChild(el);
-        });
-        scrollToBottom();
+      const div = document.getElementById("messageList");
+      div.innerHTML = "";
+      const seen = new Set();
+
+      s.forEach(d => {
+        const m = d.data();
+        const fps = (m.body || "") + Math.floor((m.createdAt?.toMillis()||0)/1000);
+        if(seen.has(fps)) return;
+        seen.add(fps);
+
+        const el = document.createElement("div");
+        el.className = `flex ${m.direction==='sent'?'justify-end':'justify-start'} fade-in-up`;
+        el.innerHTML = `
+          <div class="group relative max-w-[75%]">
+            <div class="p-3 text-sm shadow-sm ${m.direction==='sent'?'msg-sent':'msg-received'}">
+              <p>${escapeHtml(m.body)}</p>
+              <div class="text-[10px] opacity-70 mt-1 text-right flex justify-between items-center">
+                <span>${formatTime(m.createdAt?.toMillis())}</span>
+                <button onclick="window.deleteSingleMessage('${threadId}','${d.id}','${m.sid||''}')"
+                  class="ml-2 text-red-300 hover:text-red-100 opacity-0 group-hover:opacity-100 transition"
+                  title="Delete message">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+        div.appendChild(el);
+      });
+
+      scrollToBottom();
     });
-    if(window.innerWidth < 768) window.toggleMobileSidebar(); renderThreadList();
+
+    // restore draft for this thread
+    restoreDraftToUI(threadId);
+
+    // update quick replies
+    renderQuickReplies();
+
+    if(window.innerWidth < 768) window.toggleMobileSidebar();
+    renderThreadList();
   }
 
   // DELETE & SEND
-  window.deleteActiveThread = async function() { if(!store.activeThreadId)return; if(!confirm("Delete?"))return; try { await fetch(TWILIO_DELETE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone:store.activeThread.phone})}); await deleteDoc(getThreadDoc(store.activeThreadId)); store.activeThreadId=null; window.closeThreadInfo(); document.getElementById("welcomeState").classList.remove("hidden"); } catch(e){alert(e);} };
-  window.deleteSingleMessage = async function(tid, did, sid) { if(!confirm("Delete?"))return; try { if(sid){ store.deletedSids.add(sid); localStorage.setItem("deletedSids", JSON.stringify([...store.deletedSids])); fetch(TWILIO_DELETE_MSG_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sid})}).catch(()=>{}); } await deleteDoc(doc(getMsgsCol(tid), did)); } catch(e){alert(e);} };
-  async function upsertThread(phone, name, newTags) { const clean = normalizePhone(phone); if(!clean) return; const ref = getThreadDoc(clean); const snap = await getDoc(ref); if(snap.exists()) { const merged = [...new Set([...(snap.data().tags||[]), ...newTags])]; await updateDoc(ref, { name, tags: merged }); } else { await setDoc(ref, { id: clean, phone, name, tags: newTags, createdAt: serverTimestamp(), lastMessageAtMs: Date.now(), unread: 0 }); } }
-  async function addMessageToFirestore(tid, body, dir, sid) { if(!tid) return; const did = sid||"local-"+Date.now(); await setDoc(doc(getMsgsCol(tid), did), { body, direction: dir, createdAt: serverTimestamp(), sid: did }); await updateDoc(getThreadDoc(tid), { lastMessageText: body, lastMessageAtMs: Date.now() }); }
-  async function sendSmsApi(to, body) { const p = new URLSearchParams(); p.append("to", to); p.append("body", body); const r = await fetch(TWILIO_SEND_URL, { method: "POST", body: p }); if(!r.ok) throw new Error("Twilio Fail"); }
-  
-  window.sendMessage = async function() { const i = document.getElementById("msgInput"); const t = i.value.trim(); if(!t || !store.activeThread) return; i.value = ""; try { await sendSmsApi(store.activeThread.phone, t); await addMessageToFirestore(store.activeThreadId, t, "sent"); scrollToBottom(); } catch(e) { alert(e); } };
+  window.deleteActiveThread = async function() {
+    if(!store.activeThreadId) return;
+    if(!confirm("Delete?")) return;
+    try {
+      await fetch(TWILIO_DELETE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone:store.activeThread.phone})});
+      await deleteDoc(getThreadDoc(store.activeThreadId));
+      store.activeThreadId = null;
+      store.activeThread = null;
+      window.closeThreadInfo();
+      document.getElementById("welcomeState").classList.remove("hidden");
+      document.getElementById("messageList").innerHTML = "";
+      document.getElementById("activeContactName").innerText = "Select a conversation";
+      document.getElementById("activeContactPhone").innerText = "+1 ...";
+      document.getElementById("activeContactAvatar").innerText = "?";
+      const tagsEl = document.getElementById("activeTags"); if(tagsEl) tagsEl.innerHTML = "";
+    } catch(e){ alert(e); }
+  };
+
+  window.deleteSingleMessage = async function(tid, did, sid) {
+    if(!confirm("Delete?")) return;
+    try {
+      if(sid){
+        store.deletedSids.add(sid);
+        saveLocalSettings();
+        fetch(TWILIO_DELETE_MSG_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sid})}).catch(()=>{});
+      }
+      await deleteDoc(doc(getMsgsCol(tid), did));
+    } catch(e){ alert(e); }
+  };
+
+  async function upsertThread(phone, name, newTags) {
+    const clean = normalizePhone(phone);
+    if(!clean) return;
+    const ref = getThreadDoc(clean);
+    const snap = await getDoc(ref);
+
+    if(snap.exists()) {
+      const merged = [...new Set([...(snap.data().tags||[]), ...newTags])];
+      await updateDoc(ref, { name, tags: merged });
+    } else {
+      await setDoc(ref, { id: clean, phone, name, tags: newTags, createdAt: serverTimestamp(), lastMessageAtMs: Date.now(), unread: 0 });
+    }
+  }
+
+  async function addMessageToFirestore(tid, body, dir, sid) {
+    if(!tid) return;
+    const did = sid||("local-"+Date.now());
+    await setDoc(doc(getMsgsCol(tid), did), { body, direction: dir, createdAt: serverTimestamp(), sid: did });
+    await updateDoc(getThreadDoc(tid), { lastMessageText: body, lastMessageAtMs: Date.now() });
+  }
+
+  async function sendSmsApi(to, body) {
+    const p = new URLSearchParams();
+    p.append("to", to);
+    p.append("body", body);
+    const r = await fetch(TWILIO_SEND_URL, { method: "POST", body: p });
+    if(!r.ok) throw new Error("Twilio Fail");
+  }
+
+  // NEW: enter-to-send + drafts
+  function persistDraftFromUI() {
+    const input = document.getElementById("msgInput");
+    if(!input || !store.activeThreadId) return;
+    const val = input.value || "";
+    if(val.trim().length === 0) {
+      delete store.drafts[store.activeThreadId];
+    } else {
+      store.drafts[store.activeThreadId] = val;
+      toastDraftSaved();
+    }
+    saveLocalSettings();
+  }
+
+  function restoreDraftToUI(threadId) {
+    const input = document.getElementById("msgInput");
+    if(!input) return;
+    const v = store.drafts?.[threadId] || "";
+    input.value = v;
+    autosizeTextarea(input);
+  }
+
+  window.sendMessage = async function() {
+    const i = document.getElementById("msgInput");
+    const t = i.value.trim();
+    if(!t || !store.activeThread) return;
+    i.value = "";
+    autosizeTextarea(i);
+    delete store.drafts[store.activeThreadId];
+    saveLocalSettings();
+
+    try {
+      await sendSmsApi(store.activeThread.phone, t);
+      await addMessageToFirestore(store.activeThreadId, t, "sent");
+      scrollToBottom();
+    } catch(e) { alert(e); }
+  };
+
+  // MODALS
   window.openNewMsgModal = () => document.getElementById("newMsgModal").classList.remove("hidden");
   window.closeNewMsgModal = () => document.getElementById("newMsgModal").classList.add("hidden");
-  window.createThreadFromModal = async function() { const p = document.getElementById("newContactPhone").value; const n = document.getElementById("newContactName").value; const t = document.getElementById("newContactTags").value; if(!p) return alert("Phone req"); await upsertThread(p, n, parseTags(t)); window.closeNewMsgModal(); loadThread(normalizePhone(p)); };
-  window.saveThreadInfo = async function() { if(!store.activeThreadId) return; const n = document.getElementById("threadInfoName").value; const t = document.getElementById("threadInfoTags").value; await updateDoc(getThreadDoc(store.activeThreadId), { name: n, tags: parseTags(t) }); window.closeThreadInfo(); };
-  window.openThreadInfo = () => { if(!store.activeThread) return; document.getElementById("threadInfoName").value = store.activeThread.name||""; document.getElementById("threadInfoTags").value = (store.activeThread.tags||[]).join(", "); document.getElementById("threadInfoPhone").innerText = store.activeThread.phone; document.getElementById("threadInfoModal").classList.remove("hidden"); };
+  window.createThreadFromModal = async function() {
+    const p = document.getElementById("newContactPhone").value;
+    const n = document.getElementById("newContactName").value;
+    const t = document.getElementById("newContactTags").value;
+    if(!p) return alert("Phone req");
+    await upsertThread(p, n, parseTags(t));
+    window.closeNewMsgModal();
+    loadThread(normalizePhone(p));
+  };
+
+  window.saveThreadInfo = async function() {
+    if(!store.activeThreadId) return;
+    const n = document.getElementById("threadInfoName").value;
+    const t = document.getElementById("threadInfoTags").value;
+    await updateDoc(getThreadDoc(store.activeThreadId), { name: n, tags: parseTags(t) });
+    window.closeThreadInfo();
+  };
+
+  window.openThreadInfo = () => {
+    if(!store.activeThread) return;
+    document.getElementById("threadInfoName").value = store.activeThread.name||"";
+    document.getElementById("threadInfoTags").value = (store.activeThread.tags||[]).join(", ");
+    document.getElementById("threadInfoPhone").innerText = store.activeThread.phone;
+    document.getElementById("threadInfoModal").classList.remove("hidden");
+  };
+
   window.closeThreadInfo = () => document.getElementById("threadInfoModal").classList.add("hidden");
   window.toggleMobileSidebar = () => { document.getElementById("sidebar").classList.toggle("-translate-x-full"); document.getElementById("mobileOverlay").classList.toggle("hidden"); };
-  window.resetLocalUI = () => { store.openGroups.clear(); renderThreadList(); alert("UI Reset"); };
+
+  window.resetLocalUI = () => {
+    store.openGroups.clear();
+    store.initialGroupSet = false;
+    store.onlyUnread = false;
+    store.onlyPinned = false;
+    store.tagFilter.clear();
+    saveLocalSettings();
+    renderThreadList();
+    alert("UI Reset");
+  };
+
+  // NEW: Quick replies + Settings modal
+  function renderQuickReplies() {
+    const row = document.getElementById("quickRepliesRow");
+    if(!row) return;
+    row.innerHTML = "";
+
+    (store.cannedReplies || []).slice(0, 8).forEach((txt) => {
+      const b = document.createElement("button");
+      b.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition";
+      b.textContent = txt.length > 42 ? (txt.slice(0, 39) + "…") : txt;
+      b.title = txt;
+      b.onclick = () => {
+        const i = document.getElementById("msgInput");
+        if(!i) return;
+        i.value = (i.value ? (i.value + "\n") : "") + txt;
+        autosizeTextarea(i);
+        persistDraftFromUI();
+        i.focus();
+      };
+      row.appendChild(b);
+    });
+  }
+
+  window.openSettingsModal = function() {
+    const m = document.getElementById("settingsModal");
+    const ta = document.getElementById("cannedRepliesInput");
+    if(ta) ta.value = (store.cannedReplies || []).join("\n");
+    m.classList.remove("hidden");
+  };
+
+  window.closeSettingsModal = function() {
+    document.getElementById("settingsModal").classList.add("hidden");
+  };
+
+  window.saveSettings = function() {
+    const ta = document.getElementById("cannedRepliesInput");
+    const lines = (ta?.value || "").split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    store.cannedReplies = lines.slice(0, 20);
+    saveLocalSettings();
+    renderQuickReplies();
+    closeSettingsModal();
+  };
+
+  // NEW: Thread search modal
+  window.openThreadSearch = function() {
+    if(!store.activeThreadId) return alert("Open a thread first.");
+    document.getElementById("threadSearchInput").value = "";
+    document.getElementById("threadSearchResults").innerHTML = "";
+    document.getElementById("threadSearchModal").classList.remove("hidden");
+    document.getElementById("threadSearchInput").focus();
+  };
+
+  window.closeThreadSearch = function() {
+    document.getElementById("threadSearchModal").classList.add("hidden");
+  };
+
+  window.runThreadSearch = async function() {
+    if(!store.activeThreadId) return;
+    const qText = (document.getElementById("threadSearchInput").value || "").trim().toLowerCase();
+    const out = document.getElementById("threadSearchResults");
+    out.innerHTML = "";
+    if(!qText) return;
+
+    try {
+      // pull recent messages (limit 500) and filter client-side
+      const qy = query(getMsgsCol(store.activeThreadId), orderBy("createdAt", "desc"), limit(500));
+      const snap = await getDocs(qy);
+      const hits = [];
+      snap.forEach(d => {
+        const m = d.data();
+        const body = (m.body || "");
+        if(body.toLowerCase().includes(qText)) hits.push({ id: d.id, ...m });
+      });
+
+      if(!hits.length) {
+        out.innerHTML = `<div class="p-4 text-sm text-slate-500">No matches found.</div>`;
+        return;
+      }
+
+      hits.slice(0, 80).forEach(m => {
+        const row = document.createElement("div");
+        row.className = "p-3 hover:bg-slate-50 transition";
+        row.innerHTML = `
+          <div class="text-[10px] text-slate-400 flex justify-between">
+            <span class="uppercase">${escapeHtml(m.direction || "")}</span>
+            <span>${formatTime(m.createdAt?.toMillis?.() || 0)}</span>
+          </div>
+          <div class="text-sm text-slate-700 mt-1">${escapeHtml(m.body || "")}</div>
+        `;
+        out.appendChild(row);
+      });
+    } catch(e) {
+      console.error(e);
+      out.innerHTML = `<div class="p-4 text-sm text-red-500">Search failed.</div>`;
+    }
+  };
+
+  // NEW: Export active thread CSV
+  window.exportActiveThreadCsv = async function() {
+    if(!store.activeThreadId) return alert("Open a thread first.");
+    try {
+      const qy = query(getMsgsCol(store.activeThreadId), orderBy("createdAt", "asc"));
+      const snap = await getDocs(qy);
+
+      const rows = [];
+      rows.push(["thread_id","phone","direction","time","body","sid"].join(","));
+
+      snap.forEach(d => {
+        const m = d.data();
+        const ms = m.createdAt?.toMillis?.() || 0;
+        const iso = ms ? new Date(ms).toISOString() : "";
+        const body = (m.body || "").replaceAll('"','""');
+        rows.push([
+          `"${store.activeThreadId}"`,
+          `"${(store.activeThread?.phone || "").replaceAll('"','""')}"`,
+          `"${(m.direction || "").replaceAll('"','""')}"`,
+          `"${iso}"`,
+          `"${body}"`,
+          `"${(m.sid || d.id).replaceAll('"','""')}"`
+        ].join(","));
+      });
+
+      const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `thread_${store.activeThreadId}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch(e) {
+      console.error(e);
+      alert("Export failed.");
+    }
+  };
+
+  // SCROLL
+  function scrollToBottom() {
+    const c = document.getElementById("chatContainer");
+    if(!c) return;
+    c.scrollTop = c.scrollHeight;
+  }
+
+  // Init textarea behavior
+  function wireComposer() {
+    const input = document.getElementById("msgInput");
+    if(!input) return;
+
+    input.addEventListener("input", () => {
+      autosizeTextarea(input);
+      // store draft as you type
+      if(store.activeThreadId) {
+        store.drafts[store.activeThreadId] = input.value || "";
+        saveLocalSettings();
+      }
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if(e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        window.sendMessage();
+      }
+    });
+
+    autosizeTextarea(input);
+  }
 
   async function init() {
-    try { const s = localStorage.getItem("deletedSids"); if(s) store.deletedSids = new Set(JSON.parse(s)); } catch(e) {}
+    loadLocalSettings();
+    updateFilterButtons();
+    wireComposer();
+    renderQuickReplies();
+
     await signInAnonymously(auth);
-    onAuthStateChanged(auth, u => { if(u) { store.uid = u.uid; const q = query(getThreadsCol()); unsubThreads = onSnapshot(q, s => { store.threads = []; s.forEach(d => store.threads.push(d.data())); renderThreadList(); }); pollTimer = setInterval(pollIncomingMessages, 10000); } });
+
+    onAuthStateChanged(auth, u => {
+      if(u) {
+        store.uid = u.uid;
+
+        const q = query(getThreadsCol());
+        unsubThreads = onSnapshot(q, s => {
+          store.threads = [];
+          s.forEach(d => store.threads.push(d.data()));
+          renderThreadList();
+        });
+
+        pollTimer = setInterval(pollIncomingMessages, 10000);
+      }
+    });
   }
+
   init();
 </script>
 </body>
