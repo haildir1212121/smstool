@@ -37,13 +37,14 @@
         <span class="font-bold text-lg tracking-tight">OmniChat</span>
       </div>
       <div class="flex gap-2 items-center">
-        <button onclick="document.getElementById('csvInput').click()" class="p-2 text-slate-400 hover:text-indigo-600 transition" title="Import Contacts CSV">
-          <i class="fa-solid fa-file-import"></i>
+        
+        <button onclick="document.getElementById('broadcastCsvInput').click()" class="p-2 text-slate-400 hover:text-indigo-600 transition" title="New Broadcast from CSV">
+          <i class="fa-solid fa-tower-broadcast"></i>
         </button>
-        <input type="file" id="csvInput" accept=".csv" class="hidden" onchange="handleCsvUpload(this)">
+        <input type="file" id="broadcastCsvInput" accept=".csv" class="hidden" onchange="handleBroadcastCsv(this)">
 
-        <button onclick="document.getElementById('assignmentsCsvInput').click()" class="p-2 text-slate-400 hover:text-indigo-600 transition" title="Upload Assignments CSV">
-          <i class="fa-solid fa-bullhorn"></i>
+        <button onclick="document.getElementById('assignmentsCsvInput').click()" class="p-2 text-slate-400 hover:text-indigo-600 transition" title="Upload Trip Assignments">
+          <i class="fa-solid fa-file-invoice"></i>
         </button>
         <input type="file" id="assignmentsCsvInput" accept=".csv" class="hidden" onchange="handleAssignmentsCsv(this)">
 
@@ -71,6 +72,12 @@
         <div id="userLine1" class="text-xs font-bold text-slate-700 truncate">Dispatch Team</div>
         <div id="userLine2" class="text-[10px] text-slate-400 truncate">Online</div>
       </div>
+      
+      <button onclick="document.getElementById('csvInput').click()" class="text-slate-400 hover:text-indigo-500" title="Import Contacts">
+        <i class="fa-solid fa-address-book"></i>
+      </button>
+      <input type="file" id="csvInput" accept=".csv" class="hidden" onchange="handleCsvUpload(this)">
+
       <button onclick="resetLocalUI()" class="text-slate-400 hover:text-red-500" title="Reset View">
         <i class="fa-solid fa-rotate-left"></i>
       </button>
@@ -124,33 +131,20 @@
   <div id="assignmentsModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 flex flex-col max-h-[90vh]">
       <div class="flex items-center justify-between mb-3 flex-shrink-0">
-        <h3 class="text-lg font-bold text-slate-800">Assignment Blast</h3>
+        <h3 class="text-lg font-bold text-slate-800">Trip Assignments</h3>
         <button onclick="closeAssignmentsModal()" class="text-slate-400 hover:text-slate-700">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
-
-      <div class="flex-shrink-0 mb-3 bg-indigo-50 p-3 rounded-lg border border-indigo-100">
-        <div class="flex items-center justify-between mb-2">
-            <label class="flex items-center gap-2 font-bold text-sm text-indigo-900 cursor-pointer select-none">
-                <input type="checkbox" id="customMsgToggle" onchange="toggleCustomMsgMode(this)" class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500">
-                <span>Send Custom Broadcast</span>
-            </label>
-            <span class="text-[10px] text-indigo-400">Overwrites trip details</span>
-        </div>
-        <textarea id="customMsgInput" oninput="updateCustomMsgPreview(this.value)" disabled
-            class="w-full text-xs p-2 border border-indigo-200 rounded-md disabled:bg-slate-100 disabled:text-slate-400 focus:ring-2 focus:ring-indigo-500 transition resize-none"
-            rows="2" placeholder="Type message here (e.g., 'Traffic alert on I-5, expect delays...')..."></textarea>
-      </div>
-
+      <p class="text-xs text-slate-500 mb-4 flex-shrink-0">Generated from Dispatch Sheet. Review before sending.</p>
       <div class="border rounded-lg overflow-hidden bg-slate-50 flex-1 relative">
         <div class="absolute inset-0 overflow-auto">
           <table class="w-full text-xs">
-            <thead class="bg-slate-200 text-slate-700 sticky top-0 font-bold shadow-sm z-10">
+            <thead class="bg-slate-200 text-slate-700 sticky top-0 font-bold z-10">
               <tr>
                 <th class="text-left p-2 w-32 bg-slate-200">Driver</th>
                 <th class="text-left p-2 w-24 bg-slate-200">Phone</th>
-                <th class="text-left p-2 bg-slate-200">Message Preview</th>
+                <th class="text-left p-2 bg-slate-200">Generated Message</th>
                 <th class="text-left p-2 w-20 bg-slate-200">Status</th>
               </tr>
             </thead>
@@ -158,12 +152,53 @@
           </table>
         </div>
       </div>
-      
       <div class="flex items-center justify-between mt-4 flex-shrink-0">
         <div class="text-xs text-slate-500"><span id="assignmentsSummary">0 rows</span></div>
         <div class="flex gap-2">
           <button onclick="closeAssignmentsModal()" class="px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Close</button>
-          <button id="sendAllAssignmentsBtn" onclick="sendAllAssignments()" class="px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Send All</button>
+          <button id="sendAllAssignmentsBtn" onclick="sendAllAssignments()" class="px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Send Trips</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="broadcastModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 flex flex-col max-h-[90vh]">
+      <div class="flex items-center justify-between mb-3 flex-shrink-0">
+        <h3 class="text-lg font-bold text-slate-800">Team Broadcast</h3>
+        <button onclick="closeBroadcastModal()" class="text-slate-400 hover:text-slate-700">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      
+      <div class="flex-shrink-0 mb-4 bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+        <label class="block text-xs font-bold text-indigo-900 mb-2 uppercase">Message to All Drivers</label>
+        <textarea id="broadcastMsgInput" oninput="updateBroadcastPreview(this.value)" 
+            class="w-full text-sm p-3 border border-indigo-200 rounded-md focus:ring-2 focus:ring-indigo-500 transition resize-none"
+            rows="3" placeholder="Type your announcement here (e.g. 'Traffic Alert: I-5 South blocked at Exit 200')..."></textarea>
+      </div>
+
+      <div class="border rounded-lg overflow-hidden bg-slate-50 flex-1 relative">
+        <div class="absolute inset-0 overflow-auto">
+          <table class="w-full text-xs">
+            <thead class="bg-slate-200 text-slate-700 sticky top-0 font-bold z-10">
+              <tr>
+                <th class="text-left p-2 w-32 bg-slate-200">Driver</th>
+                <th class="text-left p-2 w-24 bg-slate-200">Phone</th>
+                <th class="text-left p-2 bg-slate-200">Message Preview</th>
+                <th class="text-left p-2 w-20 bg-slate-200">Status</th>
+              </tr>
+            </thead>
+            <tbody id="broadcastPreview" class="divide-y divide-slate-200 bg-white"></tbody>
+          </table>
+        </div>
+      </div>
+      
+      <div class="flex items-center justify-between mt-4 flex-shrink-0">
+        <div class="text-xs text-slate-500"><span id="broadcastSummary">0 recipients</span></div>
+        <div class="flex gap-2">
+          <button onclick="closeBroadcastModal()" class="px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Cancel</button>
+          <button id="sendBroadcastBtn" onclick="sendBroadcast()" class="px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Send Broadcast</button>
         </div>
       </div>
     </div>
@@ -173,9 +208,9 @@
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
       <h3 class="text-lg font-bold text-slate-800 mb-4">New Conversation</h3>
       <div class="space-y-4">
-        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Phone Number</label><input type="tel" id="newContactPhone" class="w-full border border-slate-300 rounded-lg p-2.5" placeholder="+1XXXXXXXXXX"></div>
-        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Name</label><input type="text" id="newContactName" class="w-full border border-slate-300 rounded-lg p-2.5" placeholder="Jane Doe"></div>
-        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Tags</label><input type="text" id="newContactTags" class="w-full border border-slate-300 rounded-lg p-2.5" placeholder="VIP, Staff"></div>
+        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Phone</label><input type="tel" id="newContactPhone" class="w-full border border-slate-300 rounded-lg p-2.5"></div>
+        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Name</label><input type="text" id="newContactName" class="w-full border border-slate-300 rounded-lg p-2.5"></div>
+        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Tags</label><input type="text" id="newContactTags" class="w-full border border-slate-300 rounded-lg p-2.5"></div>
         <div class="flex gap-3 mt-6">
           <button onclick="closeNewMsgModal()" class="flex-1 px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg">Cancel</button>
           <button onclick="createThreadFromModal()" class="flex-1 px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Create</button>
@@ -192,7 +227,7 @@
         <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Name</label><input type="text" id="threadInfoName" class="w-full border border-slate-300 rounded-lg p-2.5"></div>
         <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Tags</label><input type="text" id="threadInfoTags" class="w-full border border-slate-300 rounded-lg p-2.5"></div>
         <div class="flex gap-3 mt-6 pt-4 border-t border-slate-100">
-          <button onclick="deleteActiveThread()" class="flex-1 px-4 py-2 text-white bg-red-500 hover:bg-red-600 rounded-lg">Delete Thread</button>
+          <button onclick="deleteActiveThread()" class="flex-1 px-4 py-2 text-white bg-red-500 hover:bg-red-600 rounded-lg">Delete</button>
           <div class="flex-1 flex gap-2">
              <button onclick="closeThreadInfo()" class="flex-1 px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg">Close</button>
              <button onclick="saveThreadInfo()" class="flex-1 px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Save</button>
@@ -211,7 +246,6 @@
   const TWILIO_GET_URL    = `${SMS_BACKEND_BASE}/get-messages`;
   const TWILIO_DELETE_URL = `${SMS_BACKEND_BASE}/delete-thread`;
   const TWILIO_DELETE_MSG_URL = `${SMS_BACKEND_BASE}/delete-message`;
-  
   const SHARED_ORG_ID = "dispatch_team_main";
 
   const firebaseConfig = {
@@ -236,30 +270,19 @@
   // 2. STATE & GLOBALS
   // ---------------------------
   let store = {
-    uid: null,
-    threads: [],
-    activeThreadId: null,
-    activeThread: null,
-    lastInboundSidSeen: new Set(),
-    deletedSids: new Set(),
-    openGroups: new Set(),
-    initialGroupSet: false, 
-    isPolling: false 
+    uid: null, threads: [], activeThreadId: null, activeThread: null,
+    lastInboundSidSeen: new Set(), deletedSids: new Set(),
+    openGroups: new Set(), initialGroupSet: false, isPolling: false 
   };
 
   let assignmentsRows = []; 
-  let unsubThreads = null;
-  let unsubMessages = null;
-  let pollTimer = null;
+  let broadcastRows = []; // NEW: For broadcast list
+  let unsubThreads = null; let unsubMessages = null; let pollTimer = null;
 
   // ---------------------------
   // 3. HELPERS
   // ---------------------------
-  const escapeHtml = (text) => {
-    const div = document.createElement("div");
-    div.textContent = text ?? "";
-    return div.innerHTML;
-  };
+  const escapeHtml = (text) => { const div = document.createElement("div"); div.textContent = text ?? ""; return div.innerHTML; };
   const initials = (s) => (s || "?").trim().slice(0,2).toUpperCase() || "?";
   const parseTags = (raw) => (raw || "").split(",").map(x => x.trim()).filter(Boolean).slice(0, 30);
   const normalizePhone = (raw) => (raw || "").toString().replace(/[^0-9+]/g, "").trim();
@@ -273,46 +296,34 @@
   const getMsgsCol    = (id) => collection(db, "organizations", SHARED_ORG_ID, "threads", id, "messages");
 
   // ---------------------------
-  // 4. SMART POLLER (LOCKED & BLOCKED)
+  // 4. SMART POLLER
   // ---------------------------
   async function pollIncomingMessages() {
-    if(!store.uid) return;
-    if(store.isPolling) return; 
+    if(!store.uid || store.isPolling) return;
     store.isPolling = true; 
-
     try {
         const res = await fetch(TWILIO_GET_URL);
         const data = await res.json();
         if(!data.success || !data.messages) { store.isPolling = false; return; }
-        
         for(let m of data.messages) {
             if(store.deletedSids.has(m.sid)) continue;
             if(store.lastInboundSidSeen.has(m.sid)) continue;
             store.lastInboundSidSeen.add(m.sid);
-            
             if(m.direction === 'inbound') {
                 const cleanPhone = normalizePhone(m.from);
                 if(cleanPhone.length > 5) {
-                    
                     const q = query(getMsgsCol(cleanPhone), where("sid", "==", m.sid));
                     const querySnap = await getDocs(q);
-                    
                     if (querySnap.empty) {
                         await upsertThread(m.from, cleanPhone, ["New"]); 
-                        
                         await setDoc(doc(getMsgsCol(cleanPhone), m.sid), {
                             body: m.body, direction: "received", createdAt: serverTimestamp(), sid: m.sid
                         });
-                        
                         const threadRef = getThreadDoc(cleanPhone);
                         const tSnap = await getDoc(threadRef);
                         const currentUnread = tSnap.exists() ? (tSnap.data().unread || 0) : 0;
-                        
                         const updates = { lastMessageText: m.body, lastMessageAtMs: Date.now() };
-                        if(store.activeThreadId !== cleanPhone) {
-                            updates.unread = currentUnread + 1;
-                        }
-
+                        if(store.activeThreadId !== cleanPhone) { updates.unread = currentUnread + 1; }
                         await updateDoc(threadRef, updates);
                         document.getElementById("notifSound").play().catch(()=>{});
                     }
@@ -324,40 +335,15 @@
   }
 
   // ---------------------------
-  // 5. CUSTOM MESSAGE & ASSIGNMENTS
+  // 5. TRIP ASSIGNMENTS (SPECIFIC MESSAGES)
   // ---------------------------
-  window.toggleCustomMsgMode = function(checkbox) {
-    const textarea = document.getElementById("customMsgInput");
-    if (checkbox.checked) {
-        textarea.disabled = false;
-        textarea.focus();
-        updateCustomMsgPreview(textarea.value);
-    } else {
-        textarea.disabled = true;
-        textarea.value = "";
-        // Revert to original
-        assignmentsRows.forEach(row => row.message = row.originalMessage);
-        window.renderAssignmentsPreview();
-    }
-  };
-
-  window.updateCustomMsgPreview = function(val) {
-    const text = val.trim();
-    assignmentsRows.forEach(row => {
-        row.message = text ? text : row.originalMessage;
-    });
-    window.renderAssignmentsPreview();
-  };
-
   window.handleAssignmentsCsv = async function(input) {
     const file = input.files?.[0];
     input.value = "";
-    if (!file) return;
-    if (!store.uid) { alert("Auth not ready yet."); return; }
-
+    if (!file || !store.uid) return;
     const text = await file.text();
     const lines = text.split(/\r?\n/);
-    if (lines.length < 4) { alert("CSV seems empty or invalid."); return; }
+    if (lines.length < 4) { alert("CSV seems empty."); return; }
 
     let dateStr = parseCsvLine(lines[0])[0]; 
     if(!dateStr || !/\d/.test(dateStr)) {
@@ -366,33 +352,20 @@
     }
     const dow = getDayOfWeek(dateStr); 
 
-    const sectionMap = {
-        "eugene": "DLX-EUG", "roseburg": "RBG", "portland/i-84 corridor": "PDX",
-        "albany/corvallis/salem": "XLB", "direct medical transport": "DMT", "coast": "XCC"
-    };
+    const sectionMap = { "eugene": "DLX-EUG", "roseburg": "RBG", "portland/i-84 corridor": "PDX", "albany/corvallis/salem": "XLB", "direct medical transport": "DMT", "coast": "XCC" };
     let currentTag = "Auto-Assign"; 
     const contactsMap = await buildContactsMap();
     assignmentsRows = [];
 
-    // Reset UI
-    document.getElementById("customMsgToggle").checked = false;
-    document.getElementById("customMsgInput").disabled = true;
-    document.getElementById("customMsgInput").value = "";
-
     for (let i = 0; i < lines.length; i++) {
         const parts = parseCsvLine(lines[i]);
         if (parts.length < 5) continue;
-
         const colE = (parts[4] || "").trim();
         const lowerE = colE.toLowerCase();
         if (sectionMap[lowerE]) { currentTag = sectionMap[lowerE]; continue; }
 
-        const puTime = parts[0] || ""; 
-        const city   = parts[1] || ""; 
-        const client = parts[2] || ""; 
-        let   phone  = parts[3] || ""; 
-        const name   = parts[4] || ""; 
-        const tablet = parts[6] || "?"; 
+        const puTime = parts[0] || ""; const city = parts[1] || ""; const client = parts[2] || ""; 
+        let phone = parts[3] || ""; const name = parts[4] || ""; const tablet = parts[6] || "?"; 
 
         if (!puTime || !city || !client) continue; 
         if (!name || name.toLowerCase() === "name" || name.includes("Corridor")) continue;
@@ -403,11 +376,8 @@
         const msg = `${dow}: ${puTime} pickup in ${city} (${client}), be signed into your tablet @ ${tablet} to receive ride.`;
 
         assignmentsRows.push({
-            driverName: name, phone: phone, city: city, puTime: puTime,
-            tablet: tablet, 
-            message: msg, 
-            originalMessage: msg, // Keep backup for toggling
-            tag: currentTag,
+            driverName: name, phone: phone, 
+            message: msg, tag: currentTag,
             status: (phone && phone.length > 5) ? "READY" : "NO MATCH"
         });
     }
@@ -415,6 +385,112 @@
     openAssignmentsModal();
   };
 
+  // ---------------------------
+  // 6. BROADCAST FEATURE (NEW)
+  // ---------------------------
+  window.handleBroadcastCsv = async function(input) {
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file || !store.uid) return;
+    const text = await file.text();
+    const lines = text.split(/\r?\n/);
+    if (lines.length < 4) { alert("CSV seems empty."); return; }
+
+    const sectionMap = { "eugene": "DLX-EUG", "roseburg": "RBG", "portland/i-84 corridor": "PDX", "albany/corvallis/salem": "XLB", "direct medical transport": "DMT", "coast": "XCC" };
+    let currentTag = "Auto-Assign"; 
+    const contactsMap = await buildContactsMap();
+    broadcastRows = [];
+
+    // Same parsing logic, but we don't care about Trip Details
+    for (let i = 0; i < lines.length; i++) {
+        const parts = parseCsvLine(lines[i]);
+        if (parts.length < 5) continue;
+        const colE = (parts[4] || "").trim();
+        const lowerE = colE.toLowerCase();
+        if (sectionMap[lowerE]) { currentTag = sectionMap[lowerE]; continue; }
+
+        const name = parts[4] || ""; 
+        let phone = parts[3] || ""; 
+
+        // We only care if there is a name. Even if no trip, if they are on the sheet, they get the blast?
+        // Actually, usually "Blast" implies sending to active drivers. 
+        // Let's use the same filter: Name exists, not a header.
+        if (!name || name.toLowerCase() === "name" || name.includes("Corridor")) continue;
+
+        if (!phone) { phone = contactsMap.get(nameKey(name)) || ""; }
+        phone = normalizePhone(phone);
+
+        // Don't add blank rows
+        if (!name) continue;
+
+        broadcastRows.push({
+            driverName: name, phone: phone, 
+            tag: currentTag,
+            status: (phone && phone.length > 5) ? "READY" : "NO MATCH"
+        });
+    }
+    
+    // Clear Input
+    document.getElementById("broadcastMsgInput").value = "";
+    updateBroadcastPreview("");
+    document.getElementById("broadcastModal").classList.remove("hidden");
+  };
+
+  window.updateBroadcastPreview = function(val) {
+    const text = val.trim() || "(Type a message above...)";
+    const tbody = document.getElementById("broadcastPreview");
+    const summary = document.getElementById("broadcastSummary");
+    tbody.innerHTML = "";
+    
+    const readyCount = broadcastRows.filter(r => r.status === "READY").length;
+    
+    broadcastRows.forEach(row => {
+        const tr = document.createElement("tr");
+        const color = row.status === "READY" ? "text-green-600" : "text-red-500";
+        tr.className = "hover:bg-slate-50 transition";
+        tr.innerHTML = `
+            <td class="p-2 border-b"><div class="font-bold text-slate-700">${escapeHtml(row.driverName)}</div><div class="text-[10px] text-indigo-500 font-mono">${row.tag}</div></td>
+            <td class="p-2 border-b font-mono text-slate-500">${row.phone || "—"}</td>
+            <td class="p-2 border-b text-xs text-slate-600 italic">${escapeHtml(text)}</td>
+            <td class="p-2 border-b font-bold ${color} text-xs uppercase">${row.status}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+    summary.innerText = `Targeting ${readyCount} drivers.`;
+  };
+
+  window.sendBroadcast = async function() {
+    const text = document.getElementById("broadcastMsgInput").value.trim();
+    if(!text) return alert("Please type a message first.");
+    
+    const readyRows = broadcastRows.filter(r => r.status === "READY");
+    if(!readyRows.length) return alert("No valid drivers found.");
+    
+    if(!confirm(`Send broadcast to ${readyRows.length} drivers?\nMessage: "${text}"`)) return;
+
+    const btn = document.getElementById("sendBroadcastBtn");
+    btn.disabled = true; btn.innerText = "Sending...";
+    
+    let sent = 0;
+    for(const row of readyRows) {
+        try {
+            await sendSmsApi(row.phone, text);
+            await upsertThread(row.phone, row.driverName, [row.tag]);
+            await addMessageToFirestore(normalizePhone(row.phone), text, "sent");
+            sent++;
+        } catch(e) { console.error("Broadcast fail", row.driverName, e); }
+    }
+    
+    alert(`Broadcast sent to ${sent} drivers.`);
+    btn.disabled = false; btn.innerText = "Send Broadcast";
+    closeBroadcastModal();
+  };
+
+  window.closeBroadcastModal = () => document.getElementById("broadcastModal").classList.add("hidden");
+
+  // ---------------------------
+  // 7. UTILS & UI
+  // ---------------------------
   function getDayOfWeek(dateStr) {
     if(!dateStr) return "TODAY";
     try {
@@ -441,17 +517,15 @@
         `;
         tbody.appendChild(tr);
     });
-    summary.innerText = `Found ${assignmentsRows.length} rows. ${ready} ready to send.`;
+    summary.innerText = `Found ${assignmentsRows.length} assignments. ${ready} ready.`;
   };
 
   window.sendAllAssignments = async function() {
-    const btn = document.getElementById("sendAllAssignmentsBtn");
     const readyRows = assignmentsRows.filter(r => r.status === "READY");
-    if (!readyRows.length) { alert("No valid rows to send."); return; }
+    if (!readyRows.length) return alert("No valid rows.");
     if (!confirm(`Send SMS to ${readyRows.length} drivers?`)) return;
-
-    btn.disabled = true;
-    btn.innerText = "Sending...";
+    const btn = document.getElementById("sendAllAssignmentsBtn");
+    btn.disabled = true; btn.innerText = "Sending...";
     let sent = 0;
     for (const row of readyRows) {
         try {
@@ -459,24 +533,19 @@
             await upsertThread(row.phone, row.driverName, [row.tag]);
             await addMessageToFirestore(normalizePhone(row.phone), row.message, "sent");
             sent++;
-        } catch (e) { console.error("Failed to send to", row.driverName, e); }
+        } catch (e) { console.error("Failed", row.driverName, e); }
     }
     alert(`Sent ${sent} messages.`);
-    btn.disabled = false;
-    btn.innerText = "Send All";
+    btn.disabled = false; btn.innerText = "Send Trips";
     closeAssignmentsModal();
   };
 
-  // ---------------------------
-  // 6. CONTACTS IMPORT
-  // ---------------------------
   window.handleCsvUpload = async function(input) {
     const file = input.files?.[0];
     input.value = "";
     if (!file) return;
     const text = await file.text();
     const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
-    if (lines.length < 2) { alert("CSV is empty."); return; }
     const headers = parseCsvLine(lines[0]).map(h => h.toLowerCase().trim());
     let nameIdx = -1, firstIdx = -1, lastIdx = -1, phoneIdx = -1, tagsIdx = -1;
     headers.forEach((h, i) => {
@@ -492,9 +561,8 @@
     for (let i = startRow; i < lines.length; i++) {
         const parts = parseCsvLine(lines[i]);
         let name = "", phone = "", tagsStr = "";
-        if (isSimple) {
-            if (parts.length >= 2) { name = parts[0]; phone = parts[1]; tagsStr = parts[2] || ""; }
-        } else {
+        if (isSimple) { if (parts.length >= 2) { name = parts[0]; phone = parts[1]; tagsStr = parts[2] || ""; } } 
+        else {
             const first = (firstIdx !== -1) ? parts[firstIdx] : "";
             const last  = (lastIdx !== -1) ? parts[lastIdx] : "";
             const full  = (nameIdx !== -1) ? parts[nameIdx] : "";
@@ -515,119 +583,60 @@
     return new Promise((resolve) => {
         onSnapshot(q, (snap) => {
             const map = new Map();
-            snap.forEach(d => {
-                const data = d.data();
-                if (data.name && data.phone) { map.set(nameKey(data.name), data.phone); }
-            });
+            snap.forEach(d => { const data = d.data(); if (data.name && data.phone) { map.set(nameKey(data.name), data.phone); } });
             resolve(map);
         });
     });
   }
 
   function parseCsvLine(line) {
-    const out = [];
-    let cur = "";
-    let inQuotes = false;
+    const out = []; let cur = ""; let inQuotes = false;
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
-      if (ch === '"') {
-        if (inQuotes && line[i+1] === '"') { cur += '"'; i++; } else inQuotes = !inQuotes;
-      } else if (ch === ',' && !inQuotes) { out.push(cur.trim()); cur = ""; } else { cur += ch; }
+      if (ch === '"') { if (inQuotes && line[i+1] === '"') { cur += '"'; i++; } else inQuotes = !inQuotes; } 
+      else if (ch === ',' && !inQuotes) { out.push(cur.trim()); cur = ""; } else { cur += ch; }
     }
-    out.push(cur.trim());
-    return out;
+    out.push(cur.trim()); return out;
   }
 
-  // ---------------------------
-  // 7. UI LOGIC & THREADS
-  // ---------------------------
   window.renderThreadList = function() {
     const listEl = document.getElementById("contactList");
     const search = (document.getElementById("searchContacts")?.value || "").toLowerCase().trim();
     listEl.innerHTML = "";
-
     const groups = new Map();
-    store.threads.forEach(t => {
-        const tags = (t.tags && t.tags.length) ? t.tags : ["Untagged"];
-        tags.forEach(tag => {
-            if(!groups.has(tag)) groups.set(tag, []);
-            groups.get(tag).push(t);
-        });
-    });
-
+    store.threads.forEach(t => { const tags = (t.tags && t.tags.length) ? t.tags : ["Untagged"]; tags.forEach(tag => { if(!groups.has(tag)) groups.set(tag, []); groups.get(tag).push(t); }); });
     const groupData = [...groups.entries()].map(([tag, threads]) => {
         const unreadCount = threads.reduce((acc, t) => acc + (t.unread || 0), 0);
         const maxTime = Math.max(...threads.map(t => t.lastMessageAtMs || 0));
         return { tag, threads, unreadCount, maxTime };
     });
-
     groupData.sort((a, b) => {
-        if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
-        if (b.unreadCount > 0 && a.unreadCount === 0) return 1;
-        if (b.maxTime !== a.maxTime) return b.maxTime - a.maxTime;
-        return a.tag.localeCompare(b.tag);
+        if (a.unreadCount > 0 && b.unreadCount === 0) return -1; if (b.unreadCount > 0 && a.unreadCount === 0) return 1;
+        if (b.maxTime !== a.maxTime) return b.maxTime - a.maxTime; return a.tag.localeCompare(b.tag);
     });
-
-    if (!store.initialGroupSet && groupData.length > 0) {
-        store.openGroups.add(groupData[0].tag);
-        store.initialGroupSet = true;
-    }
-
+    if (!store.initialGroupSet && groupData.length > 0) { store.openGroups.add(groupData[0].tag); store.initialGroupSet = true; }
     groupData.forEach(({ tag, threads, unreadCount }) => {
-        const filtered = threads.filter(t => 
-            !search || (t.name||"").toLowerCase().includes(search) || (t.phone||"").includes(search)
-        );
+        const filtered = threads.filter(t => !search || (t.name||"").toLowerCase().includes(search) || (t.phone||"").includes(search));
         if(!filtered.length) return;
-
         const isOpen = store.openGroups.has(tag);
         const badge = unreadCount > 0 ? `<span class="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">${unreadCount}</span>` : "";
-
         const header = document.createElement("button");
         header.className = "w-full text-left px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition flex items-center justify-between gap-3 mb-1";
-        header.innerHTML = `
-            <div class="flex items-center gap-2">
-                <i class="fa-solid ${isOpen ? 'fa-chevron-down' : 'fa-chevron-right'} text-slate-400 text-xs"></i>
-                <span class="font-semibold text-sm text-slate-800">${escapeHtml(tag)}</span>
-                ${badge}
-            </div>
-            <div class="text-[10px] text-slate-400">${filtered.length}</div>
-        `;
-        header.onclick = () => {
-            if(isOpen) store.openGroups.delete(tag); else store.openGroups.add(tag);
-            renderThreadList();
-        };
+        header.innerHTML = `<div class="flex items-center gap-2"><i class="fa-solid ${isOpen ? 'fa-chevron-down' : 'fa-chevron-right'} text-slate-400 text-xs"></i><span class="font-semibold text-sm text-slate-800">${escapeHtml(tag)}</span>${badge}</div><div class="text-[10px] text-slate-400">${filtered.length}</div>`;
+        header.onclick = () => { if(isOpen) store.openGroups.delete(tag); else store.openGroups.add(tag); renderThreadList(); };
         listEl.appendChild(header);
-
         if(isOpen) {
-            const container = document.createElement("div");
-            container.className = "pl-2 pr-1 pb-2 space-y-1";
+            const container = document.createElement("div"); container.className = "pl-2 pr-1 pb-2 space-y-1";
             filtered.sort((a, b) => {
-                const aUnread = (a.unread||0) > 0;
-                const bUnread = (b.unread||0) > 0;
-                if(aUnread && !bUnread) return -1;
-                if(bUnread && !aUnread) return 1;
+                const aUnread = (a.unread||0) > 0; const bUnread = (b.unread||0) > 0;
+                if(aUnread && !bUnread) return -1; if(bUnread && !aUnread) return 1;
                 return (b.lastMessageAtMs||0) - (a.lastMessageAtMs||0);
             });
             filtered.forEach(t => {
-                const el = document.createElement("div");
-                const isActive = t.id === store.activeThreadId;
+                const el = document.createElement("div"); const isActive = t.id === store.activeThreadId;
                 el.className = `p-3 rounded-xl cursor-pointer flex gap-3 items-center transition ${isActive ? "bg-indigo-50 border border-indigo-100" : "hover:bg-slate-50 border border-transparent"}`;
                 el.onclick = () => loadThread(t.id);
-                el.innerHTML = `
-                    <div class="relative">
-                        <div class="w-12 h-12 rounded-full bg-slate-400 flex items-center justify-center text-white font-bold text-sm">
-                            ${escapeHtml(initials(t.name || t.phone))}
-                        </div>
-                        ${t.unread > 0 ? `<div class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full border-2 border-white flex items-center justify-center text-white text-[10px] font-bold">${t.unread}</div>` : ""}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <div class="flex justify-between items-baseline mb-0.5">
-                            <span class="font-semibold text-sm text-slate-800 truncate">${escapeHtml(t.name || t.phone)}</span>
-                            <span class="text-[10px] text-slate-400 font-medium">${formatTime(t.lastMessageAtMs)}</span>
-                        </div>
-                        <p class="text-xs text-slate-500 truncate ${t.unread > 0 ? "font-bold text-slate-700" : ""}">${escapeHtml(t.lastMessageText || "No messages")}</p>
-                    </div>
-                `;
+                el.innerHTML = `<div class="relative"><div class="w-12 h-12 rounded-full bg-slate-400 flex items-center justify-center text-white font-bold text-sm">${escapeHtml(initials(t.name || t.phone))}</div>${t.unread > 0 ? `<div class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full border-2 border-white flex items-center justify-center text-white text-[10px] font-bold">${t.unread}</div>` : ""}</div><div class="flex-1 min-w-0"><div class="flex justify-between items-baseline mb-0.5"><span class="font-semibold text-sm text-slate-800 truncate">${escapeHtml(t.name || t.phone)}</span><span class="text-[10px] text-slate-400 font-medium">${formatTime(t.lastMessageAtMs)}</span></div><p class="text-xs text-slate-500 truncate ${t.unread > 0 ? "font-bold text-slate-700" : ""}">${escapeHtml(t.lastMessageText || "No messages")}</p></div>`;
                 container.appendChild(el);
             });
             listEl.appendChild(container);
@@ -640,157 +649,98 @@
     if(!threadId || store.activeThreadId === threadId) return;
     store.activeThreadId = threadId;
     store.activeThread = store.threads.find(t => t.id === threadId);
-    
     document.getElementById("welcomeState").classList.add("hidden");
     document.getElementById("activeContactName").innerText = store.activeThread?.name || store.activeThread?.phone || "Unknown";
     document.getElementById("activeContactPhone").innerText = store.activeThread?.phone || "";
     document.getElementById("activeContactAvatar").innerText = initials(store.activeThread?.name || store.activeThread?.phone);
-    
     try { await updateDoc(getThreadDoc(threadId), { unread: 0 }); } catch(e) {}
-
     const q = query(getMsgsCol(threadId), orderBy("createdAt", "asc"));
     unsubMessages = onSnapshot(q, (snap) => {
-        const div = document.getElementById("messageList");
-        div.innerHTML = "";
-        
+        const div = document.getElementById("messageList"); div.innerHTML = "";
         const seen = new Set();
         snap.forEach(d => {
-            const m = d.data();
-            const fingerprint = m.body + "-" + Math.floor((m.createdAt?.toMillis() || 0) / 1000);
-            if(seen.has(fingerprint)) return; 
-            seen.add(fingerprint);
-
-            const el = document.createElement("div");
-            el.className = `flex ${m.direction === 'sent' ? 'justify-end' : 'justify-start'} fade-in-up`;
-            el.innerHTML = `
-                <div class="group relative max-w-[75%]">
-                    <div class="p-3 text-sm shadow-sm ${m.direction === 'sent' ? 'msg-sent' : 'msg-received'}">
-                        <p>${escapeHtml(m.body)}</p>
-                        <div class="text-[10px] opacity-70 mt-1 text-right flex justify-between items-center">
-                            <span>${formatTime(m.createdAt?.toMillis())}</span>
-                            <button onclick="window.deleteSingleMessage('${threadId}', '${d.id}', '${m.sid || ''}')" class="ml-2 text-red-300 hover:text-red-100 opacity-0 group-hover:opacity-100 transition" title="Delete Message">
-                                <i class="fa-solid fa-trash"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
+            const m = d.data(); const fingerprint = m.body + "-" + Math.floor((m.createdAt?.toMillis() || 0) / 1000);
+            if(seen.has(fingerprint)) return; seen.add(fingerprint);
+            const el = document.createElement("div"); el.className = `flex ${m.direction === 'sent' ? 'justify-end' : 'justify-start'} fade-in-up`;
+            el.innerHTML = `<div class="group relative max-w-[75%]"><div class="p-3 text-sm shadow-sm ${m.direction === 'sent' ? 'msg-sent' : 'msg-received'}"><p>${escapeHtml(m.body)}</p><div class="text-[10px] opacity-70 mt-1 text-right flex justify-between items-center"><span>${formatTime(m.createdAt?.toMillis())}</span><button onclick="window.deleteSingleMessage('${threadId}', '${d.id}', '${m.sid || ''}')" class="ml-2 text-red-300 hover:text-red-100 opacity-0 group-hover:opacity-100 transition" title="Delete Message"><i class="fa-solid fa-trash"></i></button></div></div></div>`;
             div.appendChild(el);
         });
         scrollToBottom();
     });
-    
-    if(window.innerWidth < 768) window.toggleMobileSidebar();
-    renderThreadList();
+    if(window.innerWidth < 768) window.toggleMobileSidebar(); renderThreadList();
   }
 
-  // --- DELETE THREAD ---
   window.deleteActiveThread = async function() {
     if (!store.activeThreadId) return;
     const thread = store.activeThread;
-    if (!confirm(`Permanently delete thread for ${thread.phone}?\nThis will remove history from Twilio and this dashboard.`)) return;
-    const btn = document.querySelector("#threadInfoModal button.bg-red-500");
-    const origText = btn.innerText;
-    btn.disabled = true;
-    btn.innerText = "Deleting...";
+    if (!confirm(`Permanently delete thread for ${thread.phone}?`)) return;
     try {
         await fetch(TWILIO_DELETE_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone: thread.phone }) });
         await deleteDoc(getThreadDoc(store.activeThreadId));
         store.activeThreadId = null; store.activeThread = null;
-        window.closeThreadInfo();
-        document.getElementById("welcomeState").classList.remove("hidden");
+        window.closeThreadInfo(); document.getElementById("welcomeState").classList.remove("hidden");
         document.getElementById("messageList").innerHTML = "";
-        document.getElementById("activeContactName").innerText = "Select a conversation";
-        document.getElementById("activeContactPhone").innerText = "+1 ...";
-        document.getElementById("activeContactAvatar").innerText = "?";
         alert("Thread deleted.");
-    } catch(e) { alert("Error deleting: " + e.message); } finally { btn.disabled = false; btn.innerText = origText; }
+    } catch(e) { alert("Error deleting: " + e.message); }
   };
 
-  // --- DELETE MESSAGE ---
   window.deleteSingleMessage = async function(threadId, docId, sid) {
     if(!confirm("Delete this message?")) return;
     try {
         if(sid) {
-            store.deletedSids.add(sid);
-            localStorage.setItem("deletedSids", JSON.stringify([...store.deletedSids])); 
-            fetch(TWILIO_DELETE_MSG_URL, { 
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ sid: sid }) 
-            }).catch(e => console.log("Twilio delete skip:", e));
+            store.deletedSids.add(sid); localStorage.setItem("deletedSids", JSON.stringify([...store.deletedSids])); 
+            fetch(TWILIO_DELETE_MSG_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: sid }) }).catch(e => console.log(e));
         }
         await deleteDoc(doc(getMsgsCol(threadId), docId));
     } catch(e) { alert("Failed to delete: "+e.message); }
   };
 
-  // --- CORE UTILS ---
   async function upsertThread(phone, name, newTags) {
-    const cleanPhone = normalizePhone(phone);
-    if(!cleanPhone || cleanPhone.length < 5) return;
-    const ref = getThreadDoc(cleanPhone);
-    const snap = await getDoc(ref);
+    const cleanPhone = normalizePhone(phone); if(!cleanPhone) return;
+    const ref = getThreadDoc(cleanPhone); const snap = await getDoc(ref);
     if(snap.exists()) {
-        const existingTags = snap.data().tags || [];
-        const merged = [...new Set([...existingTags, ...newTags])];
+        const merged = [...new Set([...(snap.data().tags||[]), ...newTags])];
         await updateDoc(ref, { name, tags: merged });
     } else {
-        await setDoc(ref, {
-            id: cleanPhone, phone: phone, name: name, tags: newTags,
-            createdAt: serverTimestamp(), lastMessageAtMs: Date.now(), unread: 0
-        });
+        await setDoc(ref, { id: cleanPhone, phone: phone, name: name, tags: newTags, createdAt: serverTimestamp(), lastMessageAtMs: Date.now(), unread: 0 });
     }
   }
 
   async function addMessageToFirestore(threadId, body, dir, sid) {
     if(!threadId) return false;
     const docId = sid || "local-"+Date.now();
-    await setDoc(doc(getMsgsCol(threadId), docId), {
-        body, direction: dir, createdAt: serverTimestamp(), sid: docId
-    });
-    await updateDoc(getThreadDoc(threadId), {
-        lastMessageText: body, lastMessageAtMs: Date.now()
-    });
+    await setDoc(doc(getMsgsCol(threadId), docId), { body, direction: dir, createdAt: serverTimestamp(), sid: docId });
+    await updateDoc(getThreadDoc(threadId), { lastMessageText: body, lastMessageAtMs: Date.now() });
     return true;
   }
 
   window.sendMessage = async function() {
-    const input = document.getElementById("msgInput");
-    const text = input.value.trim();
-    if(!text || !store.activeThread) return;
-    input.value = "";
+    const input = document.getElementById("msgInput"); const text = input.value.trim();
+    if(!text || !store.activeThread) return; input.value = "";
     try {
         await sendSmsApi(store.activeThread.phone, text);
         await addMessageToFirestore(store.activeThreadId, text, "sent");
         scrollToBottom();
-    } catch(e) { alert("Failed to send: " + e.message); }
+    } catch(e) { alert("Failed: " + e.message); }
   };
 
   async function sendSmsApi(to, body) {
-    const params = new URLSearchParams();
-    params.append("to", to); params.append("body", body);
-    const res = await fetch(TWILIO_SEND_URL, { method: "POST", body: params });
-    if(!res.ok) throw new Error("Twilio API Error");
+    const params = new URLSearchParams(); params.append("to", to); params.append("body", body);
+    const res = await fetch(TWILIO_SEND_URL, { method: "POST", body: params }); if(!res.ok) throw new Error("Twilio API Error");
   }
 
-  // --- UI TOGGLES ---
+  // UI Toggles
   window.openNewMsgModal = () => document.getElementById("newMsgModal").classList.remove("hidden");
   window.closeNewMsgModal = () => document.getElementById("newMsgModal").classList.add("hidden");
   window.createThreadFromModal = async function() {
-    const phone = document.getElementById("newContactPhone").value;
-    const name = document.getElementById("newContactName").value;
-    const tags = document.getElementById("newContactTags").value;
-    if(!phone) return alert("Phone required");
-    await upsertThread(phone, name, parseTags(tags));
-    window.closeNewMsgModal();
-    const cleanId = normalizePhone(phone);
-    loadThread(cleanId);
+    const phone = document.getElementById("newContactPhone").value; const name = document.getElementById("newContactName").value; const tags = document.getElementById("newContactTags").value;
+    if(!phone) return alert("Phone required"); await upsertThread(phone, name, parseTags(tags));
+    window.closeNewMsgModal(); loadThread(normalizePhone(phone));
   };
   window.saveThreadInfo = async function() {
     if(!store.activeThreadId) return;
-    const name = document.getElementById("threadInfoName").value;
-    const tags = document.getElementById("threadInfoTags").value;
-    await updateDoc(getThreadDoc(store.activeThreadId), { name: name, tags: parseTags(tags) });
-    window.closeThreadInfo();
+    const name = document.getElementById("threadInfoName").value; const tags = document.getElementById("threadInfoTags").value;
+    await updateDoc(getThreadDoc(store.activeThreadId), { name: name, tags: parseTags(tags) }); window.closeThreadInfo();
   };
   window.openThreadInfo = () => {
     if(!store.activeThread) return;
@@ -802,29 +752,18 @@
   window.closeThreadInfo = () => document.getElementById("threadInfoModal").classList.add("hidden");
   window.openAssignmentsModal = () => document.getElementById("assignmentsModal").classList.remove("hidden");
   window.closeAssignmentsModal = () => document.getElementById("assignmentsModal").classList.add("hidden");
-  window.toggleMobileSidebar = () => {
-    document.getElementById("sidebar").classList.toggle("-translate-x-full");
-    document.getElementById("mobileOverlay").classList.toggle("hidden");
-  };
+  window.toggleMobileSidebar = () => { document.getElementById("sidebar").classList.toggle("-translate-x-full"); document.getElementById("mobileOverlay").classList.toggle("hidden"); };
   window.resetLocalUI = () => { store.openGroups.clear(); renderThreadList(); alert("UI Reset"); };
 
-  // --- INIT ---
   async function init() {
-    // Restore Blocklist
-    try {
-        const saved = localStorage.getItem("deletedSids");
-        if(saved) store.deletedSids = new Set(JSON.parse(saved));
-    } catch(e) {}
-
+    try { const saved = localStorage.getItem("deletedSids"); if(saved) store.deletedSids = new Set(JSON.parse(saved)); } catch(e) {}
     await signInAnonymously(auth);
     onAuthStateChanged(auth, (user) => {
         if(user) {
             store.uid = user.uid;
             const q = query(getThreadsCol());
             unsubThreads = onSnapshot(q, (snap) => {
-                store.threads = [];
-                snap.forEach(d => store.threads.push(d.data()));
-                renderThreadList();
+                store.threads = []; snap.forEach(d => store.threads.push(d.data())); renderThreadList();
             });
             pollTimer = setInterval(pollIncomingMessages, 10000);
         }
