@@ -684,7 +684,7 @@
   };
 
   window.renderThreadList = function() {
-    // 1. Update Buttons (Unread / Pinned)
+    // 1. Update Buttons
     const ub=document.getElementById("unreadOnlyBtn"), pb=document.getElementById("pinnedOnlyBtn");
     if(ub) ub.className=`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide border transition ${store.onlyUnread?'bg-indigo-600 text-white border-indigo-600':'bg-white text-slate-600 border-slate-200 hover:shadow-sm'}`;
     if(pb) pb.className=`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide border transition ${store.onlyPinned?'bg-indigo-600 text-white border-indigo-600':'bg-white text-slate-600 border-slate-200 hover:shadow-sm'}`;
@@ -703,7 +703,6 @@
     const el=document.getElementById("contactList"); el.innerHTML=""; 
     const s=document.getElementById("searchContacts").value.toLowerCase();
     
-    // Structure: { "DMT": { id: "DMT", direct: [threads], subs: { "EUG": [threads] } } }
     const groups = {}; 
 
     store.threads.forEach(t => {
@@ -718,32 +717,29 @@
         }
         if (!valid) return;
 
-        // --- NEW Grouping Logic ---
+        // --- Grouping Logic ---
         const threadTags = (t.tags && t.tags.length) ? t.tags : ["Untagged"];
         
-        // 1. Identify all "Parent" categories relevant to this thread
+        // Identify Parents
         const relevantParents = new Set();
         threadTags.forEach(tag => relevantParents.add(tag.split('-')[0].trim()));
 
-        // 2. Assign thread to buckets
         relevantParents.forEach(parent => {
             if (!groups[parent]) groups[parent] = { id: parent, direct: [], subs: {} };
 
             // Find tags belonging to this parent
             const relatedTags = threadTags.filter(tag => tag === parent || tag.startsWith(parent + '-'));
-            
-            // Check for Sub-tags (e.g., DMT-EUG)
             const subTags = relatedTags.filter(tag => tag.includes('-') && tag.split('-').length > 1);
 
             if (subTags.length > 0) {
-                // IF sub-tags exist, ONLY put in sub-menus. Do NOT put in direct.
+                // Add to sub-menus
                 subTags.forEach(fullTag => {
                     const subName = fullTag.split('-').slice(1).join('-').trim();
                     if (!groups[parent].subs[subName]) groups[parent].subs[subName] = [];
                     groups[parent].subs[subName].push(t);
                 });
             } else {
-                // No sub-tags found, so it truly belongs to the Top Level Direct list
+                // Add to direct list
                 groups[parent].direct.push(t);
             }
         });
@@ -752,8 +748,17 @@
     // Sort and Render
     Object.keys(groups).sort().forEach(key => {
         const g = groups[key];
+        
+        // Calculate Totals for Badges
         let totalCount = g.direct.length;
-        Object.values(g.subs).forEach(arr => totalCount += arr.length);
+        let totalUnread = 0;
+        
+        g.direct.forEach(t => totalUnread += (t.unread || 0));
+        Object.values(g.subs).forEach(arr => {
+            totalCount += arr.length;
+            arr.forEach(t => totalUnread += (t.unread || 0));
+        });
+
         if (totalCount === 0) return;
 
         const isOpen = store.openGroups.has(key);
@@ -762,9 +767,16 @@
         const btn = document.createElement("button");
         btn.onclick = () => window.toggleGroup(key);
         btn.className = "w-full text-left px-4 py-3 border-b bg-white hover:bg-slate-50 flex justify-between items-center transition group";
+        
+        // Badge HTML for Parent
+        const parentBadge = totalUnread > 0 
+            ? `<span class="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm mr-1">${totalUnread}</span>` 
+            : '';
+
         btn.innerHTML = `
             <span class="font-bold text-sm text-slate-700">${key}</span>
             <div class="flex items-center gap-2">
+                ${parentBadge}
                 <span class="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">${totalCount}</span>
                 <i class="fa-solid fa-chevron-right text-slate-300 text-xs transition-transform duration-200 ${isOpen?'rotate-90':''}"></i>
             </div>`;
@@ -777,27 +789,45 @@
 
             const renderRow = (t) => {
                 const isP = store.pinned.has(t.id);
+                const unread = t.unread || 0;
+                // Row Badge HTML
+                const rowBadge = unread > 0 
+                    ? `<span class="ml-2 bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">${unread}</span>` 
+                    : '';
+
                 return `
                 <div onclick="window.loadThread('${t.id}')" class="px-4 py-3 border-b border-slate-100 hover:bg-white cursor-pointer transition relative ${t.id===store.activeThreadId?'bg-indigo-50 border-indigo-100':''}">
                     <div class="flex justify-between items-center mb-1">
-                        <span class="font-bold text-sm ${t.unread?'text-indigo-600':''}">${escapeHtml(t.name||t.phone)}</span>
+                        <div class="flex items-center">
+                            <span class="font-bold text-sm ${unread?'text-indigo-900':''}">${escapeHtml(t.name||t.phone)}</span>
+                            ${rowBadge}
+                        </div>
                         <i onclick="event.stopPropagation();window.togglePinThread('${t.id}')" class="fa-solid fa-star text-xs ${isP?'text-amber-400':'text-slate-200 hover:text-slate-400'}"></i>
                     </div>
                     <div class="text-xs text-slate-500 truncate flex justify-between">
-                        <span>${escapeHtml(t.lastMessageText||"No messages")}</span>
+                        <span class="${unread?'font-semibold text-slate-700':''}">${escapeHtml(t.lastMessageText||"No messages")}</span>
                         <span class="ml-2 opacity-70">${formatTime(t.lastMessageAtMs)}</span>
                     </div>
                 </div>`;
             };
 
-            // 1. Direct Members (No suffix tags for this parent)
+            // 1. Direct Members
             g.direct.forEach(t => { container.innerHTML += renderRow(t); });
 
-            // 2. Sub-Groups (Clickable Sub-Accordions)
+            // 2. Sub-Groups
             Object.keys(g.subs).sort().forEach(subKey => {
                 const fullSubTag = `${key}-${subKey}`;
                 const isSubOpen = store.openGroups.has(fullSubTag);
                 const subCount = g.subs[subKey].length;
+                
+                // Calculate Sub Unread
+                let subUnread = 0;
+                g.subs[subKey].forEach(t => subUnread += (t.unread || 0));
+                
+                // Badge HTML for Sub-Group
+                const subBadge = subUnread > 0 
+                    ? `<span class="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm mr-1">${subUnread}</span>` 
+                    : '';
 
                 container.innerHTML += `
                     <button onclick="event.stopPropagation(); window.toggleGroup('${fullSubTag}')" class="w-full text-left px-4 py-2 bg-slate-100/50 hover:bg-slate-100 border-y border-slate-200 flex justify-between items-center transition group">
@@ -806,6 +836,7 @@
                             <span class="font-bold text-xs text-slate-600 uppercase tracking-wider">${subKey}</span>
                         </div>
                         <div class="flex items-center gap-2">
+                            ${subBadge}
                             <span class="text-[10px] text-slate-400 bg-white border border-slate-200 px-1.5 rounded-full">${subCount}</span>
                             <i class="fa-solid fa-chevron-right text-slate-300 text-[10px] transition-transform duration-200 ${isSubOpen ? 'rotate-90' : ''}"></i>
                         </div>
