@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>DLX/DMT</title>
+  <title>DLX/DMT - Dispatch Console</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -19,10 +19,9 @@
 
     .msg-sent { background:#4f46e5; color:#fff; border-radius:18px 18px 4px 18px; }
     .msg-received { background:#f1f5f9; color:#1e293b; border-radius:18px 18px 18px 4px; }
-
-    .msg-group:hover .delete-btn { opacity: 1; }
-    .fade-in-up { animation: fadeInUp 0.25s ease-out forwards; }
-    @keyframes fadeInUp { from { opacity:0; transform:translateY(8px);} to { opacity:1; transform:translateY(0);} }
+    
+    .fade-in-up { animation: fadeInUp 0.2s ease-out forwards; }
+    @keyframes fadeInUp { from { opacity:0; transform:translateY(4px);} to { opacity:1; transform:translateY(0);} }
   </style>
 </head>
 
@@ -31,84 +30,56 @@
   <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3"></audio>
 
   <aside class="w-full md:w-80 bg-white border-r border-slate-200 flex flex-col z-20 absolute md:relative h-full transition-transform duration-300 transform" id="sidebar">
-    <div class="h-16 px-2 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-      <div class="flex items-center gap-2 text-indigo-600 pl-2">
-        <i class="fa-solid fa-comments text-xl"></i>
-        <span class="font-bold text-lg tracking-tight hidden md:inline">DLX/DMT</span>
+    <div class="h-16 px-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+      <div class="flex items-center gap-2 text-indigo-600 font-bold text-lg tracking-tight">
+        <i class="fa-solid fa-comments"></i>
+        <span>DLX/DMT</span>
       </div>
-      <div class="flex gap-1 items-center">
-
-        <button onclick="document.getElementById('broadcastCsvInput').click()" class="flex flex-col items-center justify-center w-10 h-10 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition" title="Broadcast to All">
-          <i class="fa-solid fa-bullhorn text-sm mb-0.5"></i>
-          <span class="text-[8px] font-bold uppercase leading-none">Blast</span>
-        </button>
-        <input type="file" id="broadcastCsvInput" accept=".csv" class="hidden" onchange="handleBroadcastCsv(this)">
-
-        <button onclick="document.getElementById('assignmentsCsvInput').click()" class="flex flex-col items-center justify-center w-10 h-10 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition" title="Assign Trips">
-          <i class="fa-solid fa-route text-sm mb-0.5"></i>
-          <span class="text-[8px] font-bold uppercase leading-none">Trips</span>
-        </button>
-        <input type="file" id="assignmentsCsvInput" accept=".csv" class="hidden" onchange="handleAssignmentsCsv(this)">
-
-        <button onclick="openNewMsgModal()" class="flex flex-col items-center justify-center w-10 h-10 bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg transition shadow-sm ml-1" title="New Message">
-          <i class="fa-solid fa-pen text-sm"></i>
-        </button>
+      <div class="flex gap-1">
+        <button onclick="window.openMergerModal()" class="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition" title="1. Merge Data"><i class="fa-solid fa-file-export"></i></button>
+        <button onclick="document.getElementById('broadcastCsvInput').click()" class="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition" title="2. Broadcast"><i class="fa-solid fa-bullhorn"></i></button>
+        <input type="file" id="broadcastCsvInput" accept=".csv" class="hidden" onchange="window.handleBroadcastCsv(this)">
+        <button onclick="window.openAssignmentsModal()" class="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition" title="3. Assign Trips"><i class="fa-solid fa-route"></i></button>
+        <button onclick="window.openNewMsgModal()" class="w-8 h-8 flex items-center justify-center bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg transition shadow-sm ml-1" title="New Msg"><i class="fa-solid fa-pen"></i></button>
       </div>
     </div>
 
-    <div class="p-3 border-b border-slate-100 space-y-2">
+    <div class="p-3 border-b border-slate-100 space-y-2 bg-slate-50/50">
       <div class="relative">
         <i class="fa-solid fa-search absolute left-3 top-3 text-slate-400 text-sm"></i>
-        <input type="text" id="searchContacts" onkeyup="renderThreadList()" placeholder="Search..." class="w-full bg-slate-100 text-sm pl-9 pr-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+        <input type="text" id="searchContacts" onkeyup="window.renderThreadList()" placeholder="Search..." class="w-full bg-white border border-slate-200 text-sm pl-9 pr-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition shadow-sm">
       </div>
-
-      <!-- NEW: filter buttons -->
       <div class="flex items-center gap-2">
-        <button onclick="toggleUnreadOnly()" id="unreadOnlyBtn"
-          class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
-          title="Show only threads with unread messages">
-          Unread
-        </button>
-        <button onclick="togglePinnedOnly()" id="pinnedOnlyBtn"
-          class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
-          title="Show only pinned threads">
-          Pinned
-        </button>
+        <button onclick="window.toggleUnreadOnly()" id="unreadOnlyBtn" class="flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide border transition border-slate-200 text-slate-600 hover:bg-white hover:shadow-sm">Unread</button>
+        <button onclick="window.togglePinnedOnly()" id="pinnedOnlyBtn" class="flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide border transition border-slate-200 text-slate-600 hover:bg-white hover:shadow-sm">Pinned</button>
       </div>
-
-      <!-- NEW: tag chips -->
-      <div id="tagChips" class="pt-1 flex flex-wrap gap-2"></div>
-
-      <div class="text-[10px] text-slate-400 flex justify-between">
-        <span>Shared DB: <span class="font-mono text-slate-600">dispatch_main</span></span>
-        <button onclick="document.getElementById('csvInput').click()" class="hover:text-indigo-600" title="Import Contacts">Import CSV</button>
-        <input type="file" id="csvInput" accept=".csv" class="hidden" onchange="handleCsvUpload(this)">
+      <div id="tagChips" class="flex flex-wrap gap-1.5 pt-1"></div>
+      <div class="flex justify-between items-center text-[10px] text-slate-400 pt-1">
+        <span>DB: <span class="font-mono text-slate-500">dispatch_main</span></span>
+        <button onclick="document.getElementById('csvInput').click()" class="hover:text-indigo-600">Import CSV</button>
+        <input type="file" id="csvInput" accept=".csv" class="hidden" onchange="window.handleCsvUpload(this)">
       </div>
     </div>
 
-    <div class="flex-1 overflow-y-auto p-2 space-y-1" id="contactList"></div>
+    <div class="flex-1 overflow-y-auto" id="contactList"></div>
 
-    <div class="p-3 bg-slate-50 border-t border-slate-100 flex items-center gap-3">
-      <div id="userAvatar" class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">D</div>
+    <div class="p-3 bg-slate-50 border-t border-slate-200 flex items-center gap-3">
+      <div id="userAvatar" class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-sm">D</div>
       <div class="flex-1 overflow-hidden">
-        <div id="userLine1" class="text-xs font-bold text-slate-700 truncate">Dispatch Team</div>
-        <div id="userLine2" class="text-[10px] text-slate-400 truncate">Online</div>
+        <div class="text-xs font-bold text-slate-700 truncate">Dispatch Team</div>
+        <div class="text-[10px] text-slate-400 truncate">Online</div>
       </div>
-      <button onclick="resetLocalUI()" class="text-slate-400 hover:text-red-500" title="Reset View">
-        <i class="fa-solid fa-rotate-left"></i>
-      </button>
+      <button onclick="window.resetLocalUI()" class="text-slate-400 hover:text-red-500 transition" title="Reset View"><i class="fa-solid fa-rotate-left"></i></button>
     </div>
   </aside>
 
   <main class="flex-1 flex flex-col bg-white relative w-full">
-    <div id="mobileOverlay" onclick="toggleMobileSidebar()" class="absolute inset-0 bg-black/20 z-10 hidden md:hidden"></div>
+    <div id="mobileOverlay" onclick="window.toggleMobileSidebar()" class="absolute inset-0 bg-black/20 z-10 hidden md:hidden"></div>
 
     <header class="h-16 px-4 border-b border-slate-100 flex items-center justify-between bg-white flex-shrink-0">
       <div class="flex items-center gap-3 min-w-0">
-        <button onclick="toggleMobileSidebar()" class="md:hidden text-slate-500 hover:text-indigo-600">
-          <i class="fa-solid fa-arrow-left text-lg"></i>
-        </button>
-        <div id="activeContactAvatar" class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-sm">?</div>
+        <button onclick="window.toggleMobileSidebar()" class="md:hidden text-slate-500 hover:text-indigo-600"><i class="fa-solid fa-arrow-left text-lg"></i></button>
+        <div id="activeContactAvatar" class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-sm border border-slate-200">?</div>
         <div class="min-w-0">
           <h2 id="activeContactName" class="font-bold text-slate-800 text-sm truncate">Select a conversation</h2>
           <div class="flex items-center gap-2 min-w-0">
@@ -117,25 +88,15 @@
           </div>
         </div>
       </div>
-
-      <!-- NEW: header actions -->
-      <div class="flex items-center gap-3">
-        <button onclick="openThreadSearch()" class="text-slate-400 hover:text-indigo-600" title="Search this thread">
-          <i class="fa-solid fa-magnifying-glass"></i>
-        </button>
-        <button onclick="exportActiveThreadCsv()" class="text-slate-400 hover:text-indigo-600" title="Export thread CSV">
-          <i class="fa-solid fa-file-csv"></i>
-        </button>
-        <button onclick="openSettingsModal()" class="text-slate-400 hover:text-indigo-600" title="Settings">
-          <i class="fa-solid fa-gear"></i>
-        </button>
-        <button onclick="openThreadInfo()" class="text-slate-400 hover:text-indigo-600" title="Edit thread info">
-          <i class="fa-solid fa-circle-info"></i>
-        </button>
+      <div class="flex items-center gap-4 text-slate-400">
+        <button onclick="window.openThreadSearch()" class="hover:text-indigo-600 transition" title="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
+        <button onclick="window.exportActiveThreadCsv()" class="hover:text-indigo-600 transition" title="Export CSV"><i class="fa-solid fa-file-csv"></i></button>
+        <button onclick="window.openSettingsModal()" class="hover:text-indigo-600 transition" title="Settings"><i class="fa-solid fa-gear"></i></button>
+        <button onclick="window.openThreadInfo()" class="hover:text-indigo-600 transition" title="Info"><i class="fa-solid fa-circle-info"></i></button>
       </div>
     </header>
 
-    <div id="chatContainer" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 relative">
+    <div id="chatContainer" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/30 relative">
       <div id="welcomeState" class="absolute inset-0 flex flex-col items-center justify-center text-slate-300">
         <i class="fa-regular fa-comments text-6xl mb-4 opacity-50"></i>
         <p class="font-medium">Select a contact to start messaging</p>
@@ -143,201 +104,103 @@
       <div id="messageList" class="space-y-4 pb-2"></div>
     </div>
 
-    <!-- NEW: upgraded composer (quick replies + enter-to-send + draft hint) -->
     <div class="p-4 bg-white border-t border-slate-100 flex-shrink-0">
       <div class="max-w-4xl mx-auto flex flex-col gap-2">
         <div id="quickRepliesRow" class="flex flex-wrap gap-2"></div>
-
         <div class="relative flex items-end gap-2">
           <div class="relative flex-1">
-            <textarea id="msgInput" rows="1"
-              class="w-full bg-slate-100 border-0 rounded-2xl px-4 py-3 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition resize-none max-h-48"
-              placeholder="Type a message..."></textarea>
+            <textarea id="msgInput" rows="1" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-none max-h-48 shadow-sm" placeholder="Type a message..."></textarea>
           </div>
-          <button onclick="sendMessage()" id="sendBtn"
-            class="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition shadow-md flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Send (Enter)">
+          <button onclick="window.sendMessage()" id="sendBtn" class="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition shadow-md flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
             <i class="fa-solid fa-paper-plane"></i>
           </button>
         </div>
-
-        <div class="text-[10px] text-slate-400 flex items-center justify-between">
+        <div class="text-[10px] text-slate-400 flex items-center justify-between px-2">
           <span>Enter = send • Shift+Enter = newline</span>
-          <span id="draftHint" class="opacity-0 transition">Draft saved</span>
+          <span id="draftHint" class="opacity-0 transition text-indigo-500 font-bold">Draft saved</span>
         </div>
       </div>
     </div>
   </main>
 
-  <div id="assignmentsModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+  <div id="mergerModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl p-6 flex flex-col max-h-[90vh]">
-      <div class="flex items-center justify-between mb-3 flex-shrink-0">
-        <h3 class="text-lg font-bold text-slate-800">Trip Assignments Review</h3>
-        <button onclick="closeAssignmentsModal()" class="text-slate-400 hover:text-slate-700">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-xl font-bold text-slate-800">Merge Legacy Data</h3>
+        <button onclick="window.closeMergerModal()" class="text-slate-400 hover:text-slate-700"><i class="fa-solid fa-xmark text-xl"></i></button>
       </div>
-      <p class="text-xs text-slate-500 mb-4 flex-shrink-0">
-        The system detected the following drivers. Rows with missing trip info (Time, City, Client) are marked as <span class="font-bold text-slate-400">NO TRIP DATA</span>.
-      </p>
-
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+            <h4 class="text-sm font-bold text-slate-700">Step 1: Legacy Schedule</h4>
+            <p class="text-[10px] text-slate-400 mb-2">Upload the file with 3 columns of names</p>
+            <input type="file" id="mergeLegacyInput" accept=".csv,.xlsx" class="text-xs w-full text-slate-600">
+        </div>
+        <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+            <h4 class="text-sm font-bold text-slate-700">Step 2: New Template</h4>
+            <p class="text-[10px] text-slate-400 mb-2">Upload the file with phone numbers</p>
+            <input type="file" id="mergeTemplateInput" accept=".csv" class="text-xs w-full text-slate-600">
+        </div>
+      </div>
+      <button onclick="window.performMerge()" class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 font-bold shadow-sm mb-4 mx-auto block transition">Preview Merge</button>
       <div class="border rounded-lg overflow-hidden bg-slate-50 flex-1 relative min-h-[300px]">
         <div class="absolute inset-0 overflow-auto">
           <table class="w-full text-xs">
+            <thead class="bg-slate-200 text-slate-700 sticky top-0 font-bold z-10">
+              <tr><th class="p-2 border-b w-10"></th><th class="text-left p-2 border-b">Name</th><th class="text-left p-2 border-b">Vehicle</th><th class="text-left p-2 border-b">Tablet</th><th class="text-left p-2 border-b">Status</th></tr>
+            </thead>
+            <tbody id="mergePreview" class="divide-y divide-slate-200 bg-white"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="flex justify-between items-center mt-4">
+        <div class="text-xs text-slate-500" id="mergeSummary">Waiting for files...</div>
+        <button onclick="window.downloadMergedCsv()" id="downloadMergeBtn" disabled class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition">Download Merged CSV</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="assignmentsModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl p-6 flex flex-col max-h-[90vh]">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-bold text-slate-800">Trip Assignments</h3>
+        <button onclick="window.closeAssignmentsModal()" class="text-slate-400 hover:text-slate-700"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <div class="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-4 mb-4 flex items-center justify-center gap-4">
+        <div class="text-center"><h4 class="text-sm font-bold text-slate-700">Upload CSV</h4><p class="text-[10px] text-slate-400">Use Merged Template</p></div>
+        <button onclick="document.getElementById('assignmentsCsvInput').click()" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg text-xs hover:border-indigo-500 hover:text-indigo-600 transition">Browse</button>
+        <input type="file" id="assignmentsCsvInput" accept=".csv" class="hidden" onchange="window.handleAssignmentsCsv(this)">
+      </div>
+      <div class="bg-slate-100 p-3 rounded-lg border border-slate-200 mb-4 flex gap-2 items-end shadow-inner">
+        <div class="flex-1"><label class="block text-[10px] font-bold text-slate-500 uppercase">Name</label><input type="text" id="manualName" class="w-full text-xs p-2 border rounded shadow-sm"></div>
+        <div class="w-32"><label class="block text-[10px] font-bold text-slate-500 uppercase">Phone</label><input type="tel" id="manualPhone" class="w-full text-xs p-2 border rounded shadow-sm"></div>
+        <div class="flex-[2]"><label class="block text-[10px] font-bold text-slate-500 uppercase">Message</label><input type="text" id="manualMsg" class="w-full text-xs p-2 border rounded shadow-sm"></div>
+        <button onclick="window.addManualRow()" class="px-4 py-2 bg-indigo-600 text-white rounded text-xs font-bold h-[34px] shadow-sm hover:bg-indigo-700 transition">Add</button>
+      </div>
+      <div class="border rounded-lg overflow-hidden bg-slate-50 flex-1 relative min-h-[200px]">
+        <div class="absolute inset-0 overflow-auto">
+          <table class="w-full text-xs">
             <thead class="bg-slate-200 text-slate-700 sticky top-0 font-bold z-10 shadow-sm">
-              <tr>
-                <th class="text-left p-3 w-40 bg-slate-200 border-b border-slate-300">Driver / Tag</th>
-                <th class="text-left p-3 w-28 bg-slate-200 border-b border-slate-300">Phone</th>
-                <th class="text-left p-3 bg-slate-200 border-b border-slate-300">Generated Message</th>
-                <th class="text-left p-3 w-28 bg-slate-200 border-b border-slate-300">Status</th>
-              </tr>
+              <tr><th class="p-3 w-10 bg-slate-200 border-b text-center"><i class="fa-solid fa-check"></i></th><th class="text-left p-3 w-40 bg-slate-200 border-b">Driver / Tag</th><th class="text-left p-3 w-28 bg-slate-200 border-b">Phone</th><th class="text-left p-3 bg-slate-200 border-b">Message</th><th class="text-left p-3 w-28 bg-slate-200 border-b">Status</th></tr>
             </thead>
             <tbody id="assignmentsPreview" class="divide-y divide-slate-200 bg-white"></tbody>
           </table>
         </div>
       </div>
-
-      <div class="flex items-center justify-between mt-4 flex-shrink-0">
-        <div class="text-xs text-slate-500 font-medium"><span id="assignmentsSummary">0 rows found</span></div>
+      <div class="flex items-center justify-between mt-4">
+        <div class="text-xs text-slate-500 font-medium" id="assignmentsSummary">0 rows</div>
         <div class="flex gap-2">
-          <button onclick="closeAssignmentsModal()" class="px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Close</button>
-          <button id="sendAllAssignmentsBtn" onclick="sendAllAssignments()" class="px-6 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold shadow-sm">Send Valid Trips</button>
+          <button onclick="window.closeAssignmentsModal()" class="px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition">Close</button>
+          <button id="sendAllAssignmentsBtn" onclick="window.sendAllAssignments()" class="px-6 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold shadow-sm transition">Send Selected</button>
         </div>
       </div>
     </div>
   </div>
 
-  <div id="broadcastModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 flex flex-col max-h-[90vh]">
-      <div class="flex items-center justify-between mb-3 flex-shrink-0">
-        <h3 class="text-lg font-bold text-slate-800">Team Broadcast</h3>
-        <button onclick="closeBroadcastModal()" class="text-slate-400 hover:text-slate-700">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
-      <div class="flex-shrink-0 mb-4 bg-indigo-50 p-4 rounded-lg border border-indigo-100">
-        <label class="block text-xs font-bold text-indigo-900 mb-2 uppercase">Message to All Drivers</label>
-        <textarea id="broadcastMsgInput" oninput="updateBroadcastPreview(this.value)"
-          class="w-full text-sm p-3 border border-indigo-200 rounded-md focus:ring-2 focus:ring-indigo-500 transition resize-none"
-          rows="3" placeholder="Type your announcement here..."></textarea>
-      </div>
-
-      <div class="border rounded-lg overflow-hidden bg-slate-50 flex-1 relative min-h-[200px]">
-        <div class="absolute inset-0 overflow-auto">
-          <table class="w-full text-xs">
-            <thead class="bg-slate-200 text-slate-700 sticky top-0 font-bold z-10">
-              <tr>
-                <th class="text-left p-3 w-40 bg-slate-200">Driver</th>
-                <th class="text-left p-3 w-28 bg-slate-200">Phone</th>
-                <th class="text-left p-3 bg-slate-200">Preview</th>
-                <th class="text-left p-3 w-24 bg-slate-200">Status</th>
-              </tr>
-            </thead>
-            <tbody id="broadcastPreview" class="divide-y divide-slate-200 bg-white"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="flex items-center justify-between mt-4 flex-shrink-0">
-        <div class="text-xs text-slate-500"><span id="broadcastSummary">0 recipients</span></div>
-        <div class="flex gap-2">
-          <button onclick="closeBroadcastModal()" class="px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Cancel</button>
-          <button id="sendBroadcastBtn" onclick="sendBroadcast()" class="px-6 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold">Send Broadcast</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="newMsgModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-      <h3 class="text-lg font-bold text-slate-800 mb-4">New Conversation</h3>
-      <div class="space-y-4">
-        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Phone</label><input type="tel" id="newContactPhone" class="w-full border border-slate-300 rounded-lg p-2.5"></div>
-        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Name</label><input type="text" id="newContactName" class="w-full border border-slate-300 rounded-lg p-2.5"></div>
-        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Tags</label><input type="text" id="newContactTags" class="w-full border border-slate-300 rounded-lg p-2.5"></div>
-        <div class="flex gap-3 mt-6">
-          <button onclick="closeNewMsgModal()" class="flex-1 px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg">Cancel</button>
-          <button onclick="createThreadFromModal()" class="flex-1 px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Create</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="threadInfoModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-      <h3 class="text-lg font-bold text-slate-800 mb-1">Thread Info</h3>
-      <p id="threadInfoPhone" class="text-xs text-slate-400 mb-4">—</p>
-      <div class="space-y-4">
-        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Name</label><input type="text" id="threadInfoName" class="w-full border border-slate-300 rounded-lg p-2.5"></div>
-        <div><label class="block text-xs font-medium text-slate-500 uppercase mb-1">Tags</label><input type="text" id="threadInfoTags" class="w-full border border-slate-300 rounded-lg p-2.5"></div>
-        <div class="flex gap-3 mt-6 pt-4 border-t border-slate-100">
-          <button onclick="deleteActiveThread()" class="flex-1 px-4 py-2 text-white bg-red-500 hover:bg-red-600 rounded-lg">Delete</button>
-          <div class="flex-1 flex gap-2">
-            <button onclick="closeThreadInfo()" class="flex-1 px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg">Close</button>
-            <button onclick="saveThreadInfo()" class="flex-1 px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Save</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- NEW: Settings Modal -->
-  <div id="settingsModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-xl p-6">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-bold text-slate-800">Settings</h3>
-        <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-slate-700">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
-      <div class="space-y-3">
-        <div class="text-xs font-bold text-slate-500 uppercase">Canned Replies (one per line)</div>
-        <textarea id="cannedRepliesInput" rows="7"
-          class="w-full text-sm p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none"
-          placeholder="Example:
-On my way.
-Running 5 minutes late.
-Please sign into your tablet now."></textarea>
-
-        <div class="flex gap-2 pt-2">
-          <button onclick="closeSettingsModal()" class="px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Close</button>
-          <button onclick="saveSettings()" class="px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold">Save</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- NEW: Thread Search Modal -->
-  <div id="threadSearchModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl p-6 flex flex-col max-h-[85vh]">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-bold text-slate-800">Search Thread</h3>
-        <button onclick="closeThreadSearch()" class="text-slate-400 hover:text-slate-700">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
-      <div class="flex gap-2 mb-3">
-        <input id="threadSearchInput" type="text"
-          class="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
-          placeholder="Search messages (e.g., 'tablet', 'pickup', 'late')"
-          onkeydown="if(event.key==='Enter'){runThreadSearch();}">
-        <button onclick="runThreadSearch()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold">Search</button>
-      </div>
-
-      <div class="border rounded-lg overflow-hidden bg-slate-50 flex-1 relative min-h-[220px]">
-        <div class="absolute inset-0 overflow-auto">
-          <div id="threadSearchResults" class="divide-y divide-slate-200 bg-white"></div>
-        </div>
-      </div>
-
-      <div class="pt-3 flex justify-end">
-        <button onclick="closeThreadSearch()" class="px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Close</button>
-      </div>
-    </div>
-  </div>
+  <div id="broadcastModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm"><div class="bg-white rounded-xl w-full max-w-4xl p-6"><h3 class="text-lg font-bold mb-3">Broadcast</h3><textarea id="broadcastMsgInput" oninput="window.updateBroadcastPreview(this.value)" class="w-full text-sm p-3 border rounded mb-4" rows="3"></textarea><div class="max-h-64 overflow-auto border rounded mb-4"><table class="w-full text-xs"><tbody id="broadcastPreview"></tbody></table></div><div class="flex justify-end gap-2"><button onclick="window.closeBroadcastModal()" class="px-4 py-2 bg-slate-100 rounded">Cancel</button><button onclick="window.sendBroadcast()" class="px-6 py-2 bg-indigo-600 text-white rounded">Send</button></div></div></div>
+  <div id="newMsgModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm"><div class="bg-white rounded-xl w-full max-w-md p-6"><h3 class="text-lg font-bold mb-4">New Msg</h3><input id="newContactPhone" class="w-full border p-2 mb-2 rounded" placeholder="Phone"><input id="newContactName" class="w-full border p-2 mb-2 rounded" placeholder="Name"><button onclick="window.createThreadFromModal()" class="w-full bg-indigo-600 text-white p-2 rounded hover:bg-indigo-700">Create</button><button onclick="window.closeNewMsgModal()" class="w-full mt-2 bg-slate-100 p-2 rounded hover:bg-slate-200">Cancel</button></div></div>
+  <div id="threadInfoModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm"><div class="bg-white rounded-xl p-6"><h3 class="font-bold mb-2">Thread Info</h3><input id="threadInfoName" class="border w-full p-2 mb-2 rounded"><input id="threadInfoTags" class="border w-full p-2 mb-4 rounded"><button onclick="window.saveThreadInfo()" class="bg-indigo-600 text-white px-4 py-2 rounded mr-2 hover:bg-indigo-700">Save</button><button onclick="window.closeThreadInfo()" class="bg-slate-100 px-4 py-2 rounded hover:bg-slate-200">Close</button><p id="threadInfoPhone" class="hidden"></p></div></div>
+  <div id="settingsModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm"><div class="bg-white rounded-xl p-6 w-full max-w-xl"><h3 class="font-bold mb-3">Settings</h3><textarea id="cannedRepliesInput" class="w-full border p-2 mb-3 text-sm h-32 rounded"></textarea><div class="flex justify-end gap-2"><button onclick="window.closeSettingsModal()" class="px-4 py-2 bg-slate-100 rounded hover:bg-slate-200">Close</button><button onclick="window.saveSettings()" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Save</button></div></div></div>
+  <div id="threadSearchModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm"><div class="bg-white rounded-xl p-6 w-full max-w-3xl"><h3 class="font-bold mb-3">Search</h3><input id="threadSearchInput" class="w-full border p-2 mb-2 rounded" placeholder="Query..."><div id="threadSearchResults" class="max-h-64 overflow-auto border p-2 mb-2 text-sm rounded"></div><button onclick="window.runThreadSearch()" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Go</button><button onclick="window.closeThreadSearch()" class="bg-slate-100 px-4 py-2 rounded ml-2 hover:bg-slate-200">Close</button></div></div>
 
 <script type="module">
   const SMS_BACKEND_BASE = "https://sms-backend-3488.twil.io";
@@ -346,136 +209,53 @@ Please sign into your tablet now."></textarea>
   const TWILIO_DELETE_URL = `${SMS_BACKEND_BASE}/delete-thread`;
   const TWILIO_DELETE_MSG_URL = `${SMS_BACKEND_BASE}/delete-message`;
   const SHARED_ORG_ID = "dispatch_team_main";
+  const ASSIGNMENT_DISCLAIMER = "\n\nThis is a beta test for ride assignments, you will still receive a text from the original number, if assignment info doesn't match, contact dispatch for clarity.";
 
+  const LS = { pinned: "omnichat_pinned", drafts: "omnichat_drafts", canned: "omnichat_canned", filters: "omnichat_filters", deletedSids: "deletedSids" };
   const firebaseConfig = { apiKey: "AIzaSyCaypEoug2f7OTJjKOdkkJPaZDypcr3NF8", authDomain: "sms-dlx.firebaseapp.com", projectId: "sms-dlx", storageBucket: "sms-dlx.firebasestorage.app", messagingSenderId: "522453095698", appId: "1:522453095698:web:ea217285e6e5160ee4cfcb", measurementId: "G-1BRSKD75YX" };
 
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
   import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-  import {
-    getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, getDoc,
-    onSnapshot, query, orderBy, serverTimestamp, where, getDocs, limit
-  } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp, where, getDocs } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-
-  // NEW: pinned/drafts/settings/filters
-  const LS = {
-    pinned: "omnichat_pinned",
-    drafts: "omnichat_drafts",
-    canned: "omnichat_canned",
-    filters: "omnichat_filters",
-    deletedSids: "deletedSids"
+  const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getFirestore(app);
+  let store = { 
+    uid: null, threads: [], activeThreadId: null, activeThread: null, lastInboundSidSeen: new Set(), deletedSids: new Set(), openGroups: new Set(), initialGroupSet: false, isPolling: false,
+    pinned: new Set(), onlyUnread: false, onlyPinned: false, tagFilter: new Set(), drafts: {}, cannedReplies: []
   };
+  let assignmentsRows = []; let broadcastRows = []; let mergedCsvContent = "";
+  let unsubThreads = null; let unsubMessages = null;
 
-  let store = {
-    uid: null,
-    threads: [],
-    activeThreadId: null,
-    activeThread: null,
-    lastInboundSidSeen: new Set(),
-    deletedSids: new Set(),
-    openGroups: new Set(),
-    initialGroupSet: false,
-    isPolling: false,
-
-    // NEW
-    pinned: new Set(),
-    onlyUnread: false,
-    onlyPinned: false,
-    tagFilter: new Set(),
-    drafts: {},
-    cannedReplies: []
-  };
-
-  let assignmentsRows = [];
-  let broadcastRows = [];
-  let unsubThreads = null;
-  let unsubMessages = null;
-  let pollTimer = null;
-
-  // HELPERS
-  const escapeHtml = (text) => { const div = document.createElement("div"); div.textContent = text ?? ""; return div.innerHTML; };
-  const initials = (s) => (s || "?").trim().slice(0,2).toUpperCase() || "?";
-  const parseTags = (raw) => (raw || "").split(",").map(x => x.trim()).filter(Boolean).slice(0, 30);
-  const normalizePhone = (raw) => (raw || "").toString().replace(/[^0-9+]/g, "").trim();
+  const escapeHtml = (t) => { const d = document.createElement("div"); d.textContent = t??""; return d.innerHTML; };
+  const normalizePhone = (r) => (r||"").toString().replace(/[^0-9+]/g, "").trim();
+  const nameKey = (s) => (s||"").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const parseTags = (r) => (r||"").split(",").map(x=>x.trim()).filter(Boolean).slice(0,30);
+  const initials = (s) => (s||"?").trim().slice(0,2).toUpperCase()||"?";
   const formatTime = (ms) => (!ms) ? "" : new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const nameKey = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const scrollToBottom = () => { const el = document.getElementById("chatContainer"); if(el) el.scrollTop = el.scrollHeight; };
   const safeId = (s) => (s || "").toString().replace(/[^a-zA-Z0-9_-]/g, "");
 
-  function autosizeTextarea(el) {
-    if(!el) return;
-    el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 192) + "px";
-  }
-
-  function toastDraftSaved() {
-    const el = document.getElementById("draftHint");
-    if(!el) return;
-    el.classList.remove("opacity-0");
-    clearTimeout(toastDraftSaved._t);
-    toastDraftSaved._t = setTimeout(()=> el.classList.add("opacity-0"), 700);
-  }
-
-  // DB PATHS
   const getThreadsCol = () => collection(db, "organizations", SHARED_ORG_ID, "threads");
   const getThreadDoc = (id) => doc(db, "organizations", SHARED_ORG_ID, "threads", id);
   const getMsgsCol = (id) => collection(db, "organizations", SHARED_ORG_ID, "threads", id, "messages");
 
-  // LOCAL SETTINGS
+  // SETTINGS
   function loadLocalSettings() {
-    try {
-      const s = localStorage.getItem(LS.deletedSids);
-      if(s) store.deletedSids = new Set(JSON.parse(s));
-    } catch {}
-
-    try {
-      const p = JSON.parse(localStorage.getItem(LS.pinned) || "[]");
-      store.pinned = new Set(Array.isArray(p) ? p : []);
-    } catch {}
-
-    try {
-      const d = JSON.parse(localStorage.getItem(LS.drafts) || "{}");
-      store.drafts = (d && typeof d === "object") ? d : {};
-    } catch {}
-
-    try {
-      const c = JSON.parse(localStorage.getItem(LS.canned) || "[]");
-      store.cannedReplies = Array.isArray(c) ? c.slice(0, 20) : [];
-    } catch {}
-
-    try {
-      const f = JSON.parse(localStorage.getItem(LS.filters) || "{}");
-      store.onlyUnread = !!f.onlyUnread;
-      store.onlyPinned = !!f.onlyPinned;
-      store.tagFilter = new Set(Array.isArray(f.tagFilter) ? f.tagFilter : []);
-    } catch {}
-
-    if(!store.cannedReplies.length) {
-      store.cannedReplies = [
-        "Please sign into your tablet now.",
-        "Copy. Thank you.",
-        "Running about 5 minutes behind.",
-        "Call dispatch when you arrive.",
-        "Make sure you’re in the correct city zone."
-      ];
-    }
+    try { const s = localStorage.getItem(LS.deletedSids); if(s) store.deletedSids = new Set(JSON.parse(s)); } catch{}
+    try { const p = JSON.parse(localStorage.getItem(LS.pinned)||"[]"); store.pinned = new Set(p); } catch{}
+    try { const d = JSON.parse(localStorage.getItem(LS.drafts)||"{}"); store.drafts = d; } catch{}
+    try { const c = JSON.parse(localStorage.getItem(LS.canned)||"[]"); store.cannedReplies = c; } catch{}
+    try { const f = JSON.parse(localStorage.getItem(LS.filters)||"{}"); store.onlyUnread=!!f.onlyUnread; store.onlyPinned=!!f.onlyPinned; store.tagFilter=new Set(f.tagFilter||[]); } catch{}
+    if(!store.cannedReplies.length) store.cannedReplies = ["Please sign into your tablet.", "Copy. Thank you.", "Running late.", "Call dispatch.", "Check your zone."];
   }
-
   function saveLocalSettings() {
     localStorage.setItem(LS.deletedSids, JSON.stringify([...store.deletedSids]));
     localStorage.setItem(LS.pinned, JSON.stringify([...store.pinned]));
-    localStorage.setItem(LS.drafts, JSON.stringify(store.drafts || {}));
-    localStorage.setItem(LS.canned, JSON.stringify(store.cannedReplies || []));
-    localStorage.setItem(LS.filters, JSON.stringify({
-      onlyUnread: store.onlyUnread,
-      onlyPinned: store.onlyPinned,
-      tagFilter: [...store.tagFilter]
-    }));
+    localStorage.setItem(LS.drafts, JSON.stringify(store.drafts));
+    localStorage.setItem(LS.canned, JSON.stringify(store.cannedReplies));
+    localStorage.setItem(LS.filters, JSON.stringify({onlyUnread:store.onlyUnread, onlyPinned:store.onlyPinned, tagFilter:[...store.tagFilter]}));
   }
 
-  // POLL
   async function pollIncomingMessages() {
     if(!store.uid || store.isPolling) return;
     store.isPolling = true;
@@ -483,11 +263,9 @@ Please sign into your tablet now."></textarea>
       const res = await fetch(TWILIO_GET_URL);
       const data = await res.json();
       if(!data.success || !data.messages) { store.isPolling = false; return; }
-
       for(let m of data.messages) {
         if(store.deletedSids.has(m.sid) || store.lastInboundSidSeen.has(m.sid)) continue;
         store.lastInboundSidSeen.add(m.sid);
-
         if(m.direction === 'inbound') {
           const cleanPhone = normalizePhone(m.from);
           if(cleanPhone.length > 5) {
@@ -496,15 +274,12 @@ Please sign into your tablet now."></textarea>
             if (querySnap.empty) {
               await upsertThread(m.from, cleanPhone, ["New"]);
               await setDoc(doc(getMsgsCol(cleanPhone), m.sid), { body: m.body, direction: "received", createdAt: serverTimestamp(), sid: m.sid });
-
               const threadRef = getThreadDoc(cleanPhone);
               const tSnap = await getDoc(threadRef);
               const currentUnread = tSnap.exists() ? (tSnap.data().unread || 0) : 0;
-
               const updates = { lastMessageText: m.body, lastMessageAtMs: Date.now() };
               if(store.activeThreadId !== cleanPhone) { updates.unread = currentUnread + 1; }
               await updateDoc(threadRef, updates);
-
               document.getElementById("notifSound").play().catch(()=>{});
             }
           }
@@ -514,833 +289,272 @@ Please sign into your tablet now."></textarea>
     finally { store.isPolling = false; }
   }
 
-  // --- TRIP ASSIGNMENTS ---
-  window.handleAssignmentsCsv = async function(input) {
-    const file = input.files?.[0]; input.value = ""; if (!file || !store.uid) return;
-    const text = await file.text(); const lines = text.split(/\r?\n/);
-    if (lines.length < 4) { alert("CSV seems empty."); return; }
+  // --- MERGE ---
+  window.openMergerModal = () => document.getElementById("mergerModal").classList.remove("hidden");
+  window.closeMergerModal = () => document.getElementById("mergerModal").classList.add("hidden");
+  window.performMerge = async function() {
+    const lf = document.getElementById("mergeLegacyInput").files?.[0];
+    const tf = document.getElementById("mergeTemplateInput").files?.[0];
+    if(!lf || !tf) return alert("Select both files.");
+    const lt = await lf.text(); const tt = await tf.text();
+    const lmap = new Map();
+    let colMode = 0; // 0=Standard(Eugene/Coast), 1=Shifted(Portland)
 
-    let dateStr = parseCsvLine(lines[0])[0];
-    if(!dateStr || !/\d/.test(dateStr)) { const row2 = parseCsvLine(lines[1]); if(row2[0] && /\d/.test(row2[0])) dateStr = row2[0]; }
-    const dow = getDayOfWeek(dateStr);
-
-    const sectionMap = { "eugene": "DLX-EUG", "roseburg": "RBG", "portland/i-84 corridor": "PDX", "albany/corvallis/salem": "XLB", "direct medical transport": "DMT", "coast": "XCC" };
-    let currentTag = "Auto-Assign";
-    const contactsMap = await buildContactsMap();
-    assignmentsRows = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const parts = parseCsvLine(lines[i]);
-      if (parts.length < 5) continue;
-
-      const colE = (parts[4] || "").trim();
-      const lowerE = colE.toLowerCase();
-      if (sectionMap[lowerE]) { currentTag = sectionMap[lowerE]; continue; }
-
-      const puTime = parts[0] || ""; const city = parts[1] || ""; const client = parts[2] || "";
-      let phone = parts[3] || ""; const name = parts[4] || ""; const tablet = parts[6] || "?";
-
-      if (!name || name.toLowerCase() === "name" || name.includes("Corridor")) continue;
-
-      if (!phone) { phone = contactsMap.get(nameKey(name)) || ""; }
-      phone = normalizePhone(phone);
-
-      const hasTrip = (puTime && city && client);
-      const msg = hasTrip
-        ? `${dow}: ${puTime} pickup in ${city} (${client}), be signed into your tablet @ ${tablet} to receive ride.`
-        : "(No Trip Data)";
-
-      assignmentsRows.push({
-        driverName: name, phone: phone,
-        message: msg, tag: currentTag,
-        status: (!hasTrip) ? "NO TRIP DATA" : (phone && phone.length > 5) ? "READY" : "NO MATCH"
-      });
-    }
-    renderAssignmentsPreview();
-    openAssignmentsModal();
-  };
-
-  // --- BROADCAST ---
-  window.handleBroadcastCsv = async function(input) {
-    const file = input.files?.[0]; input.value = ""; if (!file || !store.uid) return;
-    const text = await file.text(); const lines = text.split(/\r?\n/);
-
-    const sectionMap = { "eugene": "DLX-EUG", "roseburg": "RBG", "portland/i-84 corridor": "PDX", "albany/corvallis/salem": "XLB", "direct medical transport": "DMT", "coast": "XCC" };
-    let currentTag = "Auto-Assign";
-    const contactsMap = await buildContactsMap();
-    broadcastRows = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const parts = parseCsvLine(lines[i]);
-      if (parts.length < 5) continue;
-
-      const colE = (parts[4] || "").trim();
-      if (sectionMap[colE.toLowerCase()]) { currentTag = sectionMap[colE.toLowerCase()]; continue; }
-
-      const name = parts[4] || ""; let phone = parts[3] || "";
-      if (!name || name.toLowerCase() === "name" || name.includes("Corridor")) continue;
-
-      if (!phone) { phone = contactsMap.get(nameKey(name)) || ""; }
-      phone = normalizePhone(phone);
-
-      broadcastRows.push({
-        driverName: name, phone: phone, tag: currentTag,
-        status: (phone && phone.length > 5) ? "READY" : "NO MATCH"
-      });
-    }
-
-    document.getElementById("broadcastMsgInput").value = "";
-    updateBroadcastPreview("");
-    document.getElementById("broadcastModal").classList.remove("hidden");
-  };
-
-  window.updateBroadcastPreview = function(val) {
-    const text = val.trim() || "(Type a message above...)";
-    const tbody = document.getElementById("broadcastPreview");
-    const summary = document.getElementById("broadcastSummary");
-    tbody.innerHTML = "";
-    const readyCount = broadcastRows.filter(r => r.status === "READY").length;
-
-    broadcastRows.forEach(row => {
-      const tr = document.createElement("tr");
-      const color = row.status === "READY" ? "text-green-600 font-bold" : "text-red-400";
-      tr.className = "hover:bg-slate-50 transition";
-      tr.innerHTML = `
-        <td class="p-3 border-b"><div class="font-bold text-slate-700">${escapeHtml(row.driverName)}</div><div class="text-[10px] text-indigo-500 font-mono">${row.tag}</div></td>
-        <td class="p-3 border-b font-mono text-slate-500">${row.phone || "—"}</td>
-        <td class="p-3 border-b text-xs text-slate-600 italic">${escapeHtml(text)}</td>
-        <td class="p-3 border-b text-xs uppercase ${color}">${row.status}</td>
-      `;
-      tbody.appendChild(tr);
+    lt.split(/\r?\n/).forEach(l => { 
+        const p = parseCsvLine(l);
+        // Detect shifted section
+        if (p[0] && (p[0].toLowerCase().includes("origin") || p[0].toLowerCase().includes("portland"))) { colMode = 1; }
+        
+        // Zone 1
+        if(p[0]) {
+            if(colMode === 0) lmap.set(nameKey(p[0]), {v:p[1], t:p[2]});
+            else lmap.set(nameKey(p[0]), {v:p[2], t:p[3]}); 
+        }
+        if(p[6]) lmap.set(nameKey(p[6]), {v:p[8], t:p[9]});
+        if(p[12]) lmap.set(nameKey(p[12]), {v:p[14], t:p[15]});
     });
 
-    summary.innerText = `Targeting ${readyCount} drivers.`;
-  };
-
-  window.sendBroadcast = async function() {
-    const text = document.getElementById("broadcastMsgInput").value.trim();
-    if(!text) return alert("Please type a message first.");
-    const readyRows = broadcastRows.filter(r => r.status === "READY");
-    if(!readyRows.length) return alert("No valid drivers found.");
-    if(!confirm(`Send broadcast to ${readyRows.length} drivers?\nMessage: "${text}"`)) return;
-
-    const btn = document.getElementById("sendBroadcastBtn");
-    btn.disabled = true; btn.innerText = "Sending...";
-    let sent = 0;
-
-    for(const row of readyRows) {
-      try {
-        await sendSmsApi(row.phone, text);
-        await upsertThread(row.phone, row.driverName, [row.tag]);
-        await addMessageToFirestore(normalizePhone(row.phone), text, "sent");
-        sent++;
-      } catch(e) { console.error("Broadcast fail", row.driverName, e); }
+    const tLines = tt.split(/\r?\n/);
+    let nLines = [tLines[0]]; let html = ""; let matches = 0;
+    for(let i=1; i<tLines.length; i++) {
+        const l = tLines[i].trim(); if(!l) continue;
+        const c = parseCsvLine(l);
+        const name = c[4] || ""; const nk = nameKey(name);
+        let nv = c[5] || "", nt = c[6] || "", st = "No Match";
+        if(lmap.has(nk)) { const leg = lmap.get(nk); if(leg.v) nv = leg.v; if(leg.t) nt = leg.t; st = "Merged"; matches++; }
+        c[5] = nv; c[6] = nt;
+        nLines.push(c.map(x=>`"${x.replace(/"/g,'""')}"`).join(","));
+        if(st==="Merged") html += `<tr><td class="p-2 text-center"><i class="fa-solid fa-check text-green-500"></i></td><td class="p-2 font-bold">${escapeHtml(name)}</td><td class="p-2 text-blue-600">${escapeHtml(nv)}</td><td class="p-2 text-blue-600">${escapeHtml(nt)}</td><td class="p-2 text-green-600 font-bold">${st}</td></tr>`;
     }
-    alert(`Broadcast sent to ${sent} drivers.`);
-    btn.disabled = false; btn.innerText = "Send Broadcast";
-    closeBroadcastModal();
+    document.getElementById("mergePreview").innerHTML = html;
+    document.getElementById("mergeSummary").innerText = `Matched ${matches}. Ready.`;
+    document.getElementById("downloadMergeBtn").disabled = false;
+    mergedCsvContent = nLines.join("\n");
+  };
+  window.downloadMergedCsv = function() {
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([mergedCsvContent], {type:"text/csv"})); a.download = "Merged_Template.csv"; document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
-  window.closeAssignmentsModal = () => document.getElementById("assignmentsModal").classList.add("hidden");
+  // --- ASSIGNMENTS ---
   window.openAssignmentsModal = () => document.getElementById("assignmentsModal").classList.remove("hidden");
-  window.closeBroadcastModal = () => document.getElementById("broadcastModal").classList.add("hidden");
+  window.closeAssignmentsModal = () => document.getElementById("assignmentsModal").classList.add("hidden");
+  window.addManualRow = function() {
+    const n = document.getElementById("manualName").value.trim()||"Manual"; const p = document.getElementById("manualPhone").value.trim(); const m = document.getElementById("manualMsg").value.trim();
+    if(!p) return alert("Phone req");
+    assignmentsRows.unshift({ driverName:n, phone:normalizePhone(p), message:m, tag:"Manual", selected:true, hasTrip:true, status:"READY" });
+    document.getElementById("manualName").value=""; document.getElementById("manualPhone").value=""; document.getElementById("manualMsg").value="";
+    window.renderAssignmentsPreview();
+  };
+  window.handleAssignmentsCsv = async function(inp) {
+    const file = inp.files?.[0]; inp.value = ""; if (!file || !store.uid) return;
+    const text = await file.text(); const lines = text.split(/\r?\n/);
+    let dateStr = parseCsvLine(lines[0])[0]; if(!dateStr || !/\d/.test(dateStr)) { const r2 = parseCsvLine(lines[1]); if(r2[0] && /\d/.test(r2[0])) dateStr = r2[0]; }
+    const dow = getDayOfWeek(dateStr);
+    const smap = { "eugene":"DLX-EUG", "deluxe":"DLX-EUG", "roseburg":"RBG", "portland/i-84 corridor":"PDX", "albany/corvallis/salem":"XLB", "direct medical transport":"DMT", "coast":"XCC" };
+    let curTag = "Auto-Assign", curSec = ""; assignmentsRows = [];
+    const cmap = await buildContactsMap();
 
-  // UTILS
-  function getDayOfWeek(dateStr) {
-    if(!dateStr) return "TODAY";
-    try {
-      const d = new Date(dateStr);
-      if(isNaN(d.getTime())) return "TODAY";
-      return d.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
-    } catch(e) { return "TODAY"; }
-  }
-
+    for(let i=0; i<lines.length; i++) {
+        const p = parseCsvLine(lines[i]); if(p.length<1) continue;
+        const cA = (p[0]||"").trim().toLowerCase();
+        if(smap[cA] || cA.includes("direct medical")) { curSec=cA; curTag=smap[cA]||"DMT"; continue; }
+        if(cA.includes("p/u time")) continue;
+        const name = (p[4]||"").trim(); if(!name || name.toLowerCase().includes("name") || name.toLowerCase().includes("corridor")) continue;
+        
+        const pu = (p[0]||"").trim(), city = (p[1]||"").trim(), cli = (p[2]||"").trim();
+        let ph = (p[3]||"").trim(), veh = (p[5]||"").trim(), tab = (p[6]||"").trim();
+        if(!ph) ph = cmap.get(nameKey(name))||"";
+        
+        const hasTrip = (pu && city && cli);
+        const isED = (curSec.includes("eugene") || curSec.includes("deluxe") || curSec.includes("direct medical") || curSec === "dmt");
+        let msg = "";
+        
+        if(isED) { 
+            msg = `${dow}: CLOCK IN AT ${tab||"?"}. Assigned vehicle is ${veh||"?"}.`; 
+        } else { 
+            if(hasTrip) msg = `${dow}: ${pu} pickup in ${city} (${cli}), be signed into your tablet @ ${tab} to receive ride.`; else msg = "(No Trip Data)"; 
+        }
+        const isSelected = hasTrip;
+        assignmentsRows.push({ driverName:name, phone:normalizePhone(ph), message:msg, tag:curTag, selected:isSelected, hasTrip:hasTrip });
+    }
+    window.renderAssignmentsPreview();
+  };
+  window.updateAssignmentRow = function(idx, val) { if(assignmentsRows[idx]) { assignmentsRows[idx].message = val; if(val.trim().length>0 && !assignmentsRows[idx].hasTrip) { assignmentsRows[idx].selected = true; document.getElementById(`assign-cb-${idx}`).checked = true; } } };
+  window.toggleAssignmentRow = function(idx, chk) { if(assignmentsRows[idx]) assignmentsRows[idx].selected = chk; window.renderAssignmentsPreview(); };
   window.renderAssignmentsPreview = function() {
-    const tbody = document.getElementById("assignmentsPreview");
-    const summary = document.getElementById("assignmentsSummary");
-    tbody.innerHTML = "";
-    const ready = assignmentsRows.filter(r => r.status === "READY").length;
-
-    assignmentsRows.forEach(row => {
-      const tr = document.createElement("tr");
-      const isReady = row.status === "READY";
-      const color = isReady ? "text-green-600 font-bold" : (row.status === "NO TRIP DATA" ? "text-slate-400 font-medium" : "text-red-400 font-bold");
-      const msgClass = row.status === "NO TRIP DATA" ? "text-slate-300 italic" : "text-slate-600";
-      tr.className = "hover:bg-slate-50 transition";
-      tr.innerHTML = `
-        <td class="p-3 border-b"><div class="font-bold text-slate-700">${escapeHtml(row.driverName)}</div><div class="text-[10px] text-indigo-500 font-mono">${row.tag}</div></td>
-        <td class="p-3 border-b font-mono text-slate-500">${row.phone || "—"}</td>
-        <td class="p-3 border-b text-[11px] leading-tight ${msgClass}">${escapeHtml(row.message)}</td>
-        <td class="p-3 border-b text-xs uppercase ${color}">${row.status}</td>
-      `;
-      tbody.appendChild(tr);
+    const tb = document.getElementById("assignmentsPreview"); tb.innerHTML = "";
+    const sel = assignmentsRows.filter(r=>r.selected).length;
+    assignmentsRows.forEach((r,i) => {
+        let msgHtml = `<input type="text" class="w-full text-xs p-1 border rounded focus:ring-2 focus:ring-indigo-500" value="${escapeHtml(r.message)}" oninput="window.updateAssignmentRow(${i},this.value)">`;
+        let st = r.selected ? "SENDING" : (r.hasTrip ? "EXCLUDED" : "NO DATA");
+        let cl = r.selected ? "text-green-600 font-bold" : "text-slate-400";
+        tb.innerHTML += `<tr class="hover:bg-slate-50"><td class="p-3 border-b text-center"><input type="checkbox" id="assign-cb-${i}" ${r.selected?"checked":""} onchange="window.toggleAssignmentRow(${i},this.checked)"></td><td class="p-3 border-b font-bold">${escapeHtml(r.driverName)}</td><td class="p-3 border-b font-mono">${r.phone}</td><td class="p-3 border-b">${msgHtml}</td><td class="p-3 border-b text-xs ${cl}">${st}</td></tr>`;
     });
-
-    summary.innerText = `Detected ${assignmentsRows.length} drivers. ${ready} trips ready.`;
+    document.getElementById("assignmentsSummary").innerText = `Found ${assignmentsRows.length}. ${sel} selected.`;
   };
-
   window.sendAllAssignments = async function() {
-    const readyRows = assignmentsRows.filter(r => r.status === "READY");
-    if (!readyRows.length) return alert("No valid trips to send.");
-    if (!confirm(`Send SMS to ${readyRows.length} drivers?`)) return;
-
-    const btn = document.getElementById("sendAllAssignmentsBtn");
-    btn.disabled = true; btn.innerText = "Sending...";
-    let sent = 0;
-
-    for (const row of readyRows) {
-      try {
-        await sendSmsApi(row.phone, row.message);
-        await upsertThread(row.phone, row.driverName, [row.tag]);
-        await addMessageToFirestore(normalizePhone(row.phone), row.message, "sent");
-        sent++;
-      } catch (e) { console.error("Failed", row.driverName, e); }
+    const valid = assignmentsRows.filter(r => r.selected && r.message.trim() && r.phone.length>5);
+    if(!valid.length) return alert("No valid rows."); if(!confirm(`Send to ${valid.length}?`)) return;
+    const btn = document.getElementById("sendAllAssignmentsBtn"); btn.disabled = true; btn.innerText = "Sending...";
+    for(const r of valid) {
+        try {
+            const m = r.message + ASSIGNMENT_DISCLAIMER;
+            await sendSmsApi(r.phone, m);
+            await upsertThread(r.phone, r.driverName, [r.tag]);
+            await addMessageToFirestore(normalizePhone(r.phone), m, "sent");
+        } catch(e) { console.error(e); }
     }
-
-    alert(`Sent ${sent} messages.`);
-    btn.disabled = false; btn.innerText = "Send Trips";
-    closeAssignmentsModal();
+    alert("Sent."); btn.disabled = false; btn.innerText = "Send Selected"; window.closeAssignmentsModal();
   };
 
-  window.handleCsvUpload = async function(input) {
-    const file = input.files?.[0]; input.value = ""; if (!file) return;
-    const text = await file.text(); const lines = text.split(/\r?\n/).filter(l => l.trim());
-    let count = 0;
-
-    for(let l of lines) {
-      const parts = parseCsvLine(l);
-      if(parts.length >= 2 && parts[0].toLowerCase() !== "first name") {
-        let name = parts[0], phone = parts[1];
-        if(parts.length > 5) { name = parts[0] + " " + parts[2]; phone = parts[18] || parts[35]; }
-        if(normalizePhone(phone).length>5) { await upsertThread(phone, name, []); count++; }
-      }
-    }
-    alert(`Imported ${count} contacts (estimated).`);
+  // BROADCAST
+  window.closeBroadcastModal = () => document.getElementById("broadcastModal").classList.add("hidden");
+  window.handleBroadcastCsv = async function(inp) {
+    const f=inp.files?.[0]; inp.value=""; if(!f)return; const t=await f.text(); broadcastRows=[];
+    t.split(/\r?\n/).forEach(l => { const p=parseCsvLine(l); if(p[4] && !p[0].includes("p/u")) broadcastRows.push({driverName:p[4], phone:normalizePhone(p[3])}); });
+    document.getElementById("broadcastMsgInput").value = ""; window.updateBroadcastPreview(""); document.getElementById("broadcastModal").classList.remove("hidden");
+  };
+  window.updateBroadcastPreview = function(v) { const t = document.getElementById("broadcastPreview"); t.innerHTML=""; broadcastRows.forEach(r=>{t.innerHTML+=`<tr><td class="p-2">${r.driverName}</td><td class="p-2 font-mono">${r.phone}</td><td class="p-2 italic text-xs">${escapeHtml(v)}</td></tr>`}); };
+  window.sendBroadcast = async function() {
+    const m = document.getElementById("broadcastMsgInput").value.trim(); if(!m) return alert("Msg empty");
+    const r = broadcastRows.filter(x=>x.phone.length>5); if(!confirm(`Send to ${r.length}?`)) return;
+    for(let row of r) { await sendSmsApi(row.phone, m); await addMessageToFirestore(row.phone, m, "sent"); }
+    alert("Sent."); window.closeBroadcastModal();
   };
 
-  async function buildContactsMap() {
-    const q = query(getThreadsCol());
-    return new Promise(r => onSnapshot(q, s => {
-      const m = new Map();
-      s.forEach(d => { if(d.data().phone) m.set(nameKey(d.data().name), d.data().phone); });
-      r(m);
-    }));
-  }
+  // COMMON & UI
+  function getDayOfWeek(d) { try{ return new Date(d).toLocaleDateString('en-US',{weekday:'long'}).toUpperCase(); }catch{return "TODAY";} }
+  function parseCsvLine(l) { const o=[]; let c="", q=false; for(let x of l){ if(x==='"')q=!q; else if(x===','&&!q){o.push(c.trim());c="";} else c+=x; } o.push(c.trim()); return o; }
+  async function buildContactsMap() { return new Promise(r=>onSnapshot(query(getThreadsCol()), s=>{const m=new Map();s.forEach(d=>m.set(nameKey(d.data().name), d.data().phone));r(m);})); }
+  
+  window.openNewMsgModal=()=>document.getElementById("newMsgModal").classList.remove("hidden");
+  window.closeNewMsgModal=()=>document.getElementById("newMsgModal").classList.add("hidden");
+  window.closeThreadInfo=()=>document.getElementById("threadInfoModal").classList.add("hidden");
+  window.toggleMobileSidebar=()=>document.getElementById("sidebar").classList.toggle("-translate-x-full");
+  window.resetLocalUI=()=>{store.openGroups.clear();window.renderThreadList();alert("Reset");};
+  window.createThreadFromModal=async()=>{const p=document.getElementById("newContactPhone").value; await upsertThread(p, document.getElementById("newContactName").value, []); window.closeNewMsgModal(); loadThread(normalizePhone(p));};
+  window.saveThreadInfo=async()=>{ if(store.activeThreadId) await updateDoc(getThreadDoc(store.activeThreadId), {name:document.getElementById("threadInfoName").value, tags:parseTags(document.getElementById("threadInfoTags").value)}); window.closeThreadInfo(); };
+  window.openThreadInfo=()=>{ if(!store.activeThread)return; document.getElementById("threadInfoName").value=store.activeThread.name; document.getElementById("threadInfoTags").value=(store.activeThread.tags||[]).join(", "); document.getElementById("threadInfoPhone").innerText = store.activeThread.phone; document.getElementById("threadInfoModal").classList.remove("hidden"); };
+  window.handleCsvUpload=async function(inp) { const file=inp.files?.[0]; inp.value=""; if(!file)return; const t=await file.text(); const lines=t.split(/\r?\n/).filter(l=>l.trim()); for(let l of lines){ const p=parseCsvLine(l); if(p.length>=2 && p[0].toLowerCase()!=="first name"){ let n=p[0],ph=p[1]; if(p.length>5){n=p[0]+" "+p[2];ph=p[18]||p[35];} if(normalizePhone(ph).length>5) await upsertThread(ph,n,[]); } } alert("Imported"); };
 
-  function parseCsvLine(line) {
-    const out = []; let cur = "", inQ = false;
-    for(let c of line) {
-      if(c === '"') { inQ = !inQ; }
-      else if(c === ',' && !inQ) { out.push(cur.trim()); cur = ""; }
-      else cur += c;
-    }
-    out.push(cur.trim());
-    return out;
-  }
-
-  // NEW: Filters UI
-  function updateFilterButtons() {
-    const u = document.getElementById("unreadOnlyBtn");
-    const p = document.getElementById("pinnedOnlyBtn");
-    if(u) u.className = store.onlyUnread
-      ? "px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition"
-      : "px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition";
-    if(p) p.className = store.onlyPinned
-      ? "px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition"
-      : "px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition";
-  }
-
-  window.toggleUnreadOnly = function() {
-    store.onlyUnread = !store.onlyUnread;
-    saveLocalSettings();
-    updateFilterButtons();
-    renderThreadList();
+  window.openSettingsModal = () => { document.getElementById("cannedRepliesInput").value = store.cannedReplies.join("\n"); document.getElementById("settingsModal").classList.remove("hidden"); };
+  window.closeSettingsModal = () => document.getElementById("settingsModal").classList.add("hidden");
+  window.saveSettings = () => { store.cannedReplies = document.getElementById("cannedRepliesInput").value.split("\n").filter(Boolean); saveLocalSettings(); renderQuickReplies(); window.closeSettingsModal(); };
+  
+  window.toggleUnreadOnly = () => { store.onlyUnread=!store.onlyUnread; saveLocalSettings(); window.renderThreadList(); };
+  window.togglePinnedOnly = () => { store.onlyPinned=!store.onlyPinned; saveLocalSettings(); window.renderThreadList(); };
+  window.togglePinThread = (id) => { if(store.pinned.has(id)) store.pinned.delete(id); else store.pinned.add(id); saveLocalSettings(); window.renderThreadList(); };
+  window.toggleGroup = (k) => { if(store.openGroups.has(k)) store.openGroups.delete(k); else store.openGroups.add(k); window.renderThreadList(); };
+  
+  window.openThreadSearch = () => { if(!store.activeThreadId) return alert("Select thread"); document.getElementById("threadSearchModal").classList.remove("hidden"); };
+  window.closeThreadSearch = () => document.getElementById("threadSearchModal").classList.add("hidden");
+  window.runThreadSearch = async () => {
+     const q=document.getElementById("threadSearchInput").value.toLowerCase();
+     const snap=await getDocs(query(getMsgsCol(store.activeThreadId), orderBy("createdAt","desc"), limit(500)));
+     const res=document.getElementById("threadSearchResults"); res.innerHTML="";
+     snap.forEach(d=>{ const m=d.data(); if((m.body||"").toLowerCase().includes(q)) res.innerHTML+=`<div class="p-2 border-b"><div class="text-xs text-gray-400">${formatTime(m.createdAt?.toMillis())}</div><div>${escapeHtml(m.body)}</div></div>`; });
+  };
+  
+  window.exportActiveThreadCsv = async () => {
+    if(!store.activeThreadId) return alert("Select thread");
+    const snap=await getDocs(query(getMsgsCol(store.activeThreadId), orderBy("createdAt","asc")));
+    let csv="Date,Direction,Message\n";
+    snap.forEach(d=>{ const m=d.data(); csv+=`"${new Date(m.createdAt?.toMillis()).toLocaleString()}","${m.direction}","${(m.body||"").replace(/"/g,'""')}"\n`; });
+    const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"})); a.download=`thread_${store.activeThreadId}.csv`; document.body.appendChild(a); a.click(); a.remove();
   };
 
-  window.togglePinnedOnly = function() {
-    store.onlyPinned = !store.onlyPinned;
-    saveLocalSettings();
-    updateFilterButtons();
-    renderThreadList();
-  };
-
-  function renderTagChips() {
-    const wrap = document.getElementById("tagChips");
-    if(!wrap) return;
-    wrap.innerHTML = "";
-
-    const counts = new Map();
-    store.threads.forEach(t => {
-      const tags = (t.tags && t.tags.length) ? t.tags : ["Untagged"];
-      tags.forEach(tag => counts.set(tag, (counts.get(tag) || 0) + 1));
-    });
-
-    const tagsSorted = [...counts.entries()]
-      .sort((a,b)=> b[1]-a[1] || a[0].localeCompare(b[0]))
-      .slice(0, 14);
-
-    const allChip = document.createElement("button");
-    allChip.className = store.tagFilter.size === 0
-      ? "px-3 py-1 rounded-full text-xs font-semibold bg-indigo-600 text-white"
-      : "px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700";
-    allChip.textContent = "All";
-    allChip.onclick = () => {
-      store.tagFilter.clear();
-      saveLocalSettings();
-      renderTagChips();
-      renderThreadList();
-    };
-    wrap.appendChild(allChip);
-
-    tagsSorted.forEach(([tag, n]) => {
-      const on = store.tagFilter.has(tag);
-      const b = document.createElement("button");
-      b.className = on
-        ? "px-3 py-1 rounded-full text-xs font-semibold bg-indigo-600 text-white"
-        : "px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700";
-      b.innerHTML = `${escapeHtml(tag)} <span class="text-[10px] opacity-70 ml-1">${n}</span>`;
-      b.onclick = () => {
-        if(store.tagFilter.has(tag)) store.tagFilter.delete(tag);
-        else store.tagFilter.add(tag);
-        saveLocalSettings();
-        renderTagChips();
-        renderThreadList();
-      };
-      wrap.appendChild(b);
-    });
-  }
-
-  // THREAD LIST + UI (upgraded: pinned + filters)
-  window.renderThreadList = function() {
-    updateFilterButtons();
-    renderTagChips();
-
-    const listEl = document.getElementById("contactList");
-    const search = document.getElementById("searchContacts")?.value.toLowerCase().trim();
-    listEl.innerHTML = "";
-
-    const groups = new Map();
-    store.threads.forEach(t => {
-      const tags = (t.tags && t.tags.length) ? t.tags : ["Untagged"];
-      tags.forEach(tag => {
-        if(!groups.has(tag)) groups.set(tag, []);
-        groups.get(tag).push(t);
-      });
-    });
-
-    const groupData = [...groups.entries()].map(([tag, threads]) => ({
-      tag,
-      threads,
-      unreadCount: threads.reduce((acc, t) => acc + (t.unread || 0), 0),
-      maxTime: Math.max(...threads.map(t => t.lastMessageAtMs || 0))
-    }));
-
-    groupData.sort((a, b) => {
-      if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
-      if (b.unreadCount > 0 && a.unreadCount === 0) return 1;
-      if (b.maxTime !== a.maxTime) return b.maxTime - a.maxTime;
-      return a.tag.localeCompare(b.tag);
-    });
-
-    if (!store.initialGroupSet && groupData.length > 0) {
-      store.openGroups.add(groupData[0].tag);
-      store.initialGroupSet = true;
-    }
-
-    groupData.forEach(({ tag, threads, unreadCount }) => {
-      // apply tag filter
-      if(store.tagFilter.size > 0 && !store.tagFilter.has(tag)) return;
-
-      // apply thread-level filters
-      let filtered = threads.slice();
-
-      if(store.onlyUnread) filtered = filtered.filter(t => (t.unread || 0) > 0);
-      if(store.onlyPinned) filtered = filtered.filter(t => store.pinned.has(t.id));
-      if(search) filtered = filtered.filter(t =>
-        (t.name||"").toLowerCase().includes(search) || (t.phone||"").includes(search)
-      );
-      if(!filtered.length) return;
-
-      const isOpen = store.openGroups.has(tag);
-      const badge = unreadCount > 0 ? `<span class="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">${unreadCount}</span>` : "";
-
-      const header = document.createElement("button");
-      header.className = "w-full text-left px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition flex items-center justify-between gap-3 mb-1";
-      header.innerHTML = `<div class="flex items-center gap-2"><i class="fa-solid ${isOpen ? 'fa-chevron-down' : 'fa-chevron-right'} text-slate-400 text-xs"></i><span class="font-semibold text-sm text-slate-800">${escapeHtml(tag)}</span>${badge}</div><div class="text-[10px] text-slate-400">${filtered.length}</div>`;
-      header.onclick = () => { if(isOpen) store.openGroups.delete(tag); else store.openGroups.add(tag); renderThreadList(); };
-      listEl.appendChild(header);
-
-      if(isOpen) {
-        const container = document.createElement("div");
-        container.className = "pl-2 pr-1 pb-2 space-y-1";
-
-        filtered.sort((a, b) => {
-          const aPinned = store.pinned.has(a.id);
-          const bPinned = store.pinned.has(b.id);
-          if(aPinned && !bPinned) return -1;
-          if(bPinned && !aPinned) return 1;
-
-          const aUnread = (a.unread||0) > 0;
-          const bUnread = (b.unread||0) > 0;
-          if(aUnread && !bUnread) return -1;
-          if(bUnread && !aUnread) return 1;
-
-          return (b.lastMessageAtMs||0) - (a.lastMessageAtMs||0);
-        });
-
-        filtered.forEach(t => {
-          const el = document.createElement("div");
-          const isActive = t.id === store.activeThreadId;
-          const isPinned = store.pinned.has(t.id);
-
-          el.className = `p-3 rounded-xl cursor-pointer flex gap-3 items-center transition ${isActive ? "bg-indigo-50 border border-indigo-100" : "hover:bg-slate-50 border border-transparent"}`;
-
-          // click row loads thread; click star toggles pin
-          el.onclick = (e) => {
-            const target = e.target;
-            if(target && (target.closest && target.closest(".pin-btn"))) return;
-            loadThread(t.id);
-          };
-
-          el.innerHTML = `
-            <div class="relative">
-              <div class="w-12 h-12 rounded-full bg-slate-400 flex items-center justify-center text-white font-bold text-sm">${escapeHtml(initials(t.name || t.phone))}</div>
-              ${(t.unread > 0) ? `<div class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full border-2 border-white flex items-center justify-center text-white text-[10px] font-bold">${t.unread}</div>` : ""}
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex justify-between items-baseline mb-0.5 gap-2">
-                <span class="font-semibold text-sm text-slate-800 truncate">${escapeHtml(t.name || t.phone)}</span>
-                <div class="flex items-center gap-2 flex-shrink-0">
-                  <button class="pin-btn text-slate-300 hover:text-amber-500 transition" title="Pin"
-                    onclick="togglePinThread('${escapeHtml(t.id)}')">
-                    <i class="fa-solid fa-star ${isPinned ? "text-amber-500" : ""}"></i>
-                  </button>
-                  <span class="text-[10px] text-slate-400 font-medium">${formatTime(t.lastMessageAtMs)}</span>
-                </div>
-              </div>
-              <p class="text-xs text-slate-500 truncate ${(t.unread > 0) ? "font-bold text-slate-700" : ""}">${escapeHtml(t.lastMessageText || "No messages")}</p>
-            </div>
-          `;
-
-          container.appendChild(el);
-        });
-
-        listEl.appendChild(container);
-      }
-    });
-  };
-
-  window.togglePinThread = function(threadId) {
-    // threadId may be html-escaped; find raw match by id in store.threads
-    const t = store.threads.find(x => x.id === threadId) || store.threads.find(x => safeId(x.id) === safeId(threadId));
-    const id = t?.id || threadId;
-    if(store.pinned.has(id)) store.pinned.delete(id);
-    else store.pinned.add(id);
-    saveLocalSettings();
-    renderThreadList();
-  };
-
-  async function loadThread(threadId) {
+  window.loadThread = async function(threadId) {
     if(unsubMessages) { unsubMessages(); unsubMessages = null; }
-
-    // save previous draft before switching
-    persistDraftFromUI();
-
     store.activeThreadId = threadId;
     store.activeThread = store.threads.find(t => t.id === threadId);
-
     document.getElementById("welcomeState").classList.add("hidden");
     document.getElementById("activeContactName").innerText = store.activeThread?.name || "Unknown";
     document.getElementById("activeContactPhone").innerText = store.activeThread?.phone || "";
     document.getElementById("activeContactAvatar").innerText = initials(store.activeThread?.name);
-
-    // show tags in header
-    const tagsEl = document.getElementById("activeTags");
-    if(tagsEl) {
-      const tags = (store.activeThread?.tags && store.activeThread.tags.length) ? store.activeThread.tags : [];
-      tagsEl.innerHTML = tags.slice(0, 10).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">${escapeHtml(t)}</span>`).join("");
+    
+    // tags in header
+    const te = document.getElementById("activeTags"); if(te) {
+        te.innerHTML = (store.activeThread?.tags||[]).slice(0,5).map(t=>`<span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-[10px] border border-indigo-100">${escapeHtml(t)}</span>`).join("");
     }
 
     try { await updateDoc(getThreadDoc(threadId), { unread: 0 }); } catch(e) {}
-
     const q = query(getMsgsCol(threadId), orderBy("createdAt", "asc"));
     unsubMessages = onSnapshot(q, s => {
-      const div = document.getElementById("messageList");
-      div.innerHTML = "";
-      const seen = new Set();
-
+      const div = document.getElementById("messageList"); div.innerHTML = ""; const seen = new Set();
       s.forEach(d => {
-        const m = d.data();
-        const fps = (m.body || "") + Math.floor((m.createdAt?.toMillis()||0)/1000);
-        if(seen.has(fps)) return;
-        seen.add(fps);
-
-        const el = document.createElement("div");
-        el.className = `flex ${m.direction==='sent'?'justify-end':'justify-start'} fade-in-up`;
-        el.innerHTML = `
-          <div class="group relative max-w-[75%]">
-            <div class="p-3 text-sm shadow-sm ${m.direction==='sent'?'msg-sent':'msg-received'}">
-              <p>${escapeHtml(m.body)}</p>
-              <div class="text-[10px] opacity-70 mt-1 text-right flex justify-between items-center">
-                <span>${formatTime(m.createdAt?.toMillis())}</span>
-                <button onclick="window.deleteSingleMessage('${threadId}','${d.id}','${m.sid||''}')"
-                  class="ml-2 text-red-300 hover:text-red-100 opacity-0 group-hover:opacity-100 transition"
-                  title="Delete message">
-                  <i class="fa-solid fa-trash"></i>
-                </button>
-              </div>
-            </div>
-          </div>
-        `;
+        const m = d.data(); const fps = (m.body||"") + Math.floor((m.createdAt?.toMillis()||0)/1000); if(seen.has(fps)) return; seen.add(fps);
+        const el = document.createElement("div"); el.className = `flex ${m.direction==='sent'?'justify-end':'justify-start'} fade-in-up`;
+        el.innerHTML = `<div class="group relative max-w-[75%]"><div class="p-3 text-sm shadow-sm ${m.direction==='sent'?'msg-sent':'msg-received'}"><p>${escapeHtml(m.body)}</p><div class="text-[10px] opacity-70 mt-1 text-right flex justify-between items-center"><span>${formatTime(m.createdAt?.toMillis())}</span><button onclick="window.deleteSingleMessage('${threadId}','${d.id}','${m.sid||''}')" class="ml-2 text-red-300 hover:text-red-100 opacity-0 group-hover:opacity-100 transition"><i class="fa-solid fa-trash"></i></button></div></div></div>`;
         div.appendChild(el);
       });
-
       scrollToBottom();
     });
-
-    // restore draft for this thread
-    restoreDraftToUI(threadId);
-
-    // update quick replies
     renderQuickReplies();
-
     if(window.innerWidth < 768) window.toggleMobileSidebar();
-    renderThreadList();
-  }
-
-  // DELETE & SEND
-  window.deleteActiveThread = async function() {
-    if(!store.activeThreadId) return;
-    if(!confirm("Delete?")) return;
-    try {
-      await fetch(TWILIO_DELETE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone:store.activeThread.phone})});
-      await deleteDoc(getThreadDoc(store.activeThreadId));
-      store.activeThreadId = null;
-      store.activeThread = null;
-      window.closeThreadInfo();
-      document.getElementById("welcomeState").classList.remove("hidden");
-      document.getElementById("messageList").innerHTML = "";
-      document.getElementById("activeContactName").innerText = "Select a conversation";
-      document.getElementById("activeContactPhone").innerText = "+1 ...";
-      document.getElementById("activeContactAvatar").innerText = "?";
-      const tagsEl = document.getElementById("activeTags"); if(tagsEl) tagsEl.innerHTML = "";
-    } catch(e){ alert(e); }
+    window.renderThreadList();
   };
 
-  window.deleteSingleMessage = async function(tid, did, sid) {
-    if(!confirm("Delete?")) return;
-    try {
-      if(sid){
-        store.deletedSids.add(sid);
-        saveLocalSettings();
-        fetch(TWILIO_DELETE_MSG_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sid})}).catch(()=>{});
-      }
-      await deleteDoc(doc(getMsgsCol(tid), did));
-    } catch(e){ alert(e); }
+  window.renderThreadList = function() {
+    const ub=document.getElementById("unreadOnlyBtn"), pb=document.getElementById("pinnedOnlyBtn");
+    if(ub) ub.className=`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide border transition ${store.onlyUnread?'bg-indigo-600 text-white border-indigo-600':'bg-white text-slate-600 border-slate-200 hover:shadow-sm'}`;
+    if(pb) pb.className=`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide border transition ${store.onlyPinned?'bg-indigo-600 text-white border-indigo-600':'bg-white text-slate-600 border-slate-200 hover:shadow-sm'}`;
+    const tc=document.getElementById("tagChips"); tc.innerHTML="";
+    const counts=new Map(); store.threads.forEach(t=>{(t.tags||["Untagged"]).forEach(g=>counts.set(g,(counts.get(g)||0)+1))});
+    [...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10).forEach(([t,c])=>{
+        const on=store.tagFilter.has(t);
+        const b=document.createElement("button"); b.className=`px-2 py-1 rounded-full text-[10px] border ${on?'bg-indigo-600 text-white border-indigo-600':'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`; b.innerText=`${t} (${c})`; 
+        b.onclick=()=>{ if(on)store.tagFilter.delete(t); else store.tagFilter.add(t); saveLocalSettings(); window.renderThreadList(); };
+        tc.appendChild(b);
+    });
+    const el=document.getElementById("contactList"); el.innerHTML=""; const s=document.getElementById("searchContacts").value.toLowerCase();
+    const g=new Map(); store.threads.forEach(t=>{ (t.tags&&t.tags.length?t.tags:["Untagged"]).forEach(x=>{ if(!g.has(x))g.set(x,[]); g.get(x).push(t); }); });
+    [...g.entries()].sort((a,b)=>a[0].localeCompare(b[0])).forEach(([k,v])=>{
+        if(store.tagFilter.size && !store.tagFilter.has(k)) return;
+        let f=v.filter(x=>!s||(x.name+x.phone).toLowerCase().includes(s));
+        if(store.onlyUnread) f=f.filter(x=>(x.unread||0)>0);
+        if(store.onlyPinned) f=f.filter(x=>store.pinned.has(x.id));
+        if(!f.length)return;
+        const op=store.openGroups.has(k);
+        el.innerHTML+=`<button onclick="window.toggleGroup('${k}')" class="w-full text-left p-3 border-b bg-white hover:bg-slate-50 flex justify-between items-center transition group"><span class="font-bold text-sm text-slate-700">${k}</span><div class="flex items-center gap-2"><span class="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">${f.length}</span><i class="fa-solid fa-chevron-down text-slate-300 text-xs transition-transform duration-200 ${op?'rotate-180':''}"></i></div></button>`;
+        if(op) {
+            const con=document.createElement("div"); con.className="bg-slate-50/50 inner-shadow-sm";
+            f.forEach(x=>{ 
+                const isP=store.pinned.has(x.id);
+                con.innerHTML+=`<div onclick="window.loadThread('${x.id}')" class="p-3 border-b border-slate-100 hover:bg-white cursor-pointer transition relative ${x.id===store.activeThreadId?'bg-indigo-50 border-indigo-100':''}"><div class="flex justify-between items-center mb-1"><span class="font-bold text-sm ${x.unread?'text-indigo-600':''}">${escapeHtml(x.name||x.phone)}</span><i onclick="event.stopPropagation();window.togglePinThread('${x.id}')" class="fa-solid fa-star text-xs ${isP?'text-amber-400':'text-slate-200 hover:text-slate-400'}"></i></div><div class="text-xs text-slate-500 truncate flex justify-between"><span>${escapeHtml(x.lastMessageText||"No messages")}</span><span class="ml-2 opacity-70">${formatTime(x.lastMessageAtMs)}</span></div></div>`; 
+            });
+            el.appendChild(con);
+        }
+    });
   };
 
-  async function upsertThread(phone, name, newTags) {
-    const clean = normalizePhone(phone);
-    if(!clean) return;
-    const ref = getThreadDoc(clean);
-    const snap = await getDoc(ref);
-
-    if(snap.exists()) {
-      const merged = [...new Set([...(snap.data().tags||[]), ...newTags])];
-      await updateDoc(ref, { name, tags: merged });
-    } else {
-      await setDoc(ref, { id: clean, phone, name, tags: newTags, createdAt: serverTimestamp(), lastMessageAtMs: Date.now(), unread: 0 });
-    }
-  }
-
-  async function addMessageToFirestore(tid, body, dir, sid) {
-    if(!tid) return;
-    const did = sid||("local-"+Date.now());
-    await setDoc(doc(getMsgsCol(tid), did), { body, direction: dir, createdAt: serverTimestamp(), sid: did });
-    await updateDoc(getThreadDoc(tid), { lastMessageText: body, lastMessageAtMs: Date.now() });
-  }
-
-  async function sendSmsApi(to, body) {
-    const p = new URLSearchParams();
-    p.append("to", to);
-    p.append("body", body);
-    const r = await fetch(TWILIO_SEND_URL, { method: "POST", body: p });
-    if(!r.ok) throw new Error("Twilio Fail");
-  }
-
-  // NEW: enter-to-send + drafts
-  function persistDraftFromUI() {
-    const input = document.getElementById("msgInput");
-    if(!input || !store.activeThreadId) return;
-    const val = input.value || "";
-    if(val.trim().length === 0) {
-      delete store.drafts[store.activeThreadId];
-    } else {
-      store.drafts[store.activeThreadId] = val;
-      toastDraftSaved();
-    }
-    saveLocalSettings();
-  }
-
-  function restoreDraftToUI(threadId) {
-    const input = document.getElementById("msgInput");
-    if(!input) return;
-    const v = store.drafts?.[threadId] || "";
-    input.value = v;
-    autosizeTextarea(input);
-  }
-
-  window.sendMessage = async function() {
-    const i = document.getElementById("msgInput");
-    const t = i.value.trim();
-    if(!t || !store.activeThread) return;
-    i.value = "";
-    autosizeTextarea(i);
-    delete store.drafts[store.activeThreadId];
-    saveLocalSettings();
-
-    try {
-      await sendSmsApi(store.activeThread.phone, t);
-      await addMessageToFirestore(store.activeThreadId, t, "sent");
-      scrollToBottom();
-    } catch(e) { alert(e); }
-  };
-
-  // MODALS
-  window.openNewMsgModal = () => document.getElementById("newMsgModal").classList.remove("hidden");
-  window.closeNewMsgModal = () => document.getElementById("newMsgModal").classList.add("hidden");
-  window.createThreadFromModal = async function() {
-    const p = document.getElementById("newContactPhone").value;
-    const n = document.getElementById("newContactName").value;
-    const t = document.getElementById("newContactTags").value;
-    if(!p) return alert("Phone req");
-    await upsertThread(p, n, parseTags(t));
-    window.closeNewMsgModal();
-    loadThread(normalizePhone(p));
-  };
-
-  window.saveThreadInfo = async function() {
-    if(!store.activeThreadId) return;
-    const n = document.getElementById("threadInfoName").value;
-    const t = document.getElementById("threadInfoTags").value;
-    await updateDoc(getThreadDoc(store.activeThreadId), { name: n, tags: parseTags(t) });
-    window.closeThreadInfo();
-  };
-
-  window.openThreadInfo = () => {
-    if(!store.activeThread) return;
-    document.getElementById("threadInfoName").value = store.activeThread.name||"";
-    document.getElementById("threadInfoTags").value = (store.activeThread.tags||[]).join(", ");
-    document.getElementById("threadInfoPhone").innerText = store.activeThread.phone;
-    document.getElementById("threadInfoModal").classList.remove("hidden");
-  };
-
-  window.closeThreadInfo = () => document.getElementById("threadInfoModal").classList.add("hidden");
-  window.toggleMobileSidebar = () => { document.getElementById("sidebar").classList.toggle("-translate-x-full"); document.getElementById("mobileOverlay").classList.toggle("hidden"); };
-
-  window.resetLocalUI = () => {
-    store.openGroups.clear();
-    store.initialGroupSet = false;
-    store.onlyUnread = false;
-    store.onlyPinned = false;
-    store.tagFilter.clear();
-    saveLocalSettings();
-    renderThreadList();
-    alert("UI Reset");
-  };
-
-  // NEW: Quick replies + Settings modal
   function renderQuickReplies() {
-    const row = document.getElementById("quickRepliesRow");
-    if(!row) return;
-    row.innerHTML = "";
-
-    (store.cannedReplies || []).slice(0, 8).forEach((txt) => {
-      const b = document.createElement("button");
-      b.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition";
-      b.textContent = txt.length > 42 ? (txt.slice(0, 39) + "…") : txt;
-      b.title = txt;
-      b.onclick = () => {
-        const i = document.getElementById("msgInput");
-        if(!i) return;
-        i.value = (i.value ? (i.value + "\n") : "") + txt;
-        autosizeTextarea(i);
-        persistDraftFromUI();
-        i.focus();
-      };
-      row.appendChild(b);
-    });
+      const r=document.getElementById("quickRepliesRow"); if(!r)return; r.innerHTML="";
+      store.cannedReplies.slice(0,6).forEach(txt=>{
+          const b=document.createElement("button"); b.className="px-3 py-1.5 bg-slate-100 rounded-full text-xs font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition border border-transparent hover:border-slate-300"; b.innerText=txt.length>30?txt.slice(0,28)+"...":txt;
+          b.onclick=()=>{ const i=document.getElementById("msgInput"); i.value+=(i.value?"\n":"")+txt; i.focus(); };
+          r.appendChild(b);
+      });
   }
 
-  window.openSettingsModal = function() {
-    const m = document.getElementById("settingsModal");
-    const ta = document.getElementById("cannedRepliesInput");
-    if(ta) ta.value = (store.cannedReplies || []).join("\n");
-    m.classList.remove("hidden");
-  };
-
-  window.closeSettingsModal = function() {
-    document.getElementById("settingsModal").classList.add("hidden");
-  };
-
-  window.saveSettings = function() {
-    const ta = document.getElementById("cannedRepliesInput");
-    const lines = (ta?.value || "").split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    store.cannedReplies = lines.slice(0, 20);
-    saveLocalSettings();
-    renderQuickReplies();
-    closeSettingsModal();
-  };
-
-  // NEW: Thread search modal
-  window.openThreadSearch = function() {
-    if(!store.activeThreadId) return alert("Open a thread first.");
-    document.getElementById("threadSearchInput").value = "";
-    document.getElementById("threadSearchResults").innerHTML = "";
-    document.getElementById("threadSearchModal").classList.remove("hidden");
-    document.getElementById("threadSearchInput").focus();
-  };
-
-  window.closeThreadSearch = function() {
-    document.getElementById("threadSearchModal").classList.add("hidden");
-  };
-
-  window.runThreadSearch = async function() {
-    if(!store.activeThreadId) return;
-    const qText = (document.getElementById("threadSearchInput").value || "").trim().toLowerCase();
-    const out = document.getElementById("threadSearchResults");
-    out.innerHTML = "";
-    if(!qText) return;
-
-    try {
-      // pull recent messages (limit 500) and filter client-side
-      const qy = query(getMsgsCol(store.activeThreadId), orderBy("createdAt", "desc"), limit(500));
-      const snap = await getDocs(qy);
-      const hits = [];
-      snap.forEach(d => {
-        const m = d.data();
-        const body = (m.body || "");
-        if(body.toLowerCase().includes(qText)) hits.push({ id: d.id, ...m });
-      });
-
-      if(!hits.length) {
-        out.innerHTML = `<div class="p-4 text-sm text-slate-500">No matches found.</div>`;
-        return;
-      }
-
-      hits.slice(0, 80).forEach(m => {
-        const row = document.createElement("div");
-        row.className = "p-3 hover:bg-slate-50 transition";
-        row.innerHTML = `
-          <div class="text-[10px] text-slate-400 flex justify-between">
-            <span class="uppercase">${escapeHtml(m.direction || "")}</span>
-            <span>${formatTime(m.createdAt?.toMillis?.() || 0)}</span>
-          </div>
-          <div class="text-sm text-slate-700 mt-1">${escapeHtml(m.body || "")}</div>
-        `;
-        out.appendChild(row);
-      });
-    } catch(e) {
-      console.error(e);
-      out.innerHTML = `<div class="p-4 text-sm text-red-500">Search failed.</div>`;
-    }
-  };
-
-  // NEW: Export active thread CSV
-  window.exportActiveThreadCsv = async function() {
-    if(!store.activeThreadId) return alert("Open a thread first.");
-    try {
-      const qy = query(getMsgsCol(store.activeThreadId), orderBy("createdAt", "asc"));
-      const snap = await getDocs(qy);
-
-      const rows = [];
-      rows.push(["thread_id","phone","direction","time","body","sid"].join(","));
-
-      snap.forEach(d => {
-        const m = d.data();
-        const ms = m.createdAt?.toMillis?.() || 0;
-        const iso = ms ? new Date(ms).toISOString() : "";
-        const body = (m.body || "").replaceAll('"','""');
-        rows.push([
-          `"${store.activeThreadId}"`,
-          `"${(store.activeThread?.phone || "").replaceAll('"','""')}"`,
-          `"${(m.direction || "").replaceAll('"','""')}"`,
-          `"${iso}"`,
-          `"${body}"`,
-          `"${(m.sid || d.id).replaceAll('"','""')}"`
-        ].join(","));
-      });
-
-      const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `thread_${store.activeThreadId}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch(e) {
-      console.error(e);
-      alert("Export failed.");
-    }
-  };
-
-  // SCROLL
-  function scrollToBottom() {
-    const c = document.getElementById("chatContainer");
-    if(!c) return;
-    c.scrollTop = c.scrollHeight;
-  }
-
-  // Init textarea behavior
-  function wireComposer() {
-    const input = document.getElementById("msgInput");
-    if(!input) return;
-
-    input.addEventListener("input", () => {
-      autosizeTextarea(input);
-      // store draft as you type
-      if(store.activeThreadId) {
-        store.drafts[store.activeThreadId] = input.value || "";
-        saveLocalSettings();
-      }
-    });
-
-    input.addEventListener("keydown", (e) => {
-      if(e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        window.sendMessage();
-      }
-    });
-
-    autosizeTextarea(input);
-  }
+  // CORE MSG
+  async function upsertThread(p,n,t){ const c=normalizePhone(p); if(!c)return; await setDoc(getThreadDoc(c),{id:c,phone:p,name:n,tags:t,createdAt:serverTimestamp(),lastMessageAtMs:Date.now(),unread:0},{merge:true}); }
+  async function addMessageToFirestore(t,b,d,s){ if(!t)return; const i=s||"loc-"+Date.now(); await setDoc(doc(getMsgsCol(t),i),{body:b,direction:d,createdAt:serverTimestamp(),sid:i}); await updateDoc(getThreadDoc(t),{lastMessageText:b,lastMessageAtMs:Date.now()}); }
+  async function sendSmsApi(t,b){ const p=new URLSearchParams(); p.append("to",t); p.append("body",b); await fetch(TWILIO_SEND_URL,{method:"POST",body:p}); }
+  
+  window.sendMessage = async function() { const i=document.getElementById("msgInput"), t=i.value.trim(); if(!t||!store.activeThread)return; i.value=""; await sendSmsApi(store.activeThread.phone, t); await addMessageToFirestore(store.activeThreadId, t, "sent"); scrollToBottom(); };
+  window.deleteActiveThread = async function() { if(store.activeThreadId && confirm("Delete?")) { await fetch(TWILIO_DELETE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone:store.activeThread.phone})}); await deleteDoc(getThreadDoc(store.activeThreadId)); window.location.reload(); } };
+  window.deleteSingleMessage = async function(tid,did,sid) { if(confirm("Delete?")) { if(sid) fetch(TWILIO_DELETE_MSG_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sid})}); await deleteDoc(doc(getMsgsCol(tid),did)); } };
 
   async function init() {
     loadLocalSettings();
-    updateFilterButtons();
-    wireComposer();
-    renderQuickReplies();
-
+    if(Notification.permission!=="granted") Notification.requestPermission();
     await signInAnonymously(auth);
-
-    onAuthStateChanged(auth, u => {
-      if(u) {
-        store.uid = u.uid;
-
-        const q = query(getThreadsCol());
-        unsubThreads = onSnapshot(q, s => {
-          store.threads = [];
-          s.forEach(d => store.threads.push(d.data()));
-          renderThreadList();
-        });
-
-        pollTimer = setInterval(pollIncomingMessages, 10000);
-      }
-    });
+    onAuthStateChanged(auth, u=>{ if(u){ store.uid=u.uid; unsubThreads=onSnapshot(query(getThreadsCol()), s=>{ store.threads=[]; s.forEach(d=>store.threads.push(d.data())); window.renderThreadList(); }); setInterval(pollIncomingMessages, 10000); } });
+    const inp=document.getElementById("msgInput");
+    inp.addEventListener("input", ()=>{ inp.style.height='auto';inp.style.height=inp.scrollHeight+'px'; if(store.activeThreadId){ store.drafts[store.activeThreadId]=inp.value; saveLocalSettings(); document.getElementById("draftHint").classList.remove("opacity-0"); setTimeout(()=>document.getElementById("draftHint").classList.add("opacity-0"),1000); } });
+    inp.addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); window.sendMessage(); } });
+    renderQuickReplies();
   }
-
   init();
 </script>
 </body>
