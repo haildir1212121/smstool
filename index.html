@@ -36,10 +36,13 @@
         <span>DLX/DMT</span>
       </div>
       <div class="flex gap-1">
+        <button onclick="window.openContactsManager()" class="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition" title="Contacts Manager"><i class="fa-solid fa-address-book"></i></button>
+
         <button onclick="window.openMergerModal()" class="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition" title="1. Merge Data"><i class="fa-solid fa-file-export"></i></button>
         <button onclick="document.getElementById('broadcastCsvInput').click()" class="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition" title="2. Broadcast"><i class="fa-solid fa-bullhorn"></i></button>
         <input type="file" id="broadcastCsvInput" accept=".csv" class="hidden" onchange="window.handleBroadcastCsv(this)">
         <button onclick="window.openAssignmentsModal()" class="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition" title="3. Assign Trips"><i class="fa-solid fa-route"></i></button>
+
         <button onclick="window.openNewMsgModal()" class="w-8 h-8 flex items-center justify-center bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg transition shadow-sm ml-1" title="New Msg"><i class="fa-solid fa-pen"></i></button>
       </div>
     </div>
@@ -51,6 +54,7 @@
       </div>
       <div class="flex items-center gap-2">
         <button onclick="window.toggleUnreadOnly()" id="unreadOnlyBtn" class="flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide border transition border-slate-200 text-slate-600 hover:bg-white hover:shadow-sm">Unread</button>
+        <button onclick="window.openMergePurge()" class="flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide border transition border-slate-200 text-slate-600 hover:bg-white hover:shadow-sm">Tools</button>
         <button onclick="window.togglePinnedOnly()" id="pinnedOnlyBtn" class="flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide border transition border-slate-200 text-slate-600 hover:bg-white hover:shadow-sm">Pinned</button>
       </div>
       <div id="tagChips" class="flex flex-wrap gap-1.5 pt-1"></div>
@@ -122,6 +126,72 @@
       </div>
     </div>
   </main>
+
+  <div id="contactsManagerModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-5xl p-6 flex flex-col max-h-[90vh]">
+      <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xl font-bold text-slate-800">Contacts Manager</h3>
+          <button onclick="window.closeContactsManager()" class="text-slate-400 hover:text-slate-700"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <div class="mb-4">
+          <input type="text" id="cmSearch" onkeyup="window.renderContactsManagerTable(this.value)" placeholder="Search names, phones, or tags..." class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 shadow-sm">
+      </div>
+      <div class="border rounded-lg overflow-hidden bg-slate-50 flex-1 relative min-h-[300px]">
+          <div class="absolute inset-0 overflow-auto">
+              <table class="w-full text-xs">
+                  <thead class="bg-slate-200 text-slate-700 sticky top-0 font-bold z-10 shadow-sm">
+                      <tr>
+                          <th class="p-3 text-left w-36 bg-slate-200">Phone</th>
+                          <th class="p-3 text-left bg-slate-200">Name</th>
+                          <th class="p-3 text-left bg-slate-200">Tags (comma separated)</th>
+                      </tr>
+                  </thead>
+                  <tbody id="cmList" class="divide-y divide-slate-200 bg-white"></tbody>
+              </table>
+          </div>
+      </div>
+      <div class="flex justify-end gap-2 mt-4 pt-2 border-t border-slate-100">
+          <div id="cmStatus" class="mr-auto text-xs text-slate-400 flex items-center"></div>
+          <button onclick="window.closeContactsManager()" class="px-4 py-2 bg-slate-100 rounded hover:bg-slate-200 text-slate-700 font-bold transition">Cancel</button>
+          <button onclick="window.saveContactsManager()" class="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-bold shadow-sm transition">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mergePurgeModal" class="fixed inset-0 hidden items-center justify-center bg-black/40 z-50 backdrop-blur-sm">
+    <div class="w-[720px] max-w-[95vw] bg-white rounded-xl shadow-xl p-6 flex flex-col max-h-[90vh]">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-slate-800">Merge / Purge Contacts</h3>
+        <button onclick="window.closeMergePurge()" class="text-slate-400 hover:text-slate-700"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <div id="autoMergeSection" class="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-lg hidden">
+        <div class="flex items-start gap-3">
+            <div class="p-2 bg-white rounded-full text-indigo-600 shadow-sm"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+            <div class="flex-1">
+                <h4 class="font-bold text-indigo-900 text-sm">Duplicate Contacts Detected</h4>
+                <p class="text-xs text-indigo-700 mt-1">We found multiple threads for the same phone number (e.g., +1555... vs 555...).</p>
+                <div id="autoMergeCount" class="text-xs font-bold text-indigo-800 mt-2"></div>
+            </div>
+            <button onclick="window.runAutoMerge()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 shadow-sm transition">Auto-Fix All</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <div>
+          <div class="text-xs font-bold text-slate-500 uppercase mb-1">Primary (Keep)</div>
+          <select id="mpPrimary" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-50 focus:ring-2 focus:ring-indigo-500"></select>
+        </div>
+        <div>
+          <div class="text-xs font-bold text-slate-500 uppercase mb-1">Secondary (Merge & Delete)</div>
+          <select id="mpSecondary" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-50 focus:ring-2 focus:ring-indigo-500"></select>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-4 border-t border-slate-100">
+        <div class="mr-auto text-xs text-slate-400 flex items-center" id="mpStatus">Select threads to merge manually.</div>
+        <button onclick="window.runPurge()" class="px-4 py-2 rounded-lg bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition">Purge Primary</button>
+        <button onclick="window.runMerge()" class="px-4 py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-900 text-xs font-bold transition shadow-sm">Merge Manual</button>
+      </div>
+    </div>
+  </div>
 
   <div id="mergerModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl p-6 flex flex-col max-h-[90vh]">
@@ -227,28 +297,7 @@
   let unsubThreads = null; let unsubMessages = null;
 
   const escapeHtml = (t) => { const d = document.createElement("div"); d.textContent = t??""; return d.innerHTML; };
-  // Canonical thread id: E.164-ish (assumes US if 10 digits)
-// Examples:
-//  (541) 555-1212  -> +15415551212
-//  15415551212     -> +15415551212
-//  +15415551212    -> +15415551212
-const normalizePhone = (raw) => {
-  const s = (raw || "").toString().trim();
-  const digits = s.replace(/\D/g, "");
-
-  if (!digits) return "";
-
-  // If original had +, respect it (just rebuild clean)
-  if (s.startsWith("+")) return `+${digits}`;
-
-  // US defaults
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-
-  // Fallback: treat as international digits
-  return `+${digits}`;
-};
-
+  const normalizePhone = (r) => { const s=(r||"").toString().trim(), d=s.replace(/\D/g,""); if(!d)return""; if(s.startsWith("+"))return`+${d}`; if(d.length===10)return`+1${d}`; if(d.length===11&&d.startsWith("1"))return`+${d}`; return`+${d}`; };
   const nameKey = (s) => (s||"").toLowerCase().replace(/[^a-z0-9]/g, "");
   const parseTags = (r) => (r||"").split(",").map(x=>x.trim()).filter(Boolean).slice(0,30);
   const initials = (s) => (s||"?").trim().slice(0,2).toUpperCase()||"?";
@@ -288,12 +337,12 @@ const normalizePhone = (raw) => {
         if(store.deletedSids.has(m.sid) || store.lastInboundSidSeen.has(m.sid)) continue;
         store.lastInboundSidSeen.add(m.sid);
         if(m.direction === 'inbound') {
-const cleanPhone = normalizePhone(m.from);
+          const cleanPhone = normalizePhone(m.from);
           if(cleanPhone.length > 5) {
             const q = query(getMsgsCol(cleanPhone), where("sid", "==", m.sid));
             const querySnap = await getDocs(q);
             if (querySnap.empty) {
-await upsertThread(cleanPhone, cleanPhone, ["New"]);
+              await upsertThread(cleanPhone, cleanPhone, ["New"]);
               await setDoc(doc(getMsgsCol(cleanPhone), m.sid), { body: m.body, direction: "received", createdAt: serverTimestamp(), sid: m.sid });
               const threadRef = getThreadDoc(cleanPhone);
               const tSnap = await getDoc(threadRef);
@@ -310,7 +359,94 @@ await upsertThread(cleanPhone, cleanPhone, ["New"]);
     finally { store.isPolling = false; }
   }
 
-  // --- MERGE ---
+  // --- NEW CONTACT MANAGER LOGIC ---
+  window.openContactsManager = () => {
+    document.getElementById("contactsManagerModal").classList.remove("hidden");
+    window.renderContactsManagerTable();
+  };
+  window.closeContactsManager = () => document.getElementById("contactsManagerModal").classList.add("hidden");
+
+  window.renderContactsManagerTable = (filter = "") => {
+    const tbody = document.getElementById("cmList");
+    tbody.innerHTML = "";
+    const f = filter.toLowerCase();
+    
+    // Sort by name or phone
+    const list = store.threads.filter(t => 
+        (t.name||"").toLowerCase().includes(f) || 
+        (t.phone||"").includes(f) ||
+        (t.tags||[]).join(" ").toLowerCase().includes(f)
+    ).sort((a,b) => (a.name||"").localeCompare(b.name||""));
+
+    list.forEach(t => {
+        const tr = document.createElement("tr");
+        const tagStr = (t.tags || []).join(", ");
+        tr.innerHTML = `
+            <td class="p-3 font-mono text-slate-500 border-b">${t.phone}</td>
+            <td class="p-3 border-b"><input type="text" class="cm-name-input w-full border rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 text-slate-700" data-id="${t.id}" value="${escapeHtml(t.name)}"></td>
+            <td class="p-3 border-b"><input type="text" class="cm-tags-input w-full border rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 text-slate-700" data-id="${t.id}" value="${escapeHtml(tagStr)}"></td>
+        `;
+        tbody.appendChild(tr);
+    });
+    document.getElementById("cmStatus").innerText = `Showing ${list.length} contacts`;
+  };
+
+  window.saveContactsManager = async () => {
+    const names = document.querySelectorAll(".cm-name-input");
+    const tags = document.querySelectorAll(".cm-tags-input");
+    const updates = [];
+    const btn = document.querySelector("#contactsManagerModal button.bg-indigo-600");
+    
+    btn.disabled = true; 
+    btn.innerText = "Saving...";
+
+    // Map current state for comparison
+    const currentMap = new Map(store.threads.map(t => [t.id, t]));
+
+    for (let i = 0; i < names.length; i++) {
+        const id = names[i].dataset.id;
+        const newName = names[i].value.trim();
+        const newTags = tags[i].value.split(",").map(t => t.trim()).filter(Boolean);
+        
+        const original = currentMap.get(id);
+        
+        // Check if update is needed
+        const tagsChanged = JSON.stringify(original.tags || []) !== JSON.stringify(newTags);
+        const nameChanged = (original.name || "") !== newName;
+
+        if (nameChanged || tagsChanged) {
+            updates.push({ id, name: newName, tags: newTags });
+        }
+    }
+
+    if (updates.length === 0) {
+        btn.disabled = false;
+        btn.innerText = "Save Changes";
+        window.closeContactsManager();
+        return;
+    }
+
+    if (!confirm(`Update ${updates.length} contacts?`)) {
+        btn.disabled = false;
+        btn.innerText = "Save Changes";
+        return;
+    }
+
+    try {
+        const promises = updates.map(u => updateDoc(getThreadDoc(u.id), { name: u.name, tags: u.tags }));
+        await Promise.all(promises);
+        alert("Contacts updated successfully.");
+        window.closeContactsManager();
+    } catch (e) {
+        console.error(e);
+        alert("Error saving contacts: " + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "Save Changes";
+    }
+  };
+
+  // --- TOOLS ---
   window.openMergerModal = () => document.getElementById("mergerModal").classList.remove("hidden");
   window.closeMergerModal = () => document.getElementById("mergerModal").classList.add("hidden");
   window.performMerge = async function() {
@@ -319,22 +455,14 @@ await upsertThread(cleanPhone, cleanPhone, ["New"]);
     if(!lf || !tf) return alert("Select both files.");
     const lt = await lf.text(); const tt = await tf.text();
     const lmap = new Map();
-    let colMode = 0; // 0=Standard(Eugene/Coast), 1=Shifted(Portland)
-
+    let colMode = 0;
     lt.split(/\r?\n/).forEach(l => { 
         const p = parseCsvLine(l);
-        // Detect shifted section
-        if (p[0] && (p[0].toLowerCase().includes("origin") || p[0].toLowerCase().includes("portland"))) { colMode = 1; }
-        
-        // Zone 1
-        if(p[0]) {
-            if(colMode === 0) lmap.set(nameKey(p[0]), {v:p[1], t:p[2]});
-            else lmap.set(nameKey(p[0]), {v:p[2], t:p[3]}); 
-        }
+        if(p[0] && (p[0].toLowerCase().includes("origin") || p[0].toLowerCase().includes("portland"))) colMode=1;
+        if(p[0]) { if(colMode===0) lmap.set(nameKey(p[0]), {v:p[1], t:p[2]}); else lmap.set(nameKey(p[0]), {v:p[2], t:p[3]}); }
         if(p[6]) lmap.set(nameKey(p[6]), {v:p[8], t:p[9]});
         if(p[12]) lmap.set(nameKey(p[12]), {v:p[14], t:p[15]});
     });
-
     const tLines = tt.split(/\r?\n/);
     let nLines = [tLines[0]]; let html = ""; let matches = 0;
     for(let i=1; i<tLines.length; i++) {
@@ -355,6 +483,46 @@ await upsertThread(cleanPhone, cleanPhone, ["New"]);
   window.downloadMergedCsv = function() {
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([mergedCsvContent], {type:"text/csv"})); a.download = "Merged_Template.csv"; document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
+  window.openMergePurge = () => { document.getElementById("mergePurgeModal").classList.remove("hidden"); document.getElementById("mergePurgeModal").classList.add("flex"); populateMergePurgeDropdowns(); };
+  window.closeMergePurge = () => { document.getElementById("mergePurgeModal").classList.add("hidden"); document.getElementById("mergePurgeModal").classList.remove("flex"); };
+  async function populateMergePurgeDropdowns() {
+    const p = document.getElementById("mpPrimary"), s = document.getElementById("mpSecondary");
+    const threads = (store.threads||[]).slice().sort((a,b)=>(b.lastMessageAtMs||0)-(a.lastMessageAtMs||0));
+    const opts = threads.map(t=>`<option value="${escapeHtml(t.id)}">${escapeHtml(t.name||t.phone||t.id)} (${t.id})</option>`).join("");
+    p.innerHTML = opts; s.innerHTML = opts;
+    // Auto duplicates
+    const grps = new Map(); threads.forEach(t=>{const k=normalizePhone(t.id||t.phone); if(k.length>6){if(!grps.has(k))grps.set(k,[]); grps.get(k).push(t);}});
+    const dupes = [...grps.entries()].filter(x=>x[1].length>1);
+    const box = document.getElementById("autoMergeSection");
+    if(dupes.length>0) { box.classList.remove("hidden"); document.getElementById("autoMergeCount").innerText = `${dupes.length} duplicates found (e.g. ${dupes[0][0]})`; } else box.classList.add("hidden");
+  }
+  window.runAutoMerge = async function() {
+      if(!confirm("Automatically merge all duplicates based on phone numbers?")) return;
+      const grps = new Map(); (store.threads||[]).forEach(t=>{const k=normalizePhone(t.id||t.phone); if(k.length>6){if(!grps.has(k))grps.set(k,[]); grps.get(k).push(t);}});
+      for (const [k, arr] of grps.entries()) {
+          if(arr.length<2) continue;
+          arr.sort((a,b)=>(b.lastMessageAtMs||0)-(a.lastMessageAtMs||0));
+          const primary = arr[0];
+          for (let i=1; i<arr.length; i++) await mergeThreads(primary.id, arr[i].id);
+      }
+      alert("Auto-Merge Complete."); window.location.reload();
+  }
+  window.runMerge = async function() {
+    const p = document.getElementById("mpPrimary").value, s = document.getElementById("mpSecondary").value;
+    if(!p || !s || p===s) return alert("Invalid selection");
+    if(confirm("Merge?")) { await mergeThreads(p,s); alert("Merged"); window.location.reload(); }
+  };
+  window.runPurge = async function() {
+    const p = document.getElementById("mpPrimary").value; if(!p) return;
+    if(confirm("Purge?")) { await deleteThreadDeep(p); alert("Purged"); window.location.reload(); }
+  };
+  async function listAllMessages(tid) { const s=await getDocs(getMsgsCol(tid)); const o=[]; s.forEach(d=>o.push({id:d.id,...d.data()})); return o; }
+  async function deleteThreadDeep(tid) { const m=await listAllMessages(tid); for(const x of m) await deleteDoc(doc(getMsgsCol(tid),x.id)); await deleteDoc(getThreadDoc(tid)); }
+  async function mergeThreads(pid, sid) {
+      const ps=await getDoc(getThreadDoc(pid)), ss=await getDoc(getThreadDoc(sid)); if(!ps.exists()||!ss.exists()) return;
+      const m=await listAllMessages(sid); for(const x of m) await setDoc(doc(getMsgsCol(pid), `m-${sid}-${x.id}`), {...x, merged:true}, {merge:true});
+      await deleteThreadDeep(sid);
+  }
 
   // --- ASSIGNMENTS ---
   window.openAssignmentsModal = () => document.getElementById("assignmentsModal").classList.remove("hidden");
@@ -439,13 +607,7 @@ await upsertThread(cleanPhone, cleanPhone, ["New"]);
   window.sendBroadcast = async function() {
     const m = document.getElementById("broadcastMsgInput").value.trim(); if(!m) return alert("Msg empty");
     const r = broadcastRows.filter(x=>x.phone.length>5); if(!confirm(`Send to ${r.length}?`)) return;
-    for (let row of r) {
-  const tid = normalizePhone(row.phone);
-  await sendSmsApi(tid, m);
-  await upsertThread(tid, row.driverName || tid, []); // optional but recommended
-  await addMessageToFirestore(tid, m, "sent");
-}
-
+    for(let row of r) { await sendSmsApi(row.phone, m); await addMessageToFirestore(row.phone, m, "sent"); }
     alert("Sent."); window.closeBroadcastModal();
   };
 
@@ -542,12 +704,12 @@ await upsertThread(cleanPhone, cleanPhone, ["New"]);
         if(store.onlyPinned) f=f.filter(x=>store.pinned.has(x.id));
         if(!f.length)return;
         const op=store.openGroups.has(k);
-        el.innerHTML+=`<button onclick="window.toggleGroup('${k}')" class="w-full text-left p-3 border-b bg-white hover:bg-slate-50 flex justify-between items-center transition group"><span class="font-bold text-sm text-slate-700">${k}</span><div class="flex items-center gap-2"><span class="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">${f.length}</span><i class="fa-solid fa-chevron-down text-slate-300 text-xs transition-transform duration-200 ${op?'rotate-180':''}"></i></div></button>`;
+        el.innerHTML+=`<button onclick="window.toggleGroup('${k}')" class="w-full text-left px-4 py-3 border-b bg-white hover:bg-slate-50 flex justify-between items-center transition group"><span class="font-bold text-sm text-slate-700">${k}</span><div class="flex items-center gap-2"><span class="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">${f.length}</span><i class="fa-solid fa-chevron-right text-slate-300 text-xs transition-transform duration-200 ${op?'rotate-90':''}"></i></div></button>`;
         if(op) {
-            const con=document.createElement("div"); con.className="bg-slate-50/50 inner-shadow-sm";
+            const con=document.createElement("div"); con.className="bg-slate-50/50 inner-shadow-sm pb-1";
             f.forEach(x=>{ 
                 const isP=store.pinned.has(x.id);
-                con.innerHTML+=`<div onclick="window.loadThread('${x.id}')" class="p-3 border-b border-slate-100 hover:bg-white cursor-pointer transition relative ${x.id===store.activeThreadId?'bg-indigo-50 border-indigo-100':''}"><div class="flex justify-between items-center mb-1"><span class="font-bold text-sm ${x.unread?'text-indigo-600':''}">${escapeHtml(x.name||x.phone)}</span><i onclick="event.stopPropagation();window.togglePinThread('${x.id}')" class="fa-solid fa-star text-xs ${isP?'text-amber-400':'text-slate-200 hover:text-slate-400'}"></i></div><div class="text-xs text-slate-500 truncate flex justify-between"><span>${escapeHtml(x.lastMessageText||"No messages")}</span><span class="ml-2 opacity-70">${formatTime(x.lastMessageAtMs)}</span></div></div>`; 
+                con.innerHTML+=`<div onclick="window.loadThread('${x.id}')" class="px-4 py-3 border-b border-slate-100 hover:bg-white cursor-pointer transition relative ${x.id===store.activeThreadId?'bg-indigo-50 border-indigo-100':''}"><div class="flex justify-between items-center mb-1"><span class="font-bold text-sm ${x.unread?'text-indigo-600':''}">${escapeHtml(x.name||x.phone)}</span><i onclick="event.stopPropagation();window.togglePinThread('${x.id}')" class="fa-solid fa-star text-xs ${isP?'text-amber-400':'text-slate-200 hover:text-slate-400'}"></i></div><div class="text-xs text-slate-500 truncate flex justify-between"><span>${escapeHtml(x.lastMessageText||"No messages")}</span><span class="ml-2 opacity-70">${formatTime(x.lastMessageAtMs)}</span></div></div>`; 
             });
             el.appendChild(con);
         }
