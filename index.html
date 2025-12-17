@@ -227,7 +227,28 @@
   let unsubThreads = null; let unsubMessages = null;
 
   const escapeHtml = (t) => { const d = document.createElement("div"); d.textContent = t??""; return d.innerHTML; };
-  const normalizePhone = (r) => (r||"").toString().replace(/[^0-9+]/g, "").trim();
+  // Canonical thread id: E.164-ish (assumes US if 10 digits)
+// Examples:
+//  (541) 555-1212  -> +15415551212
+//  15415551212     -> +15415551212
+//  +15415551212    -> +15415551212
+const normalizePhone = (raw) => {
+  const s = (raw || "").toString().trim();
+  const digits = s.replace(/\D/g, "");
+
+  if (!digits) return "";
+
+  // If original had +, respect it (just rebuild clean)
+  if (s.startsWith("+")) return `+${digits}`;
+
+  // US defaults
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+
+  // Fallback: treat as international digits
+  return `+${digits}`;
+};
+
   const nameKey = (s) => (s||"").toLowerCase().replace(/[^a-z0-9]/g, "");
   const parseTags = (r) => (r||"").split(",").map(x=>x.trim()).filter(Boolean).slice(0,30);
   const initials = (s) => (s||"?").trim().slice(0,2).toUpperCase()||"?";
@@ -267,12 +288,12 @@
         if(store.deletedSids.has(m.sid) || store.lastInboundSidSeen.has(m.sid)) continue;
         store.lastInboundSidSeen.add(m.sid);
         if(m.direction === 'inbound') {
-          const cleanPhone = normalizePhone(m.from);
+const cleanPhone = normalizePhone(m.from);
           if(cleanPhone.length > 5) {
             const q = query(getMsgsCol(cleanPhone), where("sid", "==", m.sid));
             const querySnap = await getDocs(q);
             if (querySnap.empty) {
-              await upsertThread(m.from, cleanPhone, ["New"]);
+await upsertThread(cleanPhone, cleanPhone, ["New"]);
               await setDoc(doc(getMsgsCol(cleanPhone), m.sid), { body: m.body, direction: "received", createdAt: serverTimestamp(), sid: m.sid });
               const threadRef = getThreadDoc(cleanPhone);
               const tSnap = await getDoc(threadRef);
@@ -418,7 +439,13 @@
   window.sendBroadcast = async function() {
     const m = document.getElementById("broadcastMsgInput").value.trim(); if(!m) return alert("Msg empty");
     const r = broadcastRows.filter(x=>x.phone.length>5); if(!confirm(`Send to ${r.length}?`)) return;
-    for(let row of r) { await sendSmsApi(row.phone, m); await addMessageToFirestore(row.phone, m, "sent"); }
+    for (let row of r) {
+  const tid = normalizePhone(row.phone);
+  await sendSmsApi(tid, m);
+  await upsertThread(tid, row.driverName || tid, []); // optional but recommended
+  await addMessageToFirestore(tid, m, "sent");
+}
+
     alert("Sent."); window.closeBroadcastModal();
   };
 
