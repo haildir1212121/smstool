@@ -93,10 +93,14 @@
         </div>
       </div>
       <div class="flex items-center gap-4 text-slate-400">
-        <button onclick="window.openThreadSearch()" class="hover:text-indigo-600 transition" title="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
-        <button onclick="window.exportActiveThreadCsv()" class="hover:text-indigo-600 transition" title="Export CSV"><i class="fa-solid fa-file-csv"></i></button>
-        <button onclick="window.openSettingsModal()" class="hover:text-indigo-600 transition" title="Settings"><i class="fa-solid fa-gear"></i></button>
+<button onclick="window.openThreadSearch()" class="hover:text-indigo-600 transition" title="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
+<button onclick="window.exportActiveThreadCsv()" class="hover:text-indigo-600 transition" title="Export CSV"><i class="fa-solid fa-file-csv"></i></button>
+
+<button onclick="window.deleteActiveThread()" class="hover:text-red-500 transition" title="Delete Thread"><i class="fa-solid fa-trash"></i></button>
+
+<button onclick="window.openSettingsModal()" class="hover:text-indigo-600 transition" title="Settings"><i class="fa-solid fa-gear"></i></button>
         <button onclick="window.openThreadInfo()" class="hover:text-indigo-600 transition" title="Info"><i class="fa-solid fa-circle-info"></i></button>
+        
       </div>
     </header>
 
@@ -701,26 +705,94 @@
     // 1. Update Buttons
     const ub=document.getElementById("unreadOnlyBtn"), pb=document.getElementById("pinnedOnlyBtn");
     if(ub) ub.className=`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide border transition ${store.onlyUnread?'bg-indigo-600 text-white border-indigo-600':'bg-white text-slate-600 border-slate-200 hover:shadow-sm'}`;
+    ifwindow.renderThreadList = function() {
+    // 0. GLOBAL SORT: Ensure newest messages are always first, regardless of view
+    store.threads.sort((a, b) => (b.lastMessageAtMs || 0) - (a.lastMessageAtMs || 0));
+
+    // 1. Update Buttons (Unread / Pinned)
+    const ub=document.getElementById("unreadOnlyBtn"), pb=document.getElementById("pinnedOnlyBtn");
+    if(ub) ub.className=`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide border transition ${store.onlyUnread?'bg-indigo-600 text-white border-indigo-600':'bg-white text-slate-600 border-slate-200 hover:shadow-sm'}`;
     if(pb) pb.className=`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide border transition ${store.onlyPinned?'bg-indigo-600 text-white border-indigo-600':'bg-white text-slate-600 border-slate-200 hover:shadow-sm'}`;
     
-    // 2. Update Tag Chips
+    // 2. Render Tag Chips (Filters)
     const tc=document.getElementById("tagChips"); tc.innerHTML="";
+    
+    // --- NEW: "ALL" BUTTON ---
+    const isAll = (store.tagFilter.size === 0);
+    const allBtn = document.createElement("button");
+    allBtn.className = `px-3 py-1 rounded-full text-[10px] border font-bold mr-1 ${isAll ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`;
+    allBtn.innerText = "ALL";
+    allBtn.onclick = () => { store.tagFilter.clear(); saveLocalSettings(); window.renderThreadList(); };
+    tc.appendChild(allBtn);
+    // -------------------------
+
     const counts=new Map(); store.threads.forEach(t=>{(t.tags||["Untagged"]).forEach(g=>counts.set(g,(counts.get(g)||0)+1))});
     [...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10).forEach(([t,c])=>{
         const on=store.tagFilter.has(t);
         const b=document.createElement("button"); b.className=`px-2 py-1 rounded-full text-[10px] border ${on?'bg-indigo-600 text-white border-indigo-600':'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`; b.innerText=`${t} (${c})`; 
-        b.onclick=()=>{ if(on)store.tagFilter.delete(t); else store.tagFilter.add(t); saveLocalSettings(); window.renderThreadList(); };
+        b.onclick=()=>{ 
+            if(on) store.tagFilter.delete(t); 
+            else { store.tagFilter.clear(); store.tagFilter.add(t); } 
+            saveLocalSettings(); 
+            window.renderThreadList(); 
+        };
         tc.appendChild(b);
     });
 
-    // 3. Render Hierarchy List
     const el=document.getElementById("contactList"); el.innerHTML=""; 
     const s=document.getElementById("searchContacts").value.toLowerCase();
-    
+
+    // ============================================================
+    // VIEW MODE 1: FLAT LIST (ALL)
+    // ============================================================
+    if (store.tagFilter.size === 0) {
+        let list = store.threads.filter(t => {
+            if(s && !(t.name+t.phone).toLowerCase().includes(s)) return false;
+            if(store.onlyUnread && (t.unread||0)===0) return false;
+            if(store.onlyPinned && !store.pinned.has(t.id)) return false;
+            return true;
+        });
+
+        if(list.length === 0) { el.innerHTML = `<div class="p-4 text-center text-xs text-slate-400">No threads found.</div>`; return; }
+
+        // Render Flat Rows
+        list.forEach(t => {
+            const isP = store.pinned.has(t.id);
+            const unread = t.unread || 0;
+            const rowBadge = unread > 0 ? `<span class="ml-2 bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">${unread}</span>` : '';
+            
+            // Show first tag in pill for context
+            const tagPill = (t.tags && t.tags.length > 0) 
+                ? `<span class="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 mr-2">${t.tags[0]}</span>` 
+                : '';
+
+            el.innerHTML += `
+            <div onclick="window.loadThread('${t.id}')" class="px-4 py-3 border-b border-slate-100 hover:bg-white cursor-pointer transition relative ${t.id===store.activeThreadId?'bg-indigo-50 border-indigo-100':''}">
+                <div class="flex justify-between items-center mb-1">
+                    <div class="flex items-center">
+                        <span class="font-bold text-sm ${unread?'text-indigo-900':''}">${escapeHtml(t.name||t.phone)}</span>
+                        ${rowBadge}
+                    </div>
+                    <div class="flex items-center">
+                        ${tagPill}
+                        <i onclick="event.stopPropagation();window.togglePinThread('${t.id}')" class="fa-solid fa-star text-xs ${isP?'text-amber-400':'text-slate-200 hover:text-slate-400'}"></i>
+                    </div>
+                </div>
+                <div class="text-xs text-slate-500 truncate flex justify-between">
+                    <span class="${unread?'font-semibold text-slate-700':''}">${escapeHtml(t.lastMessageText||"No messages")}</span>
+                    <span class="ml-2 opacity-70">${formatTime(t.lastMessageAtMs)}</span>
+                </div>
+            </div>`;
+        });
+        return; // Stop here, do not render groups
+    }
+
+    // ============================================================
+    // VIEW MODE 2: GROUPED LIST (When Specific Tags Selected)
+    // ============================================================
     const groups = {}; 
 
     store.threads.forEach(t => {
-        // --- Filtering ---
         let valid = true;
         if(s && !(t.name+t.phone).toLowerCase().includes(s)) valid = false;
         if(store.onlyUnread && (t.unread||0)===0) valid = false;
@@ -731,39 +803,29 @@
         }
         if (!valid) return;
 
-        // --- Grouping Logic ---
         const threadTags = (t.tags && t.tags.length) ? t.tags : ["Untagged"];
-        
-        // Identify Parents
         const relevantParents = new Set();
         threadTags.forEach(tag => relevantParents.add(tag.split('-')[0].trim()));
 
         relevantParents.forEach(parent => {
             if (!groups[parent]) groups[parent] = { id: parent, direct: [], subs: {} };
-
-            // Find tags belonging to this parent
             const relatedTags = threadTags.filter(tag => tag === parent || tag.startsWith(parent + '-'));
             const subTags = relatedTags.filter(tag => tag.includes('-') && tag.split('-').length > 1);
 
             if (subTags.length > 0) {
-                // Add to sub-menus
                 subTags.forEach(fullTag => {
                     const subName = fullTag.split('-').slice(1).join('-').trim();
                     if (!groups[parent].subs[subName]) groups[parent].subs[subName] = [];
                     groups[parent].subs[subName].push(t);
                 });
             } else {
-                // Add to direct list
                 groups[parent].direct.push(t);
             }
         });
     });
 
-    // Sort and Render
     Object.keys(groups).sort().forEach(key => {
         const g = groups[key];
-        
-        // Calculate Totals for Badges
         let totalCount = g.direct.length;
         let totalUnread = 0;
         
@@ -774,18 +836,13 @@
         });
 
         if (totalCount === 0) return;
-
         const isOpen = store.openGroups.has(key);
         
-        // Parent Accordion Header
         const btn = document.createElement("button");
         btn.onclick = () => window.toggleGroup(key);
         btn.className = "w-full text-left px-4 py-3 border-b bg-white hover:bg-slate-50 flex justify-between items-center transition group";
         
-        // Badge HTML for Parent
-        const parentBadge = totalUnread > 0 
-            ? `<span class="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm mr-1">${totalUnread}</span>` 
-            : '';
+        const parentBadge = totalUnread > 0 ? `<span class="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm mr-1">${totalUnread}</span>` : '';
 
         btn.innerHTML = `
             <span class="font-bold text-sm text-slate-700">${key}</span>
@@ -796,7 +853,6 @@
             </div>`;
         el.appendChild(btn);
 
-        // Parent Accordion Body
         if (isOpen) {
             const container = document.createElement("div");
             container.className = "bg-slate-50/50 inner-shadow-sm pb-1";
@@ -804,10 +860,7 @@
             const renderRow = (t) => {
                 const isP = store.pinned.has(t.id);
                 const unread = t.unread || 0;
-                // Row Badge HTML
-                const rowBadge = unread > 0 
-                    ? `<span class="ml-2 bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">${unread}</span>` 
-                    : '';
+                const rowBadge = unread > 0 ? `<span class="ml-2 bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">${unread}</span>` : '';
 
                 return `
                 <div onclick="window.loadThread('${t.id}')" class="px-4 py-3 border-b border-slate-100 hover:bg-white cursor-pointer transition relative ${t.id===store.activeThreadId?'bg-indigo-50 border-indigo-100':''}">
@@ -825,23 +878,15 @@
                 </div>`;
             };
 
-            // 1. Direct Members
             g.direct.forEach(t => { container.innerHTML += renderRow(t); });
 
-            // 2. Sub-Groups
             Object.keys(g.subs).sort().forEach(subKey => {
                 const fullSubTag = `${key}-${subKey}`;
                 const isSubOpen = store.openGroups.has(fullSubTag);
                 const subCount = g.subs[subKey].length;
-                
-                // Calculate Sub Unread
                 let subUnread = 0;
                 g.subs[subKey].forEach(t => subUnread += (t.unread || 0));
-                
-                // Badge HTML for Sub-Group
-                const subBadge = subUnread > 0 
-                    ? `<span class="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm mr-1">${subUnread}</span>` 
-                    : '';
+                const subBadge = subUnread > 0 ? `<span class="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm mr-1">${subUnread}</span>` : '';
 
                 container.innerHTML += `
                     <button onclick="event.stopPropagation(); window.toggleGroup('${fullSubTag}')" class="w-full text-left px-4 py-2 bg-slate-100/50 hover:bg-slate-100 border-y border-slate-200 flex justify-between items-center transition group">
@@ -860,7 +905,6 @@
                     g.subs[subKey].forEach(t => { container.innerHTML += renderRow(t); });
                 }
             });
-
             el.appendChild(container);
         }
     });
