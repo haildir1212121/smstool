@@ -115,6 +115,18 @@
           <div class="relative flex-1">
             <textarea id="msgInput" rows="1" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-none max-h-48 shadow-sm" placeholder="Type a message..."></textarea>
           </div>
+          
+          <input type="file" id="mmsFileInput" class="hidden" multiple accept="image/*,video/*,audio/*,application/pdf" onchange="window.handleMmsFiles(this)">
+          <button onclick="document.getElementById('mmsFileInput').click()" id="attachBtn" class="p-3 bg-slate-100 text-slate-600 rounded-full hover:bg-slate-200 transition shadow-sm flex-shrink-0" title="Attach (MMS)">
+            <i class="fa-solid fa-paperclip"></i>
+          </button>
+          <div id="mmsPreviewPill" class="hidden px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-xs border border-indigo-100 flex items-center gap-2">
+            <i class="fa-solid fa-images"></i>
+            <span id="mmsPreviewCount">0</span>
+            <button onclick="window.clearMmsQueue()" class="text-indigo-500 hover:text-indigo-700" title="Clear">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
           <button onclick="window.sendMessage()" id="sendBtn" class="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition shadow-md flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
             <i class="fa-solid fa-paper-plane"></i>
           </button>
@@ -287,8 +299,10 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
   import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
   import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp, where, getDocs } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+  import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js";
 
   const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getFirestore(app);
+  const storage = getStorage(app);
   let store = { 
     uid: null, threads: [], activeThreadId: null, activeThread: null, lastInboundSidSeen: new Set(), deletedSids: new Set(), openGroups: new Set(), initialGroupSet: false, isPolling: false,
     pinned: new Set(), onlyUnread: false, onlyPinned: false, tagFilter: new Set(), drafts: {}, cannedReplies: []
@@ -343,7 +357,7 @@
             const querySnap = await getDocs(q);
             if (querySnap.empty) {
               await upsertThread(cleanPhone, cleanPhone, ["New"]);
-              await setDoc(doc(getMsgsCol(cleanPhone), m.sid), { body: m.body, direction: "received", createdAt: serverTimestamp(), sid: m.sid });
+              await setDoc(doc(getMsgsCol(cleanPhone), m.sid), { body: m.body, direction: "received", createdAt: serverTimestamp(), sid: m.sid, mediaUrls: (m.mediaUrls || m.media || m.MediaUrl || []) });
               const threadRef = getThreadDoc(cleanPhone);
               const tSnap = await getDoc(threadRef);
               const currentUnread = tSnap.exists() ? (tSnap.data().unread || 0) : 0;
@@ -590,7 +604,7 @@
             const m = r.message + ASSIGNMENT_DISCLAIMER;
             await sendSmsApi(r.phone, m);
             await upsertThread(r.phone, r.driverName, [r.tag]);
-            await addMessageToFirestore(normalizePhone(r.phone), m, "sent");
+            await addMessageToFirestore(normalizePhone(r.phone), m, "sent", {});
         } catch(e) { console.error(e); }
     }
     alert("Sent."); btn.disabled = false; btn.innerText = "Send Selected"; window.closeAssignmentsModal();
@@ -607,7 +621,7 @@
   window.sendBroadcast = async function() {
     const m = document.getElementById("broadcastMsgInput").value.trim(); if(!m) return alert("Msg empty");
     const r = broadcastRows.filter(x=>x.phone.length>5); if(!confirm(`Send to ${r.length}?`)) return;
-    for(let row of r) { await sendSmsApi(row.phone, m); await addMessageToFirestore(row.phone, m, "sent"); }
+    for(let row of r) { await sendSmsApi(row.phone, m); await addMessageToFirestore(row.phone, m, "sent", {}); }
     alert("Sent."); window.closeBroadcastModal();
   };
 
@@ -673,7 +687,7 @@
       s.forEach(d => {
         const m = d.data(); const fps = (m.body||"") + Math.floor((m.createdAt?.toMillis()||0)/1000); if(seen.has(fps)) return; seen.add(fps);
         const el = document.createElement("div"); el.className = `flex ${m.direction==='sent'?'justify-end':'justify-start'} fade-in-up`;
-        el.innerHTML = `<div class="group relative max-w-[75%]"><div class="p-3 text-sm shadow-sm ${m.direction==='sent'?'msg-sent':'msg-received'}"><p>${escapeHtml(m.body)}</p><div class="text-[10px] opacity-70 mt-1 text-right flex justify-between items-center"><span>${formatTime(m.createdAt?.toMillis())}</span><button onclick="window.deleteSingleMessage('${threadId}','${d.id}','${m.sid||''}')" class="ml-2 text-red-300 hover:text-red-100 opacity-0 group-hover:opacity-100 transition"><i class="fa-solid fa-trash"></i></button></div></div></div>`;
+        el.innerHTML = `<div class="group relative max-w-[75%]"><div class="p-3 text-sm shadow-sm ${m.direction==='sent'?'msg-sent':'msg-received'}"><p>${escapeHtml(m.body)}</p>${renderMedia(m.mediaUrls)}<div class="text-[10px] opacity-70 mt-1 text-right flex justify-between items-center"><span>${formatTime(m.createdAt?.toMillis())}</span><button onclick="window.deleteSingleMessage('${threadId}','${d.id}','${m.sid||''}')" class="ml-2 text-red-300 hover:text-red-100 opacity-0 group-hover:opacity-100 transition"><i class="fa-solid fa-trash"></i></button></div></div></div>`;
         div.appendChild(el);
       });
       scrollToBottom();
@@ -862,11 +876,124 @@
   }
 
   // CORE MSG
+  // --- MMS (attachments) ---
+  function updateMmsPreviewPill() {
+    const pill = document.getElementById("mmsPreviewPill");
+    const countEl = document.getElementById("mmsPreviewCount");
+    const n = (store.pendingMedia || []).length;
+    if (countEl) countEl.textContent = String(n);
+    if (pill) pill.classList.toggle("hidden", n === 0);
+  }
+
+  window.handleMmsFiles = function (inp) {
+    const files = Array.from(inp.files || []);
+    inp.value = "";
+    if (!files.length) return;
+    // Twilio supports up to 10 media URLs per message
+    store.pendingMedia = (store.pendingMedia || []).concat(files).slice(0, 10);
+    updateMmsPreviewPill();
+  };
+
+  window.clearMmsQueue = function () {
+    store.pendingMedia = [];
+    updateMmsPreviewPill();
+  };
+
+  async function uploadPendingMedia(threadId) {
+    const files = Array.from(store.pendingMedia || []).slice(0, 10);
+    const urls = [];
+    for (const file of files) {
+      const safeName = (file.name || "file").replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `mms/${SHARED_ORG_ID}/${threadId}/${Date.now()}_${safeName}`;
+      const r = storageRef(storage, path);
+      await uploadBytes(r, file, { contentType: file.type || "application/octet-stream" });
+      const url = await getDownloadURL(r);
+      urls.push(url);
+    }
+    return urls;
+  }
+
+  function renderMedia(mediaUrls) {
+    const urls = (mediaUrls || []).filter(Boolean);
+    if (!urls.length) return "";
+    const items = urls.map(u => {
+      const esc = escapeHtml(u);
+      const lower = u.toLowerCase();
+      const isImg = /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/.test(lower) || lower.includes("image");
+      if (isImg) {
+        return `<a href="${esc}" target="_blank" class="block"><img src="${esc}" class="mt-2 rounded-lg border max-h-64 object-contain bg-white" loading="lazy" /></a>`;
+      }
+      return `<a href="${esc}" target="_blank" class="mt-2 inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white text-xs text-indigo-600 hover:bg-indigo-50">
+        <i class="fa-solid fa-paperclip"></i><span class="truncate max-w-[220px]">${esc}</span>
+      </a>`;
+    }).join("");
+    return `<div class="flex flex-col">${items}</div>`;
+  }
+
+
   async function upsertThread(p,n,t){ const c=normalizePhone(p); if(!c)return; await setDoc(getThreadDoc(c),{id:c,phone:p,name:n,tags:t,createdAt:serverTimestamp(),lastMessageAtMs:Date.now(),unread:0},{merge:true}); }
-  async function addMessageToFirestore(t,b,d,s){ if(!t)return; const i=s||"loc-"+Date.now(); await setDoc(doc(getMsgsCol(t),i),{body:b,direction:d,createdAt:serverTimestamp(),sid:i}); await updateDoc(getThreadDoc(t),{lastMessageText:b,lastMessageAtMs:Date.now()}); }
-  async function sendSmsApi(t,b){ const p=new URLSearchParams(); p.append("to",t); p.append("body",b); await fetch(TWILIO_SEND_URL,{method:"POST",body:p}); }
+  async function addMessageToFirestore(threadId, body, direction, opts = {}) {
+    if (!threadId) return;
+    const sid = opts.sid || `loc-${Date.now()}`;
+    const mediaUrls = Array.isArray(opts.mediaUrls) ? opts.mediaUrls.filter(Boolean).slice(0, 10) : [];
+
+    await setDoc(doc(getMsgsCol(threadId), sid), {
+      body: body ?? "",
+      direction,
+      createdAt: serverTimestamp(),
+      sid,
+      mediaUrls,
+    }, { merge: true });
+
+    await updateDoc(getThreadDoc(threadId), {
+      lastMessageText: (body && body.trim())
+        ? body
+        : (mediaUrls.length ? `[${mediaUrls.length} attachment${mediaUrls.length>1?"s":""}]` : ""),
+      lastMessageAtMs: Date.now(),
+    });
+  }
+
+  async function sendSmsApi(to, body, mediaUrls=[]) {
+    const p = new URLSearchParams();
+    p.append("to", to);
+    // Twilio allows empty body for some MMS, but some carriers require text; keep at least one space if only media.
+    p.append("body", (body ?? "").toString());
+    (mediaUrls || []).forEach(u => { if (u) p.append("mediaUrl", u); });
+    await fetch(TWILIO_SEND_URL, { method: "POST", body: p });
+  }
   
-  window.sendMessage = async function() { const i=document.getElementById("msgInput"), t=i.value.trim(); if(!t||!store.activeThread)return; i.value=""; await sendSmsApi(store.activeThread.phone, t); await addMessageToFirestore(store.activeThreadId, t, "sent"); scrollToBottom(); };
+  window.sendMessage = async function () {
+    const input = document.getElementById("msgInput");
+    const text = (input?.value || "").trim();
+    if ((!text && !(store.pendingMedia || []).length) || !store.activeThread) return;
+
+    // clear UI immediately
+    if (input) input.value = "";
+
+    try {
+      const threadId = store.activeThreadId;
+      const to = store.activeThread.phone;
+
+      // Upload attachments (if any) to Firebase Storage to get public HTTPS URLs for Twilio
+      let mediaUrls = [];
+      if ((store.pendingMedia || []).length) {
+        mediaUrls = await uploadPendingMedia(threadId);
+      }
+
+      await sendSmsApi(to, text, mediaUrls);
+
+      // Persist to Firestore so it shows in the thread instantly
+      await addMessageToFirestore(threadId, text, "sent", { mediaUrls });
+
+      // clear attachments UI
+      store.pendingMedia = [];
+      updateMmsPreviewPill();
+      scrollToBottom();
+    } catch (e) {
+      console.error("Send failed", e);
+      alert("Send failed (see console).");
+    }
+  };
   window.deleteActiveThread = async function() { if(store.activeThreadId && confirm("Delete?")) { await fetch(TWILIO_DELETE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone:store.activeThread.phone})}); await deleteDoc(getThreadDoc(store.activeThreadId)); window.location.reload(); } };
   window.deleteSingleMessage = async function(tid,did,sid) { if(confirm("Delete?")) { if(sid) fetch(TWILIO_DELETE_MSG_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sid})}); await deleteDoc(doc(getMsgsCol(tid),did)); } };
 
@@ -879,6 +1006,7 @@
     inp.addEventListener("input", ()=>{ inp.style.height='auto';inp.style.height=inp.scrollHeight+'px'; if(store.activeThreadId){ store.drafts[store.activeThreadId]=inp.value; saveLocalSettings(); document.getElementById("draftHint").classList.remove("opacity-0"); setTimeout(()=>document.getElementById("draftHint").classList.add("opacity-0"),1000); } });
     inp.addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); window.sendMessage(); } });
     renderQuickReplies();
+    updateMmsPreviewPill();
   }
   init();
 </script>
