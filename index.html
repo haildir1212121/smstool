@@ -23,6 +23,7 @@
 
     :focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(37,99,235,0.2); border-radius: 4px; }
 
+    /* Modern Chat Bubbles */
     .msg-sent { 
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
         color: #fff; 
@@ -54,9 +55,14 @@
     <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-blue-200 shadow-lg">D</div>
 
     <div class="flex flex-col gap-4 w-full px-4 items-center">
-
+        <button class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center transition-all shadow-sm" title="Inbox">
+            <i class="fa-solid fa-inbox"></i>
+        </button>
         <button onclick="window.openContactsManager()" class="w-10 h-10 rounded-xl hover:bg-gray-50 text-gray-400 hover:text-gray-600 flex items-center justify-center transition-all" title="Contacts">
             <i class="fa-regular fa-address-book"></i>
+        </button>
+        <button onclick="window.openLogbook()" class="w-10 h-10 rounded-xl hover:bg-gray-50 text-gray-400 hover:text-gray-600 flex items-center justify-center transition-all" title="End of Shift Log">
+            <i class="fa-solid fa-clipboard-check"></i>
         </button>
         <button onclick="window.openCommandPalette()" class="w-10 h-10 rounded-xl hover:bg-gray-50 text-gray-400 hover:text-gray-600 flex items-center justify-center transition-all" title="Command (Ctrl+K)">
             <i class="fa-solid fa-bolt"></i>
@@ -104,7 +110,7 @@
           class="w-full bg-gray-50 border-transparent text-sm pl-10 pr-4 py-2.5 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-200 text-gray-700 placeholder-gray-400 transition outline-none border">
       </div>
       
-      <div class="flex gap-2 flex-wrap justify-evenly pb-1 scrollbar-hide">
+      <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
         <button onclick="window.toggleUrgentOnly()" id="urgentOnlyBtn" class="shrink-0 px-3 py-1.5 rounded-full text-[10px] font-bold border border-gray-200 text-gray-600 hover:border-rose-300 hover:text-rose-600 transition uppercase tracking-wide flex items-center gap-1"><i class="fa-solid fa-bell"></i> Urgent</button>
         <button onclick="window.toggleUnreadOnly()" id="unreadOnlyBtn" class="shrink-0 px-3 py-1.5 rounded-full text-[10px] font-bold border border-gray-200 text-gray-600 hover:border-gray-300 transition uppercase tracking-wide">Unread</button>
         <button onclick="window.togglePinnedOnly()" id="pinnedOnlyBtn" class="shrink-0 px-3 py-1.5 rounded-full text-[10px] font-bold border border-gray-200 text-gray-600 hover:border-gray-300 transition uppercase tracking-wide">Pinned</button>
@@ -275,38 +281,23 @@
     </div>
   </div>
 
+  <div id="logbookModal" class="fixed inset-0 bg-slate-900/60 z-[80] hidden flex items-center justify-center backdrop-blur-sm p-4 transition-opacity duration-300">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-100">
+      <div class="px-8 py-6 border-b border-gray-100 bg-white shrink-0 flex items-center justify-between"><div><h3 class="text-2xl font-bold text-gray-900 tracking-tight">End of Shift Log</h3><p class="text-sm text-gray-500 mt-1">Tracking "Call it a day" triggers</p></div><button onclick="window.closeLogbook()" class="p-2.5 rounded-xl border border-transparent text-gray-400 hover:text-gray-700 transition"><i class="fa-solid fa-xmark text-lg"></i></button></div>
+      <div class="flex-1 overflow-auto bg-gray-50/50">
+        <table class="w-full text-left border-collapse"><thead class="bg-white sticky top-0 z-10 shadow-sm"><tr><th class="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider w-48">Timestamp</th><th class="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider">Driver / Contact</th><th class="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider">Phone</th><th class="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Message Context</th></tr></thead><tbody id="logbookList" class="divide-y divide-gray-100 bg-white"></tbody></table><div id="logbookEmpty" class="hidden p-10 text-center text-gray-400">No logs found yet.</div>
+      </div>
+    </div>
+  </div>
+
   <div id="contactsManagerModal" class="fixed inset-0 bg-slate-900/60 z-[80] hidden flex items-center justify-center backdrop-blur-sm p-4 transition-opacity duration-300">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-100">
       <div class="px-8 py-6 border-b border-gray-100 bg-white shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h3 class="text-2xl font-bold text-gray-900 tracking-tight">Contacts Directory</h3>
-          <div class="flex items-center gap-3 mt-2 text-sm text-gray-500">
-             <span class="flex items-center gap-1.5"><i class="fa-solid fa-users text-blue-500"></i> <span id="cmTotalCount" class="font-bold text-gray-700">0</span> Total</span>
-             <span class="w-1 h-1 rounded-full bg-gray-300"></span>
-             <span class="flex items-center gap-1.5"><i class="fa-regular fa-clock text-emerald-500"></i> <span id="cmActiveCount" class="font-bold text-gray-700">0</span> Active (24h)</span>
-          </div>
-        </div>
-        <div class="flex items-center gap-3">
-          <div class="relative group"><i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors"></i><input type="text" id="cmSearch" oninput="window.cmPage=1; window.renderContactsManagerTable()" placeholder="Search directory..." class="w-64 bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-300 outline-none transition-all"></div>
-          <button onclick="window.exportContactsCsv()" class="p-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-blue-600 transition" title="Export CSV"><i class="fa-solid fa-file-export"></i></button>
-          <button onclick="window.closeContactsManager()" class="p-2.5 rounded-xl border border-transparent text-gray-400 hover:text-gray-700 transition"><i class="fa-solid fa-xmark text-lg"></i></button>
-        </div>
+        <div><h3 class="text-2xl font-bold text-gray-900 tracking-tight">Contacts Directory</h3><div class="flex items-center gap-3 mt-2 text-sm text-gray-500"><span class="flex items-center gap-1.5"><i class="fa-solid fa-users text-blue-500"></i> <span id="cmTotalCount" class="font-bold text-gray-700">0</span> Total</span><span class="w-1 h-1 rounded-full bg-gray-300"></span><span class="flex items-center gap-1.5"><i class="fa-regular fa-clock text-emerald-500"></i> <span id="cmActiveCount" class="font-bold text-gray-700">0</span> Active (24h)</span></div></div>
+        <div class="flex items-center gap-3"><div class="relative group"><i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors"></i><input type="text" id="cmSearch" oninput="window.cmPage=1; window.renderContactsManagerTable()" placeholder="Search directory..." class="w-64 bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-300 outline-none transition-all"></div><button onclick="window.exportContactsCsv()" class="p-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-blue-600 transition" title="Export CSV"><i class="fa-solid fa-file-export"></i></button><button onclick="window.closeContactsManager()" class="p-2.5 rounded-xl border border-transparent text-gray-400 hover:text-gray-700 transition"><i class="fa-solid fa-xmark text-lg"></i></button></div>
       </div>
       <div class="flex-1 overflow-hidden relative bg-gray-50/50 flex flex-col">
-        <div class="overflow-auto flex-1">
-          <table class="w-full text-left border-collapse">
-            <thead class="bg-white sticky top-0 z-10 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-              <tr>
-                <th onclick="window.setCmSort('name')" class="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-blue-600 select-none group border-b border-gray-100 w-[30%]">Name <i class="fa-solid fa-sort ml-1 opacity-20 group-hover:opacity-100"></i></th>
-                <th onclick="window.setCmSort('phone')" class="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-blue-600 select-none group border-b border-gray-100 w-[20%]">Phone <i class="fa-solid fa-sort ml-1 opacity-20 group-hover:opacity-100"></i></th>
-                <th class="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 w-[30%]">Tags / Groups</th>
-                <th onclick="window.setCmSort('lastActive')" class="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-blue-600 select-none group border-b border-gray-100 w-[20%] text-right">Last Activity <i class="fa-solid fa-sort ml-1 opacity-20 group-hover:opacity-100"></i></th>
-              </tr>
-            </thead>
-            <tbody id="cmList" class="divide-y divide-gray-100 bg-white"></tbody>
-          </table>
-        </div>
-        <div id="cmEmptyState" class="hidden absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white"><i class="fa-solid fa-users-slash text-4xl mb-3 text-gray-200"></i><p class="text-sm">No contacts found matching your search.</p></div>
+        <div class="overflow-auto flex-1"><table class="w-full text-left border-collapse"><thead class="bg-white sticky top-0 z-10 shadow-[0_1px_3px_rgba(0,0,0,0.02)]"><tr><th onclick="window.setCmSort('name')" class="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-blue-600 select-none group border-b border-gray-100 w-[30%]">Name <i class="fa-solid fa-sort ml-1 opacity-20 group-hover:opacity-100"></i></th><th onclick="window.setCmSort('phone')" class="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-blue-600 select-none group border-b border-gray-100 w-[20%]">Phone <i class="fa-solid fa-sort ml-1 opacity-20 group-hover:opacity-100"></i></th><th class="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 w-[30%]">Tags / Groups</th><th onclick="window.setCmSort('lastActive')" class="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-blue-600 select-none group border-b border-gray-100 w-[20%] text-right">Last Activity <i class="fa-solid fa-sort ml-1 opacity-20 group-hover:opacity-100"></i></th></tr></thead><tbody id="cmList" class="divide-y divide-gray-100 bg-white"></tbody></table></div><div id="cmEmptyState" class="hidden absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-white"><i class="fa-solid fa-users-slash text-4xl mb-3 text-gray-200"></i><p class="text-sm">No contacts found matching your search.</p></div>
       </div>
       <div class="px-8 py-5 border-t border-gray-100 bg-white shrink-0 flex items-center justify-between">
         <div class="flex items-center gap-2 text-sm text-gray-500"><button onclick="window.changeCmPage(-1)" id="cmPrevBtn" class="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button><span id="cmPageIndicator" class="font-mono font-medium mx-2">Page 1</span><button onclick="window.changeCmPage(1)" id="cmNextBtn" class="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Next</button></div>
@@ -318,15 +309,7 @@
   <div id="settingsModal" class="fixed inset-0 bg-black/40 z-[70] hidden flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-white rounded-2xl p-6 w-full max-w-xl shadow-2xl">
       <div class="flex items-center justify-between mb-4"><h3 class="font-bold text-lg">Settings</h3><button onclick="window.closeSettingsModal()" class="text-slate-400 hover:text-slate-700"><i class="fa-solid fa-xmark"></i></button></div>
-      
-      <div class="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between">
-          <div><div class="font-bold text-sm text-blue-900">Desktop Notifications</div><div class="text-xs text-blue-600">Google Voice style pop-ups</div></div>
-          <div class="flex gap-2">
-              <button onclick="window.testNotification()" class="px-3 py-1.5 bg-white border border-blue-200 text-blue-700 text-xs font-bold rounded-lg shadow-sm hover:bg-blue-50">Test</button>
-              <button onclick="window.requestNotifPerm()" class="px-3 py-1.5 bg-blue-600 text-white border border-blue-600 text-xs font-bold rounded-lg shadow-sm hover:bg-blue-700">Enable</button>
-          </div>
-      </div>
-
+      <div class="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between"><div><div class="font-bold text-sm text-blue-900">Desktop Notifications</div><div class="text-xs text-blue-600">Google Voice style pop-ups</div></div><div class="flex gap-2"><button onclick="window.testNotification()" class="px-3 py-1.5 bg-white border border-blue-200 text-blue-700 text-xs font-bold rounded-lg shadow-sm hover:bg-blue-50">Test</button><button onclick="window.requestNotifPerm()" class="px-3 py-1.5 bg-blue-600 text-white border border-blue-600 text-xs font-bold rounded-lg shadow-sm hover:bg-blue-700">Enable</button></div></div>
       <div class="text-xs text-slate-500 font-bold uppercase tracking-wider mb-2">Canned Replies (one per line)</div>
       <textarea id="cannedRepliesInput" class="w-full border border-slate-200 p-3 mb-4 text-sm h-40 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none"></textarea>
       <div class="flex justify-end gap-2"><button onclick="window.closeSettingsModal()" class="px-4 py-2 bg-slate-100 rounded-xl hover:bg-slate-200 font-bold">Close</button><button onclick="window.saveSettings()" class="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold shadow-sm">Save</button></div>
@@ -351,7 +334,6 @@
 
 
 <script type="module">
-  // ---------------- CONFIG ----------------
   const SMS_BACKEND_BASE = "https://sms-backend-3488.twil.io";
   const TWILIO_SEND_URL = `${SMS_BACKEND_BASE}/send-sms`;
   const TWILIO_GET_URL  = `${SMS_BACKEND_BASE}/get-messages`;
@@ -364,7 +346,7 @@
 
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
   import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-  import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp, where, getDocs } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp, where, getDocs } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
   import { getStorage, ref as storageRef, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js";
 
   const app = initializeApp(firebaseConfig);
@@ -381,15 +363,14 @@
     cmdItems: [], cmdIndex: 0, pendingMedia: [], pendingUploads: new Map(),
     lastReadAtMs: 0, latestAttachments: [],
     
-    // NOTIFICATION STATE
-    maxKnownTime: Date.now(), // Only notify about things newer than page load time
+    // NOTIFICATION & STATE
+    maxKnownTime: Date.now(), 
     isFirstLoad: true
   };
 
   let unsubThreads = null;
   let unsubMessages = null;
 
-  // ---------------- HELPERS ----------------
   const escapeHtml = (t) => { const d = document.createElement("div"); d.textContent = t ?? ""; return d.innerHTML; };
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
   const normalizePhone = (r) => { const s = (r || "").toString().trim().replace(/\D/g, ""); if(!s) return ""; return s.length === 10 ? `+1${s}` : (s.length === 11 && s.startsWith("1") ? `+${s}` : `+${s}`); };
@@ -405,29 +386,34 @@
   window.scrollToBottom = scrollToBottom;
   window.showToast = (msg, type = "success") => { const t = document.getElementById("toast"), tm = document.getElementById("toastMsg"), ti = document.getElementById("toastIcon"); tm.innerText = msg; ti.className = type === "error" ? "fa-solid fa-circle-exclamation text-rose-400" : "fa-solid fa-check-circle text-emerald-400"; t.classList.remove("translate-y-20", "opacity-0"); setTimeout(() => { t.classList.add("translate-y-20", "opacity-0"); }, 2600); };
 
-  // ---------------- NOTIFICATIONS ----------------
+  // ---------------- NOTIFICATIONS (DEBUG VERSION) ----------------
   window.requestNotifPerm = () => {
       if (!("Notification" in window)) return alert("Browser does not support notifications");
+      // Check if secure context
+      if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+          alert("SECURITY BLOCK: Notifications only work on HTTPS or localhost.\n\nCurrent context: " + window.location.protocol);
+          return;
+      }
       Notification.requestPermission().then(p => {
-          if(p === "granted") { window.showToast("Notifications enabled!"); document.getElementById("permWarningBtn").classList.add("hidden"); }
-          else window.showToast("Permission denied", "error");
+          if(p === "granted") { window.showToast("Notifications enabled!"); document.getElementById("permWarningBtn").classList.add("hidden"); window.testNotification(); }
+          else if (p === "denied") alert("PERMISSION DENIED:\nYou previously blocked notifications for this site.\n\nClick the 'Lock' icon 🔒 in the URL bar -> Site Settings -> Reset Permissions.");
       });
   };
-  
   window.testNotification = () => {
-      if(Notification.permission !== "granted") { window.requestNotifPerm(); return; }
-      sendBrowserNotification("It Works!", "This is what new messages will look like.", null);
+      if (!("Notification" in window)) return alert("Error: No Browser Support");
+      if (Notification.permission === "default") return window.requestNotifPerm();
+      if (Notification.permission === "denied") return alert("Error: Permission is Denied. Reset it in the address bar lock icon.");
+      try {
+          const n = new Notification("System Test", { body: "If you see this, notifications are working!", icon: 'https://cdn-icons-png.flaticon.com/512/724/724664.png', requireInteraction: true });
+          n.onshow = () => window.showToast("Notification sent to OS!");
+          n.onerror = (e) => alert("OS ERROR: The browser tried to send it, but Windows/Mac blocked it.\n\nCheck 'Focus Assist' or 'Do Not Disturb' settings.");
+      } catch (e) { alert("CRITICAL ERROR:\n" + e.message); }
   };
-
   function sendBrowserNotification(title, body, threadId) {
       if (!("Notification" in window) || Notification.permission !== "granted") return;
-      try {
-          const n = new Notification(title, { body: body, icon: 'https://cdn-icons-png.flaticon.com/512/724/724664.png', requireInteraction: true });
-          n.onclick = () => { window.focus(); if(threadId) window.loadThread(threadId); n.close(); };
-      } catch(e) { console.error(e); }
+      try { const n = new Notification(title, { body: body, icon: 'https://cdn-icons-png.flaticon.com/512/724/724664.png', requireInteraction: true }); n.onclick = () => { window.focus(); if(threadId) window.loadThread(threadId); n.close(); }; } catch(e) { console.error(e); }
   }
 
-  // ---------------- LOGIC ----------------
   function loadLocalSettings() {
     try { const s = localStorage.getItem(LS.deletedSids); if (s) store.deletedSids = new Set(JSON.parse(s)); } catch {}
     try { const p = JSON.parse(localStorage.getItem(LS.pinned) || "[]"); store.pinned = new Set(p); } catch {}
@@ -437,14 +423,12 @@
     if (!store.cannedReplies.length) store.cannedReplies = ["Please sign into your tablet.", "Copy. Thank you.", "Running late.", "Call dispatch."];
   }
   function saveLocalSettings() { localStorage.setItem(LS.pinned, JSON.stringify([...store.pinned])); localStorage.setItem(LS.drafts, JSON.stringify(store.drafts)); localStorage.setItem(LS.canned, JSON.stringify(store.cannedReplies)); localStorage.setItem(LS.filters, JSON.stringify({ onlyUnread: store.onlyUnread, onlyPinned: store.onlyPinned, tagFilter: [...store.tagFilter] })); }
-  function closeAllModals() { ["contactsManagerModal","newMsgModal","settingsModal","threadSearchModal","commandModal"].forEach(id => { document.getElementById(id)?.classList.add("hidden"); document.getElementById(id)?.classList.remove("flex"); }); }
+  function closeAllModals() { ["contactsManagerModal","newMsgModal","settingsModal","threadSearchModal","commandModal","logbookModal"].forEach(id => { document.getElementById(id)?.classList.add("hidden"); document.getElementById(id)?.classList.remove("flex"); }); }
   
-  // Sidebar
   window.toggleMobileSidebar = (forceOpen = null) => { const sb = document.getElementById("sidebar"), ov = document.getElementById("mobileOverlay"); if (!sb || !ov) return; const isHidden = sb.classList.contains("-translate-x-full"); let makeOpen = forceOpen !== null ? forceOpen : isHidden; if (makeOpen) { sb.classList.remove("-translate-x-full"); ov.classList.remove("hidden"); } else { sb.classList.add("-translate-x-full"); ov.classList.add("hidden"); } };
   function initMobileSidebarState() { const sb = document.getElementById("sidebar"), ov = document.getElementById("mobileOverlay"); if(window.innerWidth >= 768) { sb.classList.remove("-translate-x-full"); ov.classList.add("hidden"); } else { sb.classList.add("-translate-x-full"); } }
   window.addEventListener("resize", initMobileSidebarState);
 
-  // Poll
   async function pollIncomingMessages() {
     if (!store.uid || store.isPolling) return; store.isPolling = true;
     try {
@@ -468,7 +452,6 @@
     } catch(e) { console.error(e); } finally { store.isPolling = false; }
   }
 
-  // Render Threads
   window.renderThreadList = function () {
     const ub = document.getElementById("unreadOnlyBtn"), pb = document.getElementById("pinnedOnlyBtn"), urb = document.getElementById("urgentOnlyBtn"), sb = document.getElementById("selectModeBtn");
     if(ub) ub.className = `shrink-0 px-3 py-1.5 rounded-full text-[10px] font-bold border transition uppercase tracking-wide ${store.onlyUnread ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`;
@@ -488,12 +471,11 @@
     if (!list.length) { el.innerHTML = `<div class="p-8 text-center text-sm text-gray-400">No messages found.</div>`; updateBulkBar(); return; }
     el.innerHTML = list.map(t => {
         const isActive = t.id === store.activeThreadId, isUnread = (t.unread || 0) > 0, init = initials(t.name), avatarClass = isActive ? 'bg-blue-600 text-white' : (isUnread ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'), selected = store.selectedThreads.has(t.id), urgentClass = t.isUrgent ? 'border-l-4 border-l-rose-500 bg-rose-50/30' : 'border border-transparent';
-        return `<div onclick="${store.selectMode ? `window.toggleSelectThread('${t.id}',${!selected})` : `window.loadThread('${t.id}')`}" class="group relative p-3 rounded-xl cursor-pointer transition-all ${urgentClass} ${isActive ? 'bg-slate-200 shadow-[0_2px_8px_rgba(0,0,0,0.06)] border-gray-100' : 'hover:bg-gray-50'} ${selected ? 'bg-blue-50/50 border-blue-200' : ''}">${isUnread ? '<div class="absolute top-4 right-4 w-2.5 h-2.5 bg-blue-900 rounded-full ring-2 ring-white shadow-sm"></div>' : ''}${t.isUrgent ? '<div class="absolute top-4 border border-black right-12 text-rose-500 animate-pulse p-2"><i class="fa-solid fa-bell"></i></div>' : ''}${!t.isUrgent && store.pinned.has(t.id) ? '<div class="absolute top-1 right-1 text-amber-400 text-[10px]"><i class="fa-solid fa-star"></i></div>' : ''}<div class="flex items-start gap-3"><div class="relative shrink-0">${store.selectMode ? `<div class="w-10 h-10 flex items-center justify-center"><input type="checkbox" ${selected?'checked':''} class="w-5 h-5 rounded text-blue-600 focus:ring-blue-500"></div>` : `<div class="w-10 h-10 rounded-full ${avatarClass} flex items-center justify-center text-xs font-bold shadow-sm transition-colors">${init}</div>`}</div><div class="flex-1 min-w-0"><div class="flex justify-between items-baseline mb-0.5"><span class="font-bold text-sm ${isUnread ? 'text-gray-900' : 'text-gray-700'} truncate">${escapeHtml(t.name || t.phone)}</span><span class="text-[10px] text-gray-400 ml-2 whitespace-nowrap">${relativeTime(t.lastMessageAtMs)}</span></div><p class="text-xs text-gray-500 truncate h-4 leading-4 opacity-90 font-medium">${escapeHtml(t.lastMessageText || "No messages")}</p>${t.tags && t.tags.length ? `<div class="mt-1.5 flex flex-wrap gap-1">${t.tags.slice(0,3).map(tag => `<span class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 text-[9px] font-bold border border-gray-200">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}</div></div></div>`;
+        return `<div onclick="${store.selectMode ? `window.toggleSelectThread('${t.id}',${!selected})` : `window.loadThread('${t.id}')`}" class="group relative p-3 rounded-xl cursor-pointer transition-all ${urgentClass} ${isActive ? 'bg-slate-200 shadow-[0_2px_8px_rgba(0,0,0,0.06)] border-gray-100' : 'hover:bg-gray-50'} ${selected ? 'bg-blue-50/50 border-blue-200' : ''}">${isUnread ? '<div class="absolute top-4 right-4 w-2.5 h-2.5 bg-blue-600 rounded-full ring-2 ring-white shadow-sm"></div>' : ''}${t.isUrgent ? '<div class="absolute top-4 right-8 text-rose-500 animate-pulse"><i class="fa-solid fa-bell"></i></div>' : ''}${!t.isUrgent && store.pinned.has(t.id) ? '<div class="absolute top-1 right-1 text-amber-400 text-[10px]"><i class="fa-solid fa-star"></i></div>' : ''}<div class="flex items-start gap-3"><div class="relative shrink-0">${store.selectMode ? `<div class="w-10 h-10 flex items-center justify-center"><input type="checkbox" ${selected?'checked':''} class="w-5 h-5 rounded text-blue-600 focus:ring-blue-500"></div>` : `<div class="w-10 h-10 rounded-full ${avatarClass} flex items-center justify-center text-xs font-bold shadow-sm transition-colors">${init}</div>`}</div><div class="flex-1 min-w-0"><div class="flex justify-between items-baseline mb-0.5"><span class="font-bold text-sm ${isUnread ? 'text-gray-900' : 'text-gray-700'} truncate">${escapeHtml(t.name || t.phone)}</span><span class="text-[10px] text-gray-400 ml-2 whitespace-nowrap">${relativeTime(t.lastMessageAtMs)}</span></div><p class="text-xs text-gray-500 truncate h-4 leading-4 opacity-90 font-medium">${escapeHtml(t.lastMessageText || "No messages")}</p>${t.tags && t.tags.length ? `<div class="mt-1.5 flex flex-wrap gap-1">${t.tags.slice(0,3).map(tag => `<span class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 text-[9px] font-bold border border-gray-200">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}</div></div></div>`;
     }).join("");
     updateBulkBar();
   };
 
-  // Bulk / Selection
   window.toggleSelectThread = (id, check) => { if(store.selectMode) { if(check) store.selectedThreads.add(id); else store.selectedThreads.delete(id); updateBulkBar(); window.renderThreadList(); } };
   window.toggleSelectMode = () => { store.selectMode = !store.selectMode; store.selectedThreads.clear(); window.renderThreadList(); };
   function updateBulkBar() { const b = document.getElementById("bulkBar"); if (store.selectMode && store.selectedThreads.size > 0) { b.classList.remove("hidden"); document.getElementById("bulkCount").innerText = store.selectedThreads.size; } else b.classList.add("hidden"); }
@@ -502,7 +484,6 @@
   window.bulkDeleteThreads = async () => { if(confirm("Delete selected?")) { await Promise.all([...store.selectedThreads].map(id=>deleteDoc(getThreadDoc(id)))); window.clearBulkSelection(); }};
   window.bulkExportCsv = async () => { const ids = [...store.selectedThreads]; if (!ids.length) return; let csv = "ThreadId,Phone,Name,Tags,Unread,LastMessageAt\n"; ids.forEach(id => { const t = store.threads.find(x => x.id === id) || {}; csv += `"${id}","${(t.phone || "")}","${(t.name || "").replace(/"/g,'""')}","${(t.tags||[]).join("|").replace(/"/g,'""')}","${t.unread||0}","${new Date(t.lastMessageAtMs||0).toLocaleString()}"\n`; }); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `threads_export_${Date.now()}.csv`; document.body.appendChild(a); a.click(); a.remove(); };
 
-  // Chat
   function renderMedia(urls) { if(!urls || !urls.length) return ""; return `<div class="flex flex-col gap-2 mt-2">` + urls.map(u => { const isImg = /\.(png|jpe?g|gif|webp|bmp)(\?|$)/i.test(u); if (isImg) return `<a href="${u}" target="_blank"><img src="${u}" class="max-h-48 rounded-lg border bg-white object-cover shadow-sm"></a>`; return `<a href="${u}" target="_blank" class="flex items-center gap-2 p-2 bg-white/50 border rounded-lg text-xs hover:bg-white"><i class="fa-solid fa-paperclip"></i> Attachment</a>`; }).join("") + `</div>`; }
   window.loadThread = async function (threadId) {
       if (unsubMessages) { unsubMessages(); unsubMessages = null; } store.activeThreadId = threadId; store.activeThread = store.threads.find(t => t.id === threadId);
@@ -531,10 +512,11 @@
 
   function refreshDetailsPanel() { const t = store.activeThread; if(!t) return; document.getElementById("detailsName").innerText = t.name||t.phone; document.getElementById("detailsPhone").innerText = t.phone; document.getElementById("detailsTagsInput").value = (t.tags||[]).join(", "); document.getElementById("detailsNotes").value = t.notes||""; document.getElementById("detailsFlags").value = (t.flags||[]).join(", "); document.getElementById("detailsUnread").innerText = t.unread||0; document.getElementById("detailsLastSeen").innerText = relativeTime(t.lastMessageAtMs); const ban = document.getElementById("flagsBanner"); if(t.flags && t.flags.length) { ban.classList.remove("hidden"); ban.classList.add("flex"); document.getElementById("flagsText").innerText = t.flags.join(", "); } else { ban.classList.add("hidden"); ban.classList.remove("flex"); } }
 
-  // Actions
   window.toggleUrgentThread = async () => { if(!store.activeThreadId) return; const t = store.threads.find(x => x.id === store.activeThreadId); const newState = !t.isUrgent; t.isUrgent = newState; window.loadThread(store.activeThreadId); window.renderThreadList(); try { await updateDoc(getThreadDoc(store.activeThreadId), { isUrgent: newState }); window.showToast(newState ? "Marked Urgent" : "Marked Normal"); } catch(e) { console.error(e); } };
   window.toggleUrgentOnly = () => { store.onlyUrgent = !store.onlyUrgent; window.renderThreadList(); }; window.toggleUnreadOnly = () => { store.onlyUnread = !store.onlyUnread; saveLocalSettings(); window.renderThreadList(); }; window.togglePinnedOnly = () => { store.onlyPinned = !store.onlyPinned; saveLocalSettings(); window.renderThreadList(); };
-  window.sendMessage = async () => { const inp = document.getElementById("msgInput"); const txt = inp.value.trim(); if((!txt && !store.pendingMedia.length) || !store.activeThreadId) return; const btn = document.getElementById("sendBtn"); btn.disabled = true; try { let mediaUrls = []; if(store.pendingMedia.length) { mediaUrls = await Promise.all(store.pendingMedia.map(async (file, i) => { const ref = storageRef(storage, `mms/${SHARED_ORG_ID}/${store.activeThreadId}/${Date.now()}_${i}`); const snap = await uploadBytesResumable(ref, file); return getDownloadURL(snap.ref); })); } const p = new URLSearchParams(); p.append("to", store.activeThread.phone || store.activeThread.id); p.append("body", txt); mediaUrls.forEach(u => p.append("mediaUrl", u)); await fetch(TWILIO_SEND_URL, { method: "POST", body: p }); const sid = `loc-${Date.now()}`; await setDoc(doc(getMsgsCol(store.activeThreadId), sid), { body: txt, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls }); await updateDoc(getThreadDoc(store.activeThreadId), { lastMessageText: txt || "[Attachment]", lastMessageAtMs: Date.now() }); inp.value = ""; store.pendingMedia = []; updateMmsStrip(); scrollToBottom(); } catch(e) { console.error(e); window.showToast("Send failed", "error"); } finally { btn.disabled = false; } };
+  window.sendMessage = async () => { const inp = document.getElementById("msgInput"); const txt = inp.value.trim(); if((!txt && !store.pendingMedia.length) || !store.activeThreadId) return; const btn = document.getElementById("sendBtn"); btn.disabled = true; try { 
+    if(txt.toLowerCase().includes("call it a day")) { await addDoc(collection(db, "organizations", SHARED_ORG_ID, "logs"), { type:"end_shift", threadId: store.activeThreadId, threadName: store.activeThread.name||"Unknown", phone:store.activeThread.phone, message:txt, createdAt: serverTimestamp() }); window.showToast("Logged: End of Shift"); }
+    let mediaUrls = []; if(store.pendingMedia.length) { mediaUrls = await Promise.all(store.pendingMedia.map(async (file, i) => { const ref = storageRef(storage, `mms/${SHARED_ORG_ID}/${store.activeThreadId}/${Date.now()}_${i}`); const snap = await uploadBytesResumable(ref, file); return getDownloadURL(snap.ref); })); } const p = new URLSearchParams(); p.append("to", store.activeThread.phone || store.activeThread.id); p.append("body", txt); mediaUrls.forEach(u => p.append("mediaUrl", u)); await fetch(TWILIO_SEND_URL, { method: "POST", body: p }); const sid = `loc-${Date.now()}`; await setDoc(doc(getMsgsCol(store.activeThreadId), sid), { body: txt, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls }); await updateDoc(getThreadDoc(store.activeThreadId), { lastMessageText: txt || "[Attachment]", lastMessageAtMs: Date.now() }); inp.value = ""; store.pendingMedia = []; updateMmsStrip(); scrollToBottom(); } catch(e) { console.error(e); window.showToast("Send failed", "error"); } finally { btn.disabled = false; } };
   window.upsertThread = async (p,n,t) => { const c = normalizePhone(p); if(!c) return; await setDoc(getThreadDoc(c), { id:c, phone:c, name:n||c, tags:t||[], createdAt: serverTimestamp(), lastMessageAtMs: Date.now(), unread:0 }, {merge:true}); };
   window.deleteActiveThread = async () => { if(confirm("Delete thread?")) { await deleteDoc(getThreadDoc(store.activeThreadId)); store.activeThreadId = null; document.getElementById("messageList").innerHTML=""; document.getElementById("welcomeState").classList.remove("hidden"); window.renderThreadList(); }};
   window.deleteSingleMessage = async (tid, did, sid) => { if(confirm("Delete message?")) { if(sid) fetch(TWILIO_DELETE_MSG_URL, {method:"POST", body:JSON.stringify({sid})}).catch(()=>{}); await deleteDoc(doc(getMsgsCol(tid), did)); }};
@@ -561,6 +543,21 @@
   function renderCommandList() { const list = document.getElementById("cmdList"); list.innerHTML = ""; store.cmdItems.forEach((it, idx) => { const active = idx === store.cmdIndex; list.innerHTML += `<button onclick="store.cmdIndex=${idx}; window.runCommandSelection()" class="w-full text-left p-3 flex items-center gap-3 hover:bg-slate-50 ${active?"bg-blue-50":""}"><div class="w-8 h-8 rounded border flex items-center justify-center text-slate-500"><i class="fa-solid ${it.icon}"></i></div><div class="flex-1 min-w-0"><div class="text-sm font-bold text-slate-800 truncate">${escapeHtml(it.label)}</div><div class="text-[11px] text-slate-400 truncate">${escapeHtml(it.hint)}</div></div></button>`; }); }
   window.runCommandSelection = () => { const it=store.cmdItems[store.cmdIndex]; if(it){ window.closeCommandPalette(); it.run?.(); }}; window.openCommandPalette = (p="") => { document.getElementById("commandModal").classList.remove("hidden"); document.getElementById("commandModal").classList.add("flex"); const i=document.getElementById("cmdInput"); i.value=p; store.cmdItems=buildCommandItems(p); store.cmdIndex=0; renderCommandList(); setTimeout(()=>i.focus(),50); }; document.getElementById("cmdInput").addEventListener("input", e => { store.cmdItems=buildCommandItems(e.target.value); store.cmdIndex=0; renderCommandList(); }); document.getElementById("cmdInput").addEventListener("keydown", e => { if(e.key==="ArrowDown"){ e.preventDefault(); store.cmdIndex=clamp(store.cmdIndex+1,0,store.cmdItems.length-1); renderCommandList(); } if(e.key==="ArrowUp"){ e.preventDefault(); store.cmdIndex=clamp(store.cmdIndex+1,0,store.cmdItems.length-1); renderCommandList(); } if(e.key==="Enter"){ e.preventDefault(); window.runCommandSelection(); } }); document.addEventListener("keydown", (e) => { if(e.key==="Escape") closeAllModals(); if((e.metaKey||e.ctrlKey) && e.key==="k") { e.preventDefault(); window.openCommandPalette(); } });
 
+  // Logbook
+  window.openLogbook = async () => {
+      document.getElementById("logbookModal").classList.remove("hidden"); document.getElementById("logbookModal").classList.add("flex");
+      const tbody = document.getElementById("logbookList"); tbody.innerHTML = '<tr><td colspan="4" class="p-6 text-center text-gray-400">Loading logs...</td></tr>';
+      const q = query(collection(db, "organizations", SHARED_ORG_ID, "logs"), orderBy("createdAt", "desc"), limit(50));
+      const snap = await getDocs(q); tbody.innerHTML = "";
+      if (snap.empty) { document.getElementById("logbookEmpty").classList.remove("hidden"); return; }
+      document.getElementById("logbookEmpty").classList.add("hidden");
+      snap.forEach(d => {
+          const log = d.data(); const date = new Date(log.createdAt?.toMillis?.() || Date.now());
+          tbody.innerHTML += `<tr class="hover:bg-slate-50 transition"><td class="py-3 px-6 border-b border-gray-50 text-xs font-mono text-slate-500"><div class="font-bold text-slate-700">${date.toLocaleDateString()}</div><div>${date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div></td><td class="py-3 px-6 border-b border-gray-50"><div class="font-bold text-sm text-slate-800">${escapeHtml(log.threadName)}</div></td><td class="py-3 px-6 border-b border-gray-50 text-xs text-slate-500 font-mono">${log.phone}</td><td class="py-3 px-6 border-b border-gray-50 text-right"><button onclick="window.loadThread('${log.threadId}'); window.closeLogbook()" class="text-xs font-bold text-blue-600 hover:underline">View Chat <i class="fa-solid fa-arrow-right ml-1"></i></button></td></tr>`;
+      });
+  };
+  window.closeLogbook = () => { document.getElementById("logbookModal").classList.add("hidden"); document.getElementById("logbookModal").classList.remove("flex"); };
+
   // Init
   (async function init() {
       initMobileSidebarState(); loadLocalSettings();
@@ -573,14 +570,12 @@
               s.forEach(d => {
                   const t = d.data();
                   store.threads.push(t);
-                  if(!store.isFirstLoad) {
-                      // NEW LOGIC: Only notify if thread time is newer than anything we knew about
-                      if(t.lastMessageAtMs > store.maxKnownTime && (t.unread||0) > 0) {
-                          store.maxKnownTime = t.lastMessageAtMs;
-                          if (document.hidden || store.activeThreadId !== t.id) {
-                              document.getElementById("notifSound")?.play().catch(()=>{});
-                              sendBrowserNotification(`New from ${t.name||t.phone}`, t.lastMessageText || "Attachment", t.id);
-                          }
+                  // Notification Logic
+                  if(!store.isFirstLoad && (t.unread||0) > 0 && t.lastMessageAtMs > store.maxKnownTime) {
+                      store.maxKnownTime = t.lastMessageAtMs;
+                      if (document.hidden || store.activeThreadId !== t.id) {
+                          document.getElementById("notifSound")?.play().catch(()=>{});
+                          sendBrowserNotification(`New from ${t.name||t.phone}`, t.lastMessageText || "Attachment", t.id);
                       }
                   }
                   if(t.lastMessageAtMs > store.maxKnownTime) store.maxKnownTime = t.lastMessageAtMs;
