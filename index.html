@@ -149,8 +149,8 @@
             <span id="activeUnreadPill" class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100">New</span>
           </div>
           <div class="flex items-center gap-2 text-xs text-gray-400 min-w-0 h-4">
-             <span id="activeContactPhone" class="truncate font-mono tracking-tight"></span>
-             <div id="activeTags" class="flex gap-1 flex-wrap"></div>
+              <span id="activeContactPhone" class="truncate font-mono tracking-tight"></span>
+              <div id="activeTags" class="flex gap-1 flex-wrap"></div>
           </div>
         </div>
       </div>
@@ -212,7 +212,7 @@
                 <input type="file" id="mmsFileInput" class="hidden" multiple accept="image/*,video/*,audio/*,application/pdf" onchange="window.handleMmsFiles(this)">
                 <textarea id="msgInput" rows="1" class="flex-1 bg-transparent border-none focus:ring-0 text-gray-800 text-sm py-3 px-2 resize-none max-h-48 placeholder-gray-400" placeholder="Type a message..."></textarea>
                 <div class="flex items-center gap-1 pb-1 shrink-0">
-                     <div class="relative">
+                      <div class="relative">
                         <select id="templateSelect" onchange="window.insertTemplate()" class="absolute inset-0 opacity-0 z-10 cursor-pointer w-full h-full">
                             <option value="">Template...</option>
                             <option value="Please sign into your tablet.">Tablet Login</option>
@@ -221,8 +221,8 @@
                             <option value="Call dispatch when you can.">Call Dispatch</option>
                         </select>
                         <button class="p-2 text-gray-400 hover:text-blue-600 transition rounded-full hover:bg-gray-100" title="Templates"><i class="fa-regular fa-file-lines"></i></button>
-                     </div>
-                     <button onclick="window.sendMessage()" id="sendBtn" class="p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-md transition transform hover:scale-105 ml-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"><i class="fa-solid fa-paper-plane text-xs"></i></button>
+                      </div>
+                      <button onclick="window.sendMessage()" id="sendBtn" class="p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-md transition transform hover:scale-105 ml-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"><i class="fa-solid fa-paper-plane text-xs"></i></button>
                 </div>
             </div>
             <div class="flex justify-between mt-1 px-3">
@@ -247,12 +247,12 @@
       </div>
       <div class="p-6 space-y-6">
           <div>
-             <div class="flex justify-between items-center mb-2"><h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Tags</h4><button onclick="window.saveDetailsTags()" class="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 font-bold hover:bg-blue-100">SAVE</button></div>
-             <input id="detailsTagsInput" class="w-full bg-slate-50 border-transparent rounded-lg text-xs px-3 py-2.5 focus:bg-white focus:ring-2 focus:ring-blue-100 transition outline-none border" placeholder="e.g. Driver, VIP, New">
+              <div class="flex justify-between items-center mb-2"><h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Tags</h4><button onclick="window.saveDetailsTags()" class="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 font-bold hover:bg-blue-100">SAVE</button></div>
+              <input id="detailsTagsInput" class="w-full bg-slate-50 border-transparent rounded-lg text-xs px-3 py-2.5 focus:bg-white focus:ring-2 focus:ring-blue-100 transition outline-none border" placeholder="e.g. Driver, VIP, New">
           </div>
           <div>
-             <div class="flex justify-between items-center mb-2"><h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Notes</h4><button onclick="window.saveDetailsNotes()" class="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 font-bold hover:bg-blue-100">SAVE</button></div>
-             <textarea id="detailsNotes" class="w-full bg-amber-50/40 border-amber-100 rounded-lg text-xs px-3 py-2 h-24 focus:ring-2 focus:ring-amber-100 resize-none text-gray-600 outline-none border focus:bg-white transition" placeholder="Add specific dispatch notes..."></textarea>
+              <div class="flex justify-between items-center mb-2"><h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Notes</h4><button onclick="window.saveDetailsNotes()" class="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 font-bold hover:bg-blue-100">SAVE</button></div>
+              <textarea id="detailsNotes" class="w-full bg-amber-50/40 border-amber-100 rounded-lg text-xs px-3 py-2 h-24 focus:ring-2 focus:ring-amber-100 resize-none text-gray-600 outline-none border focus:bg-white transition" placeholder="Add specific dispatch notes..."></textarea>
           </div>
           <div>
             <div class="flex justify-between items-center mb-2"><h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Flags</h4></div>
@@ -484,7 +484,20 @@
   window.bulkDeleteThreads = async () => { if(confirm("Delete selected?")) { await Promise.all([...store.selectedThreads].map(id=>deleteDoc(getThreadDoc(id)))); window.clearBulkSelection(); }};
   window.bulkExportCsv = async () => { const ids = [...store.selectedThreads]; if (!ids.length) return; let csv = "ThreadId,Phone,Name,Tags,Unread,LastMessageAt\n"; ids.forEach(id => { const t = store.threads.find(x => x.id === id) || {}; csv += `"${id}","${(t.phone || "")}","${(t.name || "").replace(/"/g,'""')}","${(t.tags||[]).join("|").replace(/"/g,'""')}","${t.unread||0}","${new Date(t.lastMessageAtMs||0).toLocaleString()}"\n`; }); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `threads_export_${Date.now()}.csv`; document.body.appendChild(a); a.click(); a.remove(); };
 
-  function renderMedia(urls) { if(!urls || !urls.length) return ""; return `<div class="flex flex-col gap-2 mt-2">` + urls.map(u => { const isImg = /\.(png|jpe?g|gif|webp|bmp)(\?|$)/i.test(u); if (isImg) return `<a href="${u}" target="_blank"><img src="${u}" class="max-h-48 rounded-lg border bg-white object-cover shadow-sm"></a>`; return `<a href="${u}" target="_blank" class="flex items-center gap-2 p-2 bg-white/50 border rounded-lg text-xs hover:bg-white"><i class="fa-solid fa-paperclip"></i> Attachment</a>`; }).join("") + `</div>`; }
+  function renderMedia(urls) { 
+      if(!urls || !urls.length) return ""; 
+      return `<div class="flex flex-col gap-2 mt-2">` + urls.map(u => { 
+          // FIX: Treat Twilio URLs (which contain '/Media/') as images automatically
+          // OR if it has a standard image extension
+          const isTwilio = u.includes("/Media/");
+          const isImgExt = /\.(png|jpe?g|gif|webp|bmp)(\?|$)/i.test(u);
+          
+          if (isTwilio || isImgExt) {
+              return `<a href="${u}" target="_blank"><img src="${u}" class="max-h-48 rounded-lg border bg-white object-cover shadow-sm" onerror="this.style.display='none'"></a>`; 
+          }
+          return `<a href="${u}" target="_blank" class="flex items-center gap-2 p-2 bg-white/50 border rounded-lg text-xs hover:bg-white"><i class="fa-solid fa-paperclip"></i> Attachment</a>`; 
+      }).join("") + `</div>`; 
+  }
   window.loadThread = async function (threadId) {
       if (unsubMessages) { unsubMessages(); unsubMessages = null; } store.activeThreadId = threadId; store.activeThread = store.threads.find(t => t.id === threadId);
       document.getElementById("welcomeState").classList.add("hidden");
@@ -514,9 +527,72 @@
 
   window.toggleUrgentThread = async () => { if(!store.activeThreadId) return; const t = store.threads.find(x => x.id === store.activeThreadId); const newState = !t.isUrgent; t.isUrgent = newState; window.loadThread(store.activeThreadId); window.renderThreadList(); try { await updateDoc(getThreadDoc(store.activeThreadId), { isUrgent: newState }); window.showToast(newState ? "Marked Urgent" : "Marked Normal"); } catch(e) { console.error(e); } };
   window.toggleUrgentOnly = () => { store.onlyUrgent = !store.onlyUrgent; window.renderThreadList(); }; window.toggleUnreadOnly = () => { store.onlyUnread = !store.onlyUnread; saveLocalSettings(); window.renderThreadList(); }; window.togglePinnedOnly = () => { store.onlyPinned = !store.onlyPinned; saveLocalSettings(); window.renderThreadList(); };
-  window.sendMessage = async () => { const inp = document.getElementById("msgInput"); const txt = inp.value.trim(); if((!txt && !store.pendingMedia.length) || !store.activeThreadId) return; const btn = document.getElementById("sendBtn"); btn.disabled = true; try { 
-    if(txt.toLowerCase().includes("call it a day")) { await addDoc(collection(db, "organizations", SHARED_ORG_ID, "logs"), { type:"end_shift", threadId: store.activeThreadId, threadName: store.activeThread.name||"Unknown", phone:store.activeThread.phone, message:txt, createdAt: serverTimestamp() }); window.showToast("Logged: End of Shift"); }
-    let mediaUrls = []; if(store.pendingMedia.length) { mediaUrls = await Promise.all(store.pendingMedia.map(async (file, i) => { const ref = storageRef(storage, `mms/${SHARED_ORG_ID}/${store.activeThreadId}/${Date.now()}_${i}`); const snap = await uploadBytesResumable(ref, file); return getDownloadURL(snap.ref); })); } const p = new URLSearchParams(); p.append("to", store.activeThread.phone || store.activeThread.id); p.append("body", txt); mediaUrls.forEach(u => p.append("mediaUrl", u)); await fetch(TWILIO_SEND_URL, { method: "POST", body: p }); const sid = `loc-${Date.now()}`; await setDoc(doc(getMsgsCol(store.activeThreadId), sid), { body: txt, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls }); await updateDoc(getThreadDoc(store.activeThreadId), { lastMessageText: txt || "[Attachment]", lastMessageAtMs: Date.now() }); inp.value = ""; store.pendingMedia = []; updateMmsStrip(); scrollToBottom(); } catch(e) { console.error(e); window.showToast("Send failed", "error"); } finally { btn.disabled = false; } };
+  
+  // ---------------- UPDATED SEND MESSAGE FUNCTION ----------------
+  window.sendMessage = async () => { 
+    const inp = document.getElementById("msgInput"); 
+    const txt = inp.value.trim(); 
+    if((!txt && !store.pendingMedia.length) || !store.activeThreadId) return; 
+    
+    const btn = document.getElementById("sendBtn"); 
+    btn.disabled = true; 
+    
+    try { 
+        if(txt.toLowerCase().includes("call it a day")) { 
+            await addDoc(collection(db, "organizations", SHARED_ORG_ID, "logs"), { type:"end_shift", threadId: store.activeThreadId, threadName: store.activeThread.name||"Unknown", phone:store.activeThread.phone, message:txt, createdAt: serverTimestamp() }); 
+            window.showToast("Logged: End of Shift"); 
+        }
+        
+        let mediaUrls = []; 
+        if(store.pendingMedia.length) { 
+            // FIXED: Upload media and get download URLs correctly
+            mediaUrls = await Promise.all(store.pendingMedia.map(async (file, i) => { 
+                const ref = storageRef(storage, `mms/${SHARED_ORG_ID}/${store.activeThreadId}/${Date.now()}_${i}_${file.name}`); 
+                const snap = await uploadBytesResumable(ref, file); 
+                return getDownloadURL(snap.ref); 
+            })); 
+        } 
+        
+        // FIXED: Send as JSON so the array is preserved for the backend
+        const payload = {
+            to: store.activeThread.phone || store.activeThread.id,
+            body: txt,
+            mediaUrls: mediaUrls 
+        };
+
+        const res = await fetch(TWILIO_SEND_URL, { 
+            method: "POST", 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload) 
+        }); 
+        
+        if(!res.ok) throw new Error("Twilio API Failed");
+
+        const sid = `loc-${Date.now()}`; 
+        // FIXED: Save mediaUrls to Firestore so it renders immediately
+        await setDoc(doc(getMsgsCol(store.activeThreadId), sid), { 
+            body: txt, 
+            direction: "sent", 
+            createdAt: serverTimestamp(), 
+            sid, 
+            mediaUrls: mediaUrls 
+        }); 
+        
+        await updateDoc(getThreadDoc(store.activeThreadId), { lastMessageText: txt || "[Attachment]", lastMessageAtMs: Date.now() }); 
+        
+        inp.value = ""; 
+        store.pendingMedia = []; 
+        updateMmsStrip(); 
+        scrollToBottom(); 
+    } catch(e) { 
+        console.error(e); 
+        window.showToast("Send failed", "error"); 
+    } finally { 
+        btn.disabled = false; 
+    } 
+  };
+  // ---------------- END UPDATED FUNCTION ----------------
+
   window.upsertThread = async (p,n,t) => { const c = normalizePhone(p); if(!c) return; await setDoc(getThreadDoc(c), { id:c, phone:c, name:n||c, tags:t||[], createdAt: serverTimestamp(), lastMessageAtMs: Date.now(), unread:0 }, {merge:true}); };
   window.deleteActiveThread = async () => { if(confirm("Delete thread?")) { await deleteDoc(getThreadDoc(store.activeThreadId)); store.activeThreadId = null; document.getElementById("messageList").innerHTML=""; document.getElementById("welcomeState").classList.remove("hidden"); window.renderThreadList(); }};
   window.deleteSingleMessage = async (tid, did, sid) => { if(confirm("Delete message?")) { if(sid) fetch(TWILIO_DELETE_MSG_URL, {method:"POST", body:JSON.stringify({sid})}).catch(()=>{}); await deleteDoc(doc(getMsgsCol(tid), did)); }};
