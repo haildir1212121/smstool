@@ -12,18 +12,15 @@
   <style>
     body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; overflow: hidden; }
     
-    /* Custom Scrollbars */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     
-    /* Animations */
     .fade-in { animation: fadeIn 0.15s ease-out forwards; }
     @keyframes fadeIn { from { opacity:0; transform:scale(0.99);} to { opacity:1; transform:scale(1);} }
 
-    /* Chat Bubbles */
     .msg-sent { 
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); 
         color: white; 
@@ -37,7 +34,6 @@
         border-radius: 18px 18px 18px 4px; 
     }
     
-    /* Nav Rail Active State */
     .nav-item.active { background-color: #334155; color: #60a5fa; border-left: 3px solid #60a5fa; }
     .nav-item { border-left: 3px solid transparent; }
   </style>
@@ -49,29 +45,17 @@
 
   <nav class="w-[64px] bg-slate-900 flex flex-col items-center py-4 z-50 shrink-0 shadow-xl">
     <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg mb-6 shadow-lg shadow-blue-900/50">D</div>
-    
     <div class="flex flex-col gap-2 w-full">
-      <button onclick="window.switchView('inbox')" id="nav-inbox" class="nav-item active w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Inbox">
-        <i class="fa-solid fa-inbox text-xl"></i>
-      </button>
-      <button onclick="window.switchView('contacts')" id="nav-contacts" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Directory">
-        <i class="fa-regular fa-address-book text-xl"></i>
-      </button>
-      <button onclick="window.switchView('broadcast')" id="nav-broadcast" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Mass Broadcast">
-        <i class="fa-solid fa-bullhorn text-xl"></i>
-      </button>
-      <button onclick="window.switchView('logs')" id="nav-logs" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Shift Logs">
-        <i class="fa-solid fa-clipboard-check text-xl"></i>
-      </button>
+      <button onclick="window.switchView('inbox')" id="nav-inbox" class="nav-item active w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-solid fa-inbox text-xl"></i></button>
+      <button onclick="window.switchView('contacts')" id="nav-contacts" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-regular fa-address-book text-xl"></i></button>
+      <button onclick="window.switchView('broadcast')" id="nav-broadcast" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-solid fa-bullhorn text-xl"></i></button>
+      <button onclick="window.switchView('logs')" id="nav-logs" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-solid fa-clipboard-check text-xl"></i></button>
     </div>
-
     <div class="flex-1"></div>
-    <button onclick="window.openSettingsModal()" class="w-10 h-10 text-slate-500 hover:text-white transition mb-2" title="Settings"><i class="fa-solid fa-gear"></i></button>
+    <button onclick="window.openSettingsModal()" class="w-10 h-10 text-slate-500 hover:text-white transition mb-2"><i class="fa-solid fa-gear"></i></button>
   </nav>
 
-
   <div id="view-inbox" class="flex-1 flex min-w-0 h-full fade-in">
-    
     <aside class="w-[340px] bg-white border-r border-gray-200 flex flex-col shrink-0 z-20">
       <div class="h-16 px-4 flex items-center border-b border-gray-100 gap-2 shrink-0">
         <div class="relative flex-1">
@@ -80,21 +64,17 @@
         </div>
         <button onclick="window.openNewMsgModal()" class="w-8 h-8 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center shadow-sm transition"><i class="fa-solid fa-plus"></i></button>
       </div>
-      
       <div class="flex flex-col border-b border-gray-50 shrink-0">
           <div class="px-4 py-2 flex gap-2">
             <button onclick="window.toggleUnreadOnly()" id="filterUnread" class="px-3 py-1 rounded-md text-[10px] font-bold border border-gray-200 text-gray-500 hover:bg-gray-50 uppercase transition">Unread</button>
             <button onclick="window.toggleUrgentOnly()" id="filterUrgent" class="px-3 py-1 rounded-md text-[10px] font-bold border border-gray-200 text-gray-500 hover:bg-gray-50 uppercase transition">Urgent</button>
           </div>
-          <div id="tagFilterRow" class="px-4 pb-2 flex gap-2 overflow-x-scroll empty:hidden">
-              </div>
+          <div id="tagFilterRow" class="px-4 pb-2 flex gap-2 overflow-x-auto scrollbar-hide empty:hidden"></div>
       </div>
-
       <div id="contactList" class="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-hide"></div>
     </aside>
 
     <main class="flex-1 flex flex-col bg-slate-50/50 relative min-w-0">
-      
       <header class="h-16 bg-white/80 backdrop-blur border-b border-gray-200 px-6 flex items-center justify-between shrink-0 sticky top-0 z-10">
          <div class="flex items-center gap-3 min-w-0">
              <div id="activeContactAvatar" class="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs shrink-0 shadow-sm border border-slate-300">?</div>
@@ -104,17 +84,15 @@
              </div>
          </div>
          <div class="flex items-center gap-2 text-slate-400">
-             <button onclick="window.toggleUrgentThread()" id="headerUrgentBtn" class="w-8 h-8 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-500 transition" title="Toggle Urgent"><i class="fa-solid fa-bell"></i></button>
+             <button onclick="window.toggleUrgentThread()" id="headerUrgentBtn" class="w-8 h-8 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-500 transition"><i class="fa-solid fa-bell"></i></button>
              <div class="h-4 w-px bg-slate-200 mx-1"></div>
-             <button onclick="window.toggleInfoPanel()" class="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 hover:text-blue-600 transition" title="Toggle Sidebar"><i class="fa-solid fa-circle-info"></i></button>
+             <button onclick="window.toggleInfoPanel()" class="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 hover:text-blue-600 transition"><i class="fa-solid fa-circle-info"></i></button>
          </div>
       </header>
       
       <div id="chatContainer" class="flex-1 overflow-y-auto p-4 md:p-6 scroll-smooth">
          <div id="welcomeState" class="h-full flex flex-col items-center justify-center text-slate-300">
-            <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-slate-100">
-                <i class="fa-regular fa-comments text-3xl opacity-50"></i>
-            </div>
+            <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-slate-100"><i class="fa-regular fa-comments text-3xl opacity-50"></i></div>
             <p class="font-medium text-sm">Select a conversation to start</p>
          </div>
          <div id="messageList" class="max-w-3xl mx-auto space-y-4"></div>
@@ -124,16 +102,13 @@
         <div class="max-w-3xl mx-auto">
             <div id="mmsStrip" class="hidden flex gap-2 pb-2 overflow-x-auto"></div>
             <div id="quickRepliesRow" class="flex gap-2 mb-2 overflow-x-auto scrollbar-hide"></div>
-            
             <div class="flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-2xl p-1.5 focus-within:ring-4 focus-within:ring-blue-50 focus-within:border-blue-300 transition shadow-sm">
-                <button onclick="document.getElementById('mmsFileInput').click()" class="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-white hover:text-blue-500 transition shrink-0" title="Attach"><i class="fa-solid fa-paperclip"></i></button>
+                <button onclick="document.getElementById('mmsFileInput').click()" class="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-white hover:text-blue-500 transition shrink-0"><i class="fa-solid fa-paperclip"></i></button>
                 <input type="file" id="mmsFileInput" class="hidden" multiple accept="image/*,video/*" onchange="window.handleMmsFiles(this)">
-                
                 <textarea id="msgInput" rows="1" class="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2.5 px-2 max-h-32 resize-none text-slate-800 placeholder-slate-400" placeholder="Type a message..."></textarea>
-                
                 <div class="relative shrink-0">
                     <select id="templateSelect" onchange="window.insertTemplate()" class="absolute inset-0 opacity-0 cursor-pointer w-full"><option value="">T</option><option value="Please sign into your tablet.">Login</option><option value="Copy. Thank you.">Copy</option></select>
-                    <button class="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-white hover:text-blue-500 transition" title="Templates"><i class="fa-regular fa-file-lines"></i></button>
+                    <button class="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-white hover:text-blue-500 transition"><i class="fa-regular fa-file-lines"></i></button>
                 </div>
                 <button onclick="window.sendMessage()" id="sendBtn" class="w-9 h-9 flex items-center justify-center rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition transform hover:scale-105 shrink-0"><i class="fa-solid fa-paper-plane text-xs"></i></button>
             </div>
@@ -153,23 +128,14 @@
         </div>
         <div class="p-5 space-y-6">
             <div>
-                <div class="flex justify-between items-center mb-1">
-                    <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tags</label>
-                    <button onclick="window.saveDetailsTags()" class="text-[10px] text-blue-600 font-bold hover:underline">SAVE</button>
-                </div>
+                <div class="flex justify-between items-center mb-1"><label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tags</label><button onclick="window.saveDetailsTags()" class="text-[10px] text-blue-600 font-bold hover:underline">SAVE</button></div>
                 <input id="detailsTagsInput" class="w-full text-xs border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-100 focus:border-blue-300 outline-none bg-slate-50 transition" placeholder="e.g. Driver, VIP">
             </div>
             <div>
-                <div class="flex justify-between items-center mb-1">
-                    <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Notes</label>
-                    <button onclick="window.saveDetailsNotes()" class="text-[10px] text-blue-600 font-bold hover:underline">SAVE</button>
-                </div>
+                <div class="flex justify-between items-center mb-1"><label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Notes</label><button onclick="window.saveDetailsNotes()" class="text-[10px] text-blue-600 font-bold hover:underline">SAVE</button></div>
                 <textarea id="detailsNotes" class="w-full text-xs bg-amber-50 border border-amber-100 rounded-lg p-3 h-24 resize-none focus:bg-white focus:ring-2 focus:ring-amber-100 outline-none transition text-slate-600 placeholder-amber-300" placeholder="Dispatch notes..."></textarea>
             </div>
-            <div>
-                <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Media</label>
-                <div id="detailsAttachments" class="grid grid-cols-3 gap-2"></div>
-            </div>
+            <div><label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Media</label><div id="detailsAttachments" class="grid grid-cols-3 gap-2"></div></div>
         </div>
     </aside>
   </div>
@@ -203,12 +169,11 @@
               <div class="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-lg shadow-sm border border-blue-100"><i class="fa-solid fa-bullhorn"></i></div>
               <div><h2 class="text-xl font-bold text-slate-800 tracking-tight">Mass Broadcast</h2><p class="text-sm text-slate-500">Send an announcement to all contacts</p></div>
           </div>
-          
           <div class="flex-1 p-8 flex flex-col bg-slate-50/50">
               <div id="massComposeArea" class="flex flex-col h-full">
                   <div class="bg-blue-50 text-blue-900 p-4 rounded-xl text-sm mb-6 border border-blue-100 flex gap-3 shadow-sm items-start">
                       <i class="fa-solid fa-circle-info mt-0.5 text-blue-500"></i>
-                      <span>You are targeting <strong id="massCountDisplay">0</strong> contacts. Messages are sent sequentially to prevent carrier filtering.</span>
+                      <span>You are targeting <strong id="massCountDisplay">0</strong> contacts. Messages are sent sequentially.</span>
                   </div>
                   <label class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Message Content</label>
                   <textarea id="massMsgInput" class="flex-1 bg-white border border-gray-200 rounded-xl p-4 resize-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none text-sm transition shadow-sm" placeholder="Type your announcement here..."></textarea>
@@ -216,7 +181,6 @@
                       <button onclick="window.startBroadcast()" class="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition transform hover:-translate-y-1 active:scale-95">Send Broadcast <i class="fa-solid fa-paper-plane ml-2"></i></button>
                   </div>
               </div>
-
               <div id="massProgressArea" class="hidden flex-col h-full justify-between">
                   <div>
                     <div class="text-center mb-8 mt-4">
@@ -225,9 +189,7 @@
                     </div>
                     <div class="w-full bg-gray-200 rounded-full h-3 mb-6 overflow-hidden shadow-inner"><div id="massProgressBar" class="bg-blue-600 h-full w-0 transition-all duration-300 relative overflow-hidden"><div class="absolute inset-0 bg-white/20 animate-pulse"></div></div></div>
                   </div>
-                  
                   <div id="massLogBox" class="h-48 bg-slate-900 rounded-xl p-4 font-mono text-[10px] text-emerald-400 overflow-y-auto mb-4 border border-slate-700 shadow-inner"></div>
-                  
                   <button onclick="window.cancelBroadcast()" class="w-full py-3 border-2 border-rose-100 text-rose-500 font-bold rounded-xl hover:bg-rose-50 transition uppercase tracking-wide text-xs">Cancel / Stop</button>
               </div>
           </div>
@@ -266,12 +228,10 @@
   <div id="settingsModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
       <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold">Settings</h3><button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div>
-        
         <div class="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between">
            <div><div class="font-bold text-sm text-blue-900">Notifications</div><div class="text-xs text-blue-600">Sound & Popups</div></div>
            <button onclick="window.requestNotifPerm()" class="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-blue-700">Enable</button>
         </div>
-
         <label class="text-xs font-bold text-gray-400 uppercase tracking-wider">Canned Replies (One per line)</label>
         <textarea id="cannedRepliesInput" class="w-full border border-gray-200 p-3 mt-1 mb-4 h-32 rounded-xl text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50"></textarea>
         <div class="flex gap-2">
@@ -282,7 +242,6 @@
   </div>
 
 <script type="module">
-  // --- CONFIG ---
   const SMS_BACKEND_BASE = "https://sms-backend-3488.twil.io";
   const SHARED_ORG_ID = "dispatch_team_main";
   const TWILIO_SEND_URL = `${SMS_BACKEND_BASE}/send-sms`;
@@ -290,13 +249,12 @@
   
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-  import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp, where, getDocs } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp, where, getDocs, increment } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
   import { getStorage, ref as storageRef, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js";
 
   const app = initializeApp({ apiKey: "AIzaSyCaypEoug2f7OTJjKOdkkJPaZDypcr3NF8", authDomain: "sms-dlx.firebaseapp.com", projectId: "sms-dlx", storageBucket: "sms-dlx.firebasestorage.app", messagingSenderId: "522453095698", appId: "1:522453095698:web:ea217285e6e5160ee4cfcb" });
   const auth = getAuth(app); const db = getFirestore(app); const storage = getStorage(app);
 
-  // --- STORE ---
   let store = { 
       threads: [], activeThreadId: null, activeThread: null, 
       pinned: new Set(), drafts: {}, cannedReplies: [],
@@ -304,26 +262,22 @@
       isPolling: false, pendingMedia: [], isFirstLoad: true,
       onlyUnread: false, onlyUrgent: false, 
       tagFilter: null, 
-      notifQueue: {}, notifTimer: null // Notification Buffers
+      notifQueue: {}, notifTimer: null 
   };
 
-  // --- HELPERS ---
   const escapeHtml = (t) => { const d = document.createElement("div"); d.textContent = t ?? ""; return d.innerHTML; };
   const initials = (s) => (s || "?").trim().slice(0, 2).toUpperCase() || "?";
   const formatTime = (ms) => (!ms) ? "" : new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   function relativeTime(ms) { if (!ms) return ""; const diff = Date.now() - ms; const min = 60000; if (diff < min) return "now"; if (diff < 60*min) return Math.floor(diff/min) + "m"; if (diff < 24*60*min) return Math.floor(diff/(60*min)) + "h"; return Math.floor(diff/(24*60*min)) + "d"; }
   window.showToast = (msg, type) => { const t = document.getElementById("toast"); document.getElementById("toastMsg").innerText=msg; document.getElementById("toastIcon").className = type==="error"?"fa-solid fa-circle-exclamation text-rose-400":"fa-solid fa-check-circle text-emerald-400"; t.classList.remove("translate-y-20","opacity-0"); setTimeout(()=>t.classList.add("translate-y-20","opacity-0"), 2500); };
   
-  // --- NOTIFICATIONS (GROUPED) ---
   window.requestNotifPerm = () => { Notification.requestPermission().then(p => { if(p==="granted") { window.showToast("Notifications Enabled"); new Notification("Test",{body:"System Ready"}); } }); };
   
   function queueNotification(threadId, name, body) {
       if(document.visibilityState === 'visible' && store.activeThreadId === threadId) return;
-      
       if (!store.notifQueue[threadId]) store.notifQueue[threadId] = { name: name, count: 0, bodies: [] };
       store.notifQueue[threadId].count++;
       store.notifQueue[threadId].bodies.push(body);
-
       if (store.notifTimer) clearTimeout(store.notifTimer);
       store.notifTimer = setTimeout(() => {
           Object.values(store.notifQueue).forEach(item => {
@@ -335,7 +289,45 @@
               }
           });
           store.notifQueue = {}; store.notifTimer = null;
-      }, 3000); // 3-second buffer
+      }, 3000); 
+  }
+
+  // --- CORE FIX: POLLER LOGIC ---
+  async function poll() {
+      if(store.isPolling) return; store.isPolling = true;
+      try {
+          const res = await fetch(`${TWILIO_GET_URL}?after=${Date.now()-15000}`); const data = await res.json();
+          if(data.success) {
+            data.messages.filter(m=>m.direction==="inbound" && !store.lastInboundSidSeen.has(m.sid)).forEach(async m => {
+                store.lastInboundSidSeen.add(m.sid);
+                const phone = m.from.replace(/\D/g,'').length===10?`+1${m.from.replace(/\D/g,'')}`:m.from;
+                const msgTime = new Date(m.dateCreated).getTime();
+                
+                // 1. Save msg
+                await setDoc(doc(getMsgsCol(phone), m.sid), { body:m.body, direction:"received", createdAt: serverTimestamp(), sid:m.sid, mediaUrls: m.mediaUrls||[] });
+                
+                const t = store.threads.find(x => x.id === phone);
+                const name = t ? (t.name || phone) : phone;
+                
+                // 2. Queue notification if we aren't viewing it
+                const isViewing = (store.activeThreadId === phone && document.visibilityState === 'visible');
+                if (!isViewing) queueNotification(phone, name, m.body);
+
+                // 3. COMPARE TIMESTAMPS: Only update LastMessage if this inbound message is actually newer
+                const currentLastMs = t ? (t.lastMessageAtMs || 0) : 0;
+                
+                if (msgTime > currentLastMs) {
+                    await setDoc(getThreadDoc(phone), { 
+                        lastMessageText: m.body, 
+                        lastMessageAtMs: msgTime, 
+                        unread: isViewing ? 0 : increment(1) 
+                    }, { merge: true });
+                } else {
+                    // It's an old message (we probably replied already). Don't update snippet/unread.
+                }
+            });
+          }
+      } catch(e){} finally { store.isPolling=false; }
   }
 
   // --- NAVIGATION ---
@@ -350,7 +342,7 @@
   };
   window.toggleInfoPanel = () => { const p = document.getElementById("infoPanel"); p.classList.toggle("hidden"); };
 
-  // --- CORE CHAT LOGIC ---
+  // --- CORE CHAT ---
   let unsubMessages = null;
   const getThreadsCol = () => collection(db, "organizations", SHARED_ORG_ID, "threads");
   const getThreadDoc  = (id) => doc(db, "organizations", SHARED_ORG_ID, "threads", id);
@@ -361,11 +353,9 @@
       const tagRow = document.getElementById("tagFilterRow");
       const s = (document.getElementById("searchContacts").value || "").toLowerCase();
       
-      // Update Styles
       document.getElementById("filterUnread").className = `px-3 py-1 rounded-md text-[10px] font-bold border uppercase transition ${store.onlyUnread?'bg-blue-600 text-white border-blue-600':'bg-white border-gray-200 text-gray-500'}`;
       document.getElementById("filterUrgent").className = `px-3 py-1 rounded-md text-[10px] font-bold border uppercase transition ${store.onlyUrgent?'bg-rose-500 text-white border-rose-500':'bg-white border-gray-200 text-gray-500'}`;
 
-      // Render Tag Bar
       const allTags = new Set(); store.threads.forEach(t => (t.tags||[]).forEach(tag => allTags.add(tag)));
       if(allTags.size > 0) {
           tagRow.classList.remove("hidden");
@@ -377,7 +367,6 @@
           tagRow.innerHTML = tagHtml;
       } else { tagRow.classList.add("hidden"); }
 
-      // Filter & Sort
       let list = store.threads.slice().sort((a,b) => (b.lastMessageAtMs||0)-(a.lastMessageAtMs||0));
       list = list.filter(t => {
           if (s && !`${t.name} ${t.phone}`.toLowerCase().includes(s)) return false;
@@ -414,19 +403,19 @@
       if(unsubMessages) unsubMessages();
       store.activeThreadId = id; store.activeThread = store.threads.find(t=>t.id===id);
       
+      if(store.activeThread) { store.activeThread.unread = 0; window.renderThreadList(); }
+
       document.getElementById("welcomeState").classList.add("hidden");
       document.getElementById("activeContactName").innerText = store.activeThread?.name || id;
       document.getElementById("activeContactPhone").innerText = store.activeThread?.phone || id;
       document.getElementById("activeContactAvatar").innerText = initials(store.activeThread?.name);
-      
-      // Update Info Panel
       document.getElementById("detailsName").innerText = store.activeThread?.name || id;
       document.getElementById("detailsPhone").innerText = store.activeThread?.phone;
       document.getElementById("detailsTagsInput").value = (store.activeThread?.tags||[]).join(", ");
       document.getElementById("detailsNotes").value = store.activeThread?.notes||"";
       document.getElementById("msgInput").value = store.drafts[id] || "";
-      
       document.getElementById("headerUrgentBtn").className = store.activeThread.isUrgent ? "w-8 h-8 flex items-center justify-center rounded bg-rose-100 text-rose-500" : "w-8 h-8 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-500 text-slate-400 transition";
+      
       try { await updateDoc(getThreadDoc(id), { unread: 0, lastReadAtMs: Date.now() }); } catch {}
       
       const q = query(getMsgsCol(id), orderBy("createdAt", "asc"));
@@ -436,10 +425,8 @@
           s.forEach(d => {
               const m = d.data(); const isMe = m.direction === "sent";
               if(m.mediaUrls) m.mediaUrls.forEach(u=>atts.push(u));
-              
               let mediaHtml = "";
               if(m.mediaUrls && m.mediaUrls.length) mediaHtml = `<div class="flex flex-col gap-2 mt-2">` + m.mediaUrls.map(u => `<a href="${u}" target="_blank"><img src="${u}" class="rounded-lg max-h-48 border bg-white object-cover"></a>`).join("") + `</div>`;
-              
               div.innerHTML += `<div class="flex w-full ${isMe ? "justify-end" : "justify-start"} fade-in">
                 <div class="max-w-[85%] lg:max-w-[70%]">
                     <div class="px-4 py-2.5 text-sm shadow-sm ${isMe ? 'msg-sent' : 'msg-received'}">
@@ -452,15 +439,12 @@
           div.scrollTop = div.scrollHeight; document.getElementById("chatContainer").scrollTop = document.getElementById("chatContainer").scrollHeight;
           document.getElementById("detailsAttachments").innerHTML = atts.slice(0,9).map(u => `<a href="${u}" target="_blank" class="block h-20 rounded-lg bg-slate-50 border bg-cover bg-center" style="background-image:url('${u}')"></a>`).join("");
       });
-      window.renderThreadList();
   };
 
-  // --- SENDING ---
   window.sendMessage = async () => {
     const txt = document.getElementById("msgInput").value.trim();
     if((!txt && !store.pendingMedia.length) || !store.activeThreadId) return;
     const btn = document.getElementById("sendBtn"); btn.disabled = true;
-
     try {
         let mediaUrls = [];
         if(store.pendingMedia.length) {
@@ -469,41 +453,33 @@
                 return getDownloadURL(snap.ref); 
              }));
         }
-
         const res = await fetch(TWILIO_SEND_URL, { 
             method: "POST", headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ to: store.activeThread.phone, body: txt, mediaUrls }) 
         });
         if(!res.ok) throw new Error("API Fail");
-        
         const sid = `loc-${Date.now()}`;
         await setDoc(doc(getMsgsCol(store.activeThreadId), sid), { body: txt, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls });
         await updateDoc(getThreadDoc(store.activeThreadId), { lastMessageText: txt || "[Attachment]", lastMessageAtMs: Date.now() });
-        
         document.getElementById("msgInput").value = ""; store.pendingMedia=[]; window.updateMmsStrip();
     } catch(e) { console.error(e); window.showToast("Send failed", "error"); }
     finally { btn.disabled = false; }
   };
   
-  // --- BROADCAST ---
   let broadcastActive = false;
   window.startBroadcast = async () => {
       const txt = document.getElementById("massMsgInput").value.trim();
       const contacts = store.threads.filter(t => t.phone && t.phone.length > 5);
       if(!txt || !contacts.length || !confirm(`Send to ${contacts.length} people?`)) return;
-      
       broadcastActive = true;
       document.getElementById("massComposeArea").classList.add("hidden");
       document.getElementById("massProgressArea").classList.remove("hidden");
       document.getElementById("massProgressArea").classList.add("flex");
       const log = document.getElementById("massLogBox");
       const pBar = document.getElementById("massProgressBar");
-      
       document.getElementById("massTotalCount").innerText = contacts.length;
       let sent = 0;
-      
       await addDoc(collection(db, "organizations", SHARED_ORG_ID, "logs"), { type:"broadcast_start", count: contacts.length, message:txt, createdAt: serverTimestamp() });
-      
       for(let i=0; i<contacts.length; i++) {
           if(!broadcastActive) break;
           const t = contacts[i];
@@ -520,7 +496,7 @@
              } else { log.innerHTML += `<div class="text-rose-400">Failed: ${t.phone}</div>`; }
           } catch(e) { log.innerHTML += `<div class="text-rose-400">Error: ${e.message}</div>`; }
           log.scrollTop = log.scrollHeight;
-          await new Promise(r => setTimeout(r, 400)); // Rate limit
+          await new Promise(r => setTimeout(r, 400)); 
       }
       broadcastActive = false;
       log.innerHTML += `<div class="text-white mt-2">>> FINISHED. Sent ${sent}.</div>`;
@@ -528,7 +504,6 @@
   };
   window.cancelBroadcast = () => { broadcastActive = false; window.showToast("Stopping..."); };
 
-  // --- CONTACTS MANAGER ---
   window.renderContactsManagerTable = () => {
       const s = (document.getElementById("cmSearch").value||"").toLowerCase();
       const tbody = document.getElementById("cmList"); tbody.innerHTML = "";
@@ -551,7 +526,6 @@
       await Promise.all(updates); window.showToast("Directory Saved");
   };
 
-  // --- LOGS & MISC ---
   window.renderLogbook = async () => {
       const tbody = document.getElementById("logbookList"); tbody.innerHTML = "<tr><td colspan='4' class='p-4 text-center text-slate-400'>Loading...</td></tr>";
       const snap = await getDocs(query(collection(db, "organizations", SHARED_ORG_ID, "logs"), orderBy("createdAt", "desc"), limit(20)));
@@ -583,27 +557,6 @@
   window.callActivePhone = () => window.open(`tel:${store.activeThread?.phone}`);
   window.copyActivePhone = () => { navigator.clipboard.writeText(store.activeThread?.phone); window.showToast("Copied"); };
   
-  async function poll() {
-      if(store.isPolling) return; store.isPolling=true;
-      try {
-          const res = await fetch(`${TWILIO_GET_URL}?after=${Date.now()-15000}`); const data = await res.json();
-          if(data.success) {
-            data.messages.filter(m=>m.direction==="inbound" && !store.lastInboundSidSeen.has(m.sid)).forEach(async m => {
-                store.lastInboundSidSeen.add(m.sid);
-                const phone = m.from.replace(/\D/g,'').length===10?`+1${m.from.replace(/\D/g,'')}`:m.from;
-                await setDoc(doc(getMsgsCol(phone), m.sid), { body:m.body, direction:"received", createdAt: serverTimestamp(), sid:m.sid, mediaUrls: m.mediaUrls||[] });
-                
-                const t = store.threads.find(x => x.id === phone);
-                const name = t ? (t.name || phone) : phone;
-                queueNotification(phone, name, m.body);
-
-                await updateDoc(getThreadDoc(phone), { lastMessageText: m.body, lastMessageAtMs: Date.now(), unread: (store.activeThreadId!==phone?1:0) });
-            });
-          }
-      } catch(e){} finally { store.isPolling=false; }
-  }
-
-  // --- INIT ---
   (async function init() {
       await signInAnonymously(auth);
       onAuthStateChanged(auth, u => {
@@ -617,6 +570,13 @@
           setInterval(poll, 8000);
       });
       store.cannedReplies = JSON.parse(localStorage.getItem("canned")||"[]"); window.renderQuickReplies();
+      document.addEventListener("visibilitychange", async () => {
+          if (document.visibilityState === "visible" && store.activeThreadId) {
+              const t = store.threads.find(x => x.id === store.activeThreadId);
+              if(t) { t.unread = 0; window.renderThreadList(); }
+              await updateDoc(getThreadDoc(store.activeThreadId), { unread: 0, lastReadAtMs: Date.now() });
+          }
+      });
   })();
 </script>
 </body>
