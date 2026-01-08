@@ -378,7 +378,26 @@
   const initials = (s) => (s || "?").trim().slice(0, 2).toUpperCase() || "?";
   const formatTime = (ms) => (!ms) ? "" : new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   function relativeTime(ms) { if (!ms) return ""; const diff = Date.now() - ms; const min = 60000; if (diff < min) return "now"; if (diff < 60*min) return Math.floor(diff/min) + "m"; if (diff < 24*60*min) return Math.floor(diff/(60*min)) + "h"; return Math.floor(diff/(24*60*min)) + "d"; }
+const LEADER_KEY = "omnichat_leader_tab";
+const TAB_ID = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
+function isLeader() {
+  try {
+    const now = Date.now();
+    const cur = JSON.parse(localStorage.getItem(LEADER_KEY) || "null");
+    if (!cur || (now - cur.ts) > 15000) {
+      localStorage.setItem(LEADER_KEY, JSON.stringify({ id: TAB_ID, ts: now }));
+      return true;
+    }
+    if (cur.id === TAB_ID) {
+      localStorage.setItem(LEADER_KEY, JSON.stringify({ id: TAB_ID, ts: now }));
+      return true;
+    }
+    return false;
+  } catch {
+    return true; // if storage is blocked, shrug and behave normally
+  }
+}
   const getThreadsCol = () => collection(db, "organizations", SHARED_ORG_ID, "threads");
   const getThreadDoc  = (id) => doc(db, "organizations", SHARED_ORG_ID, "threads", id);
   const getMsgsCol    = (id) => collection(db, "organizations", SHARED_ORG_ID, "threads", id, "messages");
@@ -422,6 +441,16 @@
     try { const f = JSON.parse(localStorage.getItem(LS.filters) || "{}"); store.onlyUnread = !!f.onlyUnread; store.onlyPinned = !!f.onlyPinned; store.tagFilter = new Set(f.tagFilter || []); } catch {}
     if (!store.cannedReplies.length) store.cannedReplies = ["Please sign into your tablet.", "Copy. Thank you.", "Running late.", "Call dispatch."];
   }
+const LS_POLL_AFTER = "omnichat_poll_after_ms";
+
+function getPollAfterMs() {
+  const v = Number(localStorage.getItem(LS_POLL_AFTER) || "0");
+  return Number.isFinite(v) ? v : 0;
+}
+
+function setPollAfterMs(ms) {
+  localStorage.setItem(LS_POLL_AFTER, String(ms));
+}
   function saveLocalSettings() { localStorage.setItem(LS.pinned, JSON.stringify([...store.pinned])); localStorage.setItem(LS.drafts, JSON.stringify(store.drafts)); localStorage.setItem(LS.canned, JSON.stringify(store.cannedReplies)); localStorage.setItem(LS.filters, JSON.stringify({ onlyUnread: store.onlyUnread, onlyPinned: store.onlyPinned, tagFilter: [...store.tagFilter] })); }
   function closeAllModals() { ["contactsManagerModal","newMsgModal","settingsModal","threadSearchModal","commandModal","logbookModal"].forEach(id => { document.getElementById(id)?.classList.add("hidden"); document.getElementById(id)?.classList.remove("flex"); }); }
   
@@ -430,27 +459,68 @@
   window.addEventListener("resize", initMobileSidebarState);
 
   async function pollIncomingMessages() {
-    if (!store.uid || store.isPolling) return; store.isPolling = true;
-    try {
-      const res = await fetch(TWILIO_GET_URL); const data = await res.json(); if (!data.success || !data.messages) return;
-      for (let m of data.messages) {
-        if (store.deletedSids.has(m.sid) || store.lastInboundSidSeen.has(m.sid)) continue;
-        store.lastInboundSidSeen.add(m.sid);
-        if (m.direction === "inbound") {
-          const cleanPhone = normalizePhone(m.from);
-          if (cleanPhone.length > 5) {
-            const q = query(getMsgsCol(cleanPhone), where("sid", "==", m.sid)); const querySnap = await getDocs(q);
-            if (querySnap.empty) {
-                if (!store.threads.find(t => t.id === cleanPhone)) await upsertThread(cleanPhone, cleanPhone, ["New"]);
-                await setDoc(doc(getMsgsCol(cleanPhone), m.sid), { body: m.body, direction: "received", createdAt: serverTimestamp(), sid: m.sid, mediaUrls: (m.mediaUrls || []).slice(0,10) });
-                const tRef = getThreadDoc(cleanPhone), tSnap = await getDoc(tRef), unread = tSnap.exists() ? (tSnap.data().unread || 0) : 0;
-                await updateDoc(tRef, { lastMessageText: m.body, lastMessageAtMs: Date.now(), unread: store.activeThreadId !== cleanPhone ? unread + 1 : 0 });
-            }
-          }
-        }
+  if (!store.uid || store.isPolling) return;
+  store.isPolling = true;
+
+  try {
+    const after = getPollAfterMs();
+    const url = `${TWILIO_GET_URL}?after=${encodeURIComponent(after)}`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.success || !data.messages) return;
+
+    let maxSeen = after;
+
+    for (let m of data.messages) {
+      const createdMs = new Date(m.dateCreated).getTime();
+      if (Number.isFinite(createdMs) && createdMs > maxSeen) maxSeen = createdMs;
+
+      // only process inbound
+      if (m.direction !== "inbound") continue;
+
+      if (store.deletedSids.has(m.sid) || store.lastInboundSidSeen.has(m.sid)) continue;
+      store.lastInboundSidSeen.add(m.sid);
+
+      const cleanPhone = normalizePhone(m.from);
+      if (cleanPhone.length <= 5) continue;
+
+      const q = query(getMsgsCol(cleanPhone), where("sid", "==", m.sid));
+      const querySnap = await getDocs(q);
+      if (!querySnap.empty) continue;
+
+      if (!store.threads.find(t => t.id === cleanPhone)) {
+        await upsertThread(cleanPhone, cleanPhone, ["New"]);
       }
-    } catch(e) { console.error(e); } finally { store.isPolling = false; }
+
+      await setDoc(doc(getMsgsCol(cleanPhone), m.sid), {
+        body: m.body,
+        direction: "received",
+        createdAt: serverTimestamp(),
+        sid: m.sid,
+        mediaUrls: (m.mediaUrls || []).slice(0, 10),
+      });
+
+      const tRef = getThreadDoc(cleanPhone);
+      const tSnap = await getDoc(tRef);
+      const unread = tSnap.exists() ? (tSnap.data().unread || 0) : 0;
+
+      await updateDoc(tRef, {
+        lastMessageText: m.body,
+        lastMessageAtMs: Date.now(),
+        unread: store.activeThreadId !== cleanPhone ? unread + 1 : 0,
+      });
+    }
+
+    // Persist cursor so refresh doesn't re-process the last 20 again
+    if (maxSeen > after) setPollAfterMs(maxSeen);
+
+  } catch (e) {
+    console.error(e);
+  } finally {
+    store.isPolling = false;
   }
+}
 
   window.renderThreadList = function () {
     const ub = document.getElementById("unreadOnlyBtn"), pb = document.getElementById("pinnedOnlyBtn"), urb = document.getElementById("urgentOnlyBtn"), sb = document.getElementById("selectModeBtn");
