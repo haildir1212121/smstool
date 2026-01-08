@@ -11,29 +11,15 @@
   
   <style>
     body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; overflow: hidden; }
-    
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     .scrollbar-hide::-webkit-scrollbar { display: none; }
-    
     .fade-in { animation: fadeIn 0.15s ease-out forwards; }
     @keyframes fadeIn { from { opacity:0; transform:scale(0.99);} to { opacity:1; transform:scale(1);} }
-
-    .msg-sent { 
-        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); 
-        color: white; 
-        border-radius: 18px 18px 4px 18px; 
-        box-shadow: 0 2px 4px rgba(37,99,235,0.15);
-    }
-    .msg-received { 
-        background: #ffffff; 
-        color: #1e293b; 
-        border: 1px solid #e2e8f0; 
-        border-radius: 18px 18px 18px 4px; 
-    }
-    
+    .msg-sent { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; border-radius: 18px 18px 4px 18px; box-shadow: 0 2px 4px rgba(37,99,235,0.15); }
+    .msg-received { background: #ffffff; color: #1e293b; border: 1px solid #e2e8f0; border-radius: 18px 18px 18px 4px; }
     .nav-item.active { background-color: #334155; color: #60a5fa; border-left: 3px solid #60a5fa; }
     .nav-item { border-left: 3px solid transparent; }
   </style>
@@ -105,7 +91,9 @@
             <div class="flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-2xl p-1.5 focus-within:ring-4 focus-within:ring-blue-50 focus-within:border-blue-300 transition shadow-sm">
                 <button onclick="document.getElementById('mmsFileInput').click()" class="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-white hover:text-blue-500 transition shrink-0"><i class="fa-solid fa-paperclip"></i></button>
                 <input type="file" id="mmsFileInput" class="hidden" multiple accept="image/*,video/*" onchange="window.handleMmsFiles(this)">
+                
                 <textarea id="msgInput" rows="1" class="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2.5 px-2 max-h-32 resize-none text-slate-800 placeholder-slate-400" placeholder="Type a message..."></textarea>
+                
                 <div class="relative shrink-0">
                     <select id="templateSelect" onchange="window.insertTemplate()" class="absolute inset-0 opacity-0 cursor-pointer w-full"><option value="">T</option><option value="Please sign into your tablet.">Login</option><option value="Copy. Thank you.">Copy</option></select>
                     <button class="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-white hover:text-blue-500 transition"><i class="fa-regular fa-file-lines"></i></button>
@@ -127,118 +115,61 @@
             </div>
         </div>
         <div class="p-5 space-y-6">
-            <div>
-                <div class="flex justify-between items-center mb-1"><label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tags</label><button onclick="window.saveDetailsTags()" class="text-[10px] text-blue-600 font-bold hover:underline">SAVE</button></div>
-                <input id="detailsTagsInput" class="w-full text-xs border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-100 focus:border-blue-300 outline-none bg-slate-50 transition" placeholder="e.g. Driver, VIP">
-            </div>
-            <div>
-                <div class="flex justify-between items-center mb-1"><label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Notes</label><button onclick="window.saveDetailsNotes()" class="text-[10px] text-blue-600 font-bold hover:underline">SAVE</button></div>
-                <textarea id="detailsNotes" class="w-full text-xs bg-amber-50 border border-amber-100 rounded-lg p-3 h-24 resize-none focus:bg-white focus:ring-2 focus:ring-amber-100 outline-none transition text-slate-600 placeholder-amber-300" placeholder="Dispatch notes..."></textarea>
-            </div>
+            <div><div class="flex justify-between items-center mb-1"><label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tags</label><button onclick="window.saveDetailsTags()" class="text-[10px] text-blue-600 font-bold hover:underline">SAVE</button></div><input id="detailsTagsInput" class="w-full text-xs border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-100 focus:border-blue-300 outline-none bg-slate-50 transition" placeholder="e.g. Driver, VIP"></div>
+            <div><div class="flex justify-between items-center mb-1"><label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Notes</label><button onclick="window.saveDetailsNotes()" class="text-[10px] text-blue-600 font-bold hover:underline">SAVE</button></div><textarea id="detailsNotes" class="w-full text-xs bg-amber-50 border border-amber-100 rounded-lg p-3 h-24 resize-none focus:bg-white focus:ring-2 focus:ring-amber-100 outline-none transition text-slate-600 placeholder-amber-300" placeholder="Dispatch notes..."></textarea></div>
             <div><label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Media</label><div id="detailsAttachments" class="grid grid-cols-3 gap-2"></div></div>
         </div>
     </aside>
   </div>
 
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur text-white px-6 py-3 rounded-full shadow-2xl transition-all duration-300 translate-y-20 opacity-0 z-[100] flex items-center gap-3 font-medium text-sm border border-slate-700"><i id="toastIcon" class="fa-solid fa-check-circle text-emerald-400"></i><span id="toastMsg">Notification</span></div>
+  <div id="newMsgModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+      <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold">New Message</h3><button onclick="document.getElementById('newMsgModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div>
+      <input id="newContactPhone" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Phone">
+      <input id="newContactName" class="w-full bg-gray-50 border border-gray-200 p-3 mb-6 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Name">
+      <div class="flex gap-2"><button onclick="document.getElementById('newMsgModal').classList.add('hidden')" class="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-600">Cancel</button><button onclick="window.createThreadFromModal()" class="flex-1 py-3 bg-blue-600 rounded-xl font-bold text-sm text-white">Create</button></div>
+    </div>
+  </div>
+  <div id="settingsModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
+      <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
+        <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold">Settings</h3><button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between"><div><div class="font-bold text-sm text-blue-900">Notifications</div><div class="text-xs text-blue-600">Sound & Popups</div></div><button onclick="window.requestNotifPerm()" class="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700">Enable</button></div>
+        <textarea id="cannedRepliesInput" class="w-full border border-gray-200 p-3 mb-4 h-32 rounded-xl text-sm resize-none" placeholder="Canned Replies"></textarea>
+        <div class="flex gap-2"><button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-600">Close</button><button onclick="window.saveSettings()" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm">Save</button></div>
+      </div>
+  </div>
+
   <div id="view-contacts" class="hidden flex-1 h-full flex-col bg-white fade-in">
-    <div class="h-16 border-b border-gray-200 flex items-center justify-between px-8 bg-white/90 backdrop-blur sticky top-0 z-10">
-        <h2 class="text-lg font-bold text-slate-800 tracking-tight">Directory</h2>
-        <div class="flex gap-3">
-             <div class="relative group">
-                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-xs group-focus-within:text-blue-500 transition"></i>
-                 <input id="cmSearch" oninput="window.renderContactsManagerTable()" placeholder="Search directory..." class="bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm w-64 outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition">
-             </div>
-             <button onclick="window.saveContactsManager()" class="px-5 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition shadow-lg shadow-slate-200 transform active:scale-95">Save Changes</button>
-        </div>
+    <div class="h-16 border-b border-gray-200 flex items-center justify-between px-8 bg-white/90 sticky top-0 z-10">
+        <h2 class="text-lg font-bold text-slate-800">Directory</h2>
+        <div class="flex gap-3"><input id="cmSearch" oninput="window.renderContactsManagerTable()" placeholder="Search..." class="bg-slate-50 border border-slate-200 rounded-xl pl-4 py-2 text-sm w-64 outline-none"><button onclick="window.saveContactsManager()" class="px-5 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold">Save</button></div>
     </div>
-    <div class="flex-1 overflow-auto bg-slate-50 p-6">
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-w-5xl mx-auto">
-            <table class="w-full text-left">
-                <thead class="bg-slate-50 border-b border-gray-200 text-xs text-slate-500 uppercase tracking-wider font-semibold">
-                    <tr><th class="p-4 pl-6">Name</th><th class="p-4">Phone</th><th class="p-4">Tags</th><th class="p-4 text-right pr-6">Last Active</th></tr>
-                </thead>
-                <tbody id="cmList" class="divide-y divide-gray-100"></tbody>
-            </table>
-        </div>
-    </div>
+    <div class="flex-1 overflow-auto bg-slate-50 p-6"><div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-w-5xl mx-auto"><table class="w-full text-left"><tbody id="cmList" class="divide-y divide-gray-100"></tbody></table></div></div>
   </div>
 
   <div id="view-broadcast" class="hidden flex-1 h-full flex-col bg-slate-50 fade-in items-center justify-center p-6">
       <div class="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-2xl overflow-hidden flex flex-col h-[600px]">
-          <div class="p-6 border-b border-gray-100 bg-white flex items-center gap-4">
-              <div class="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-lg shadow-sm border border-blue-100"><i class="fa-solid fa-bullhorn"></i></div>
-              <div><h2 class="text-xl font-bold text-slate-800 tracking-tight">Mass Broadcast</h2><p class="text-sm text-slate-500">Send an announcement to all contacts</p></div>
-          </div>
+          <div class="p-6 border-b border-gray-100 bg-white flex items-center gap-4"><div class="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-lg"><i class="fa-solid fa-bullhorn"></i></div><div><h2 class="text-xl font-bold">Mass Broadcast</h2></div></div>
           <div class="flex-1 p-8 flex flex-col bg-slate-50/50">
               <div id="massComposeArea" class="flex flex-col h-full">
-                  <div class="bg-blue-50 text-blue-900 p-4 rounded-xl text-sm mb-6 border border-blue-100 flex gap-3 shadow-sm items-start">
-                      <i class="fa-solid fa-circle-info mt-0.5 text-blue-500"></i>
-                      <span>You are targeting <strong id="massCountDisplay">0</strong> contacts. Messages are sent sequentially.</span>
-                  </div>
-                  <label class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Message Content</label>
-                  <textarea id="massMsgInput" class="flex-1 bg-white border border-gray-200 rounded-xl p-4 resize-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none text-sm transition shadow-sm" placeholder="Type your announcement here..."></textarea>
-                  <div class="flex justify-end pt-6">
-                      <button onclick="window.startBroadcast()" class="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition transform hover:-translate-y-1 active:scale-95">Send Broadcast <i class="fa-solid fa-paper-plane ml-2"></i></button>
-                  </div>
+                  <div class="bg-blue-50 text-blue-900 p-4 rounded-xl text-sm mb-6 border border-blue-100 flex gap-3"><i class="fa-solid fa-circle-info mt-0.5"></i><span>Targeting <strong id="massCountDisplay">0</strong> contacts.</span></div>
+                  <textarea id="massMsgInput" class="flex-1 bg-white border border-gray-200 rounded-xl p-4 resize-none outline-none text-sm" placeholder="Message..."></textarea>
+                  <div class="flex justify-end pt-6"><button onclick="window.startBroadcast()" class="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700">Send</button></div>
               </div>
               <div id="massProgressArea" class="hidden flex-col h-full justify-between">
-                  <div>
-                    <div class="text-center mb-8 mt-4">
-                        <div class="text-5xl font-bold text-blue-600 mb-2 tracking-tight"><span id="massSentCount">0</span><span class="text-gray-300 text-3xl">/</span><span id="massTotalCount" class="text-gray-400 text-3xl">0</span></div>
-                        <div class="text-xs text-slate-400 font-bold uppercase tracking-widest">Messages Sent</div>
-                    </div>
-                    <div class="w-full bg-gray-200 rounded-full h-3 mb-6 overflow-hidden shadow-inner"><div id="massProgressBar" class="bg-blue-600 h-full w-0 transition-all duration-300 relative overflow-hidden"><div class="absolute inset-0 bg-white/20 animate-pulse"></div></div></div>
-                  </div>
-                  <div id="massLogBox" class="h-48 bg-slate-900 rounded-xl p-4 font-mono text-[10px] text-emerald-400 overflow-y-auto mb-4 border border-slate-700 shadow-inner"></div>
-                  <button onclick="window.cancelBroadcast()" class="w-full py-3 border-2 border-rose-100 text-rose-500 font-bold rounded-xl hover:bg-rose-50 transition uppercase tracking-wide text-xs">Cancel / Stop</button>
+                  <div class="text-center mb-8 mt-4"><div class="text-5xl font-bold text-blue-600 mb-2"><span id="massSentCount">0</span>/<span id="massTotalCount">0</span></div></div>
+                  <div class="w-full bg-gray-200 rounded-full h-3 mb-6 overflow-hidden"><div id="massProgressBar" class="bg-blue-600 h-full w-0 transition-all duration-300"></div></div>
+                  <div id="massLogBox" class="h-48 bg-slate-900 rounded-xl p-4 font-mono text-[10px] text-emerald-400 overflow-y-auto mb-4"></div>
+                  <button onclick="window.cancelBroadcast()" class="w-full py-3 border-2 border-rose-100 text-rose-500 font-bold rounded-xl">Stop</button>
               </div>
           </div>
       </div>
   </div>
 
   <div id="view-logs" class="hidden flex-1 h-full flex-col bg-white fade-in">
-      <div class="h-16 border-b border-gray-200 flex items-center px-8 bg-white/90 backdrop-blur sticky top-0 z-10"><h2 class="text-lg font-bold text-slate-800 tracking-tight">Shift Logs</h2></div>
-      <div class="flex-1 overflow-auto bg-slate-50 p-6">
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-w-4xl mx-auto">
-            <table class="w-full text-left">
-                <thead class="bg-slate-50 border-b border-gray-200 text-xs text-slate-500 uppercase tracking-wider font-semibold">
-                    <tr><th class="p-4 pl-6">Time</th><th class="p-4">Contact</th><th class="p-4">Event</th><th class="p-4 text-right pr-6">Action</th></tr>
-                </thead>
-                <tbody id="logbookList" class="divide-y divide-gray-100"></tbody>
-            </table>
-        </div>
-      </div>
-  </div>
-
-  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur text-white px-6 py-3 rounded-full shadow-2xl transition-all duration-300 translate-y-20 opacity-0 z-[100] flex items-center gap-3 font-medium text-sm border border-slate-700">
-    <i id="toastIcon" class="fa-solid fa-check-circle text-emerald-400"></i><span id="toastMsg">Notification</span>
-  </div>
-
-  <div id="newMsgModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
-    <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl transform scale-100 transition-all">
-      <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold">New Message</h3><button onclick="document.getElementById('newMsgModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div>
-      <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Phone</label>
-      <input id="newContactPhone" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm transition" placeholder="+1...">
-      <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Name</label>
-      <input id="newContactName" class="w-full bg-gray-50 border border-gray-200 p-3 mb-6 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm transition" placeholder="Optional">
-      <div class="flex gap-2"><button onclick="document.getElementById('newMsgModal').classList.add('hidden')" class="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-600 hover:bg-gray-200 transition">Cancel</button><button onclick="window.createThreadFromModal()" class="flex-1 py-3 bg-blue-600 rounded-xl font-bold text-sm text-white hover:bg-blue-700 shadow-lg shadow-blue-200 transition">Create</button></div>
-    </div>
-  </div>
-
-  <div id="settingsModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
-      <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
-        <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold">Settings</h3><button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div>
-        <div class="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between">
-           <div><div class="font-bold text-sm text-blue-900">Notifications</div><div class="text-xs text-blue-600">Sound & Popups</div></div>
-           <button onclick="window.requestNotifPerm()" class="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-blue-700">Enable</button>
-        </div>
-        <label class="text-xs font-bold text-gray-400 uppercase tracking-wider">Canned Replies (One per line)</label>
-        <textarea id="cannedRepliesInput" class="w-full border border-gray-200 p-3 mt-1 mb-4 h-32 rounded-xl text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50"></textarea>
-        <div class="flex gap-2">
-            <button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-600 hover:bg-gray-200">Close</button>
-            <button onclick="window.saveSettings()" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 shadow-sm">Save Config</button>
-        </div>
-      </div>
+      <div class="h-16 border-b border-gray-200 flex items-center px-8 bg-white/90 sticky top-0 z-10"><h2 class="text-lg font-bold">Shift Logs</h2></div>
+      <div class="flex-1 overflow-auto bg-slate-50 p-6"><div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-w-4xl mx-auto"><table class="w-full text-left"><tbody id="logbookList" class="divide-y divide-gray-100"></tbody></table></div></div>
   </div>
 
 <script type="module">
@@ -255,15 +186,7 @@
   const app = initializeApp({ apiKey: "AIzaSyCaypEoug2f7OTJjKOdkkJPaZDypcr3NF8", authDomain: "sms-dlx.firebaseapp.com", projectId: "sms-dlx", storageBucket: "sms-dlx.firebasestorage.app", messagingSenderId: "522453095698", appId: "1:522453095698:web:ea217285e6e5160ee4cfcb" });
   const auth = getAuth(app); const db = getFirestore(app); const storage = getStorage(app);
 
-  let store = { 
-      threads: [], activeThreadId: null, activeThread: null, 
-      pinned: new Set(), drafts: {}, cannedReplies: [],
-      deletedSids: new Set(), lastInboundSidSeen: new Set(),
-      isPolling: false, pendingMedia: [], isFirstLoad: true,
-      onlyUnread: false, onlyUrgent: false, 
-      tagFilter: null, 
-      notifQueue: {}, notifTimer: null 
-  };
+  let store = { threads: [], activeThreadId: null, activeThread: null, pinned: new Set(), drafts: {}, cannedReplies: [], deletedSids: new Set(), lastInboundSidSeen: new Set(), isPolling: false, pendingMedia: [], isFirstLoad: true, onlyUnread: false, onlyUrgent: false, tagFilter: null, notifQueue: {}, notifTimer: null };
 
   const escapeHtml = (t) => { const d = document.createElement("div"); d.textContent = t ?? ""; return d.innerHTML; };
   const initials = (s) => (s || "?").trim().slice(0, 2).toUpperCase() || "?";
@@ -271,20 +194,16 @@
   function relativeTime(ms) { if (!ms) return ""; const diff = Date.now() - ms; const min = 60000; if (diff < min) return "now"; if (diff < 60*min) return Math.floor(diff/min) + "m"; if (diff < 24*60*min) return Math.floor(diff/(60*min)) + "h"; return Math.floor(diff/(24*60*min)) + "d"; }
   window.showToast = (msg, type) => { const t = document.getElementById("toast"); document.getElementById("toastMsg").innerText=msg; document.getElementById("toastIcon").className = type==="error"?"fa-solid fa-circle-exclamation text-rose-400":"fa-solid fa-check-circle text-emerald-400"; t.classList.remove("translate-y-20","opacity-0"); setTimeout(()=>t.classList.add("translate-y-20","opacity-0"), 2500); };
   
-  window.requestNotifPerm = () => { Notification.requestPermission().then(p => { if(p==="granted") { window.showToast("Notifications Enabled"); new Notification("Test",{body:"System Ready"}); } }); };
-  
+  window.requestNotifPerm = () => { Notification.requestPermission().then(p => { if(p==="granted") { window.showToast("Notifications Enabled"); } }); };
   function queueNotification(threadId, name, body) {
       if(document.visibilityState === 'visible' && store.activeThreadId === threadId) return;
       if (!store.notifQueue[threadId]) store.notifQueue[threadId] = { name: name, count: 0, bodies: [] };
-      store.notifQueue[threadId].count++;
-      store.notifQueue[threadId].bodies.push(body);
+      store.notifQueue[threadId].count++; store.notifQueue[threadId].bodies.push(body);
       if (store.notifTimer) clearTimeout(store.notifTimer);
       store.notifTimer = setTimeout(() => {
           Object.values(store.notifQueue).forEach(item => {
-              const title = item.count > 1 ? `${item.name} (${item.count} new)` : item.name;
-              const body = item.count > 1 ? item.bodies.slice(-2).join("\n") : item.bodies[0];
               if(Notification.permission === "granted") {
-                  new Notification(title, { body: body, icon: 'https://cdn-icons-png.flaticon.com/512/724/724664.png' });
+                  new Notification(item.count > 1 ? `${item.name} (${item.count})` : item.name, { body: item.bodies[0], icon: 'https://cdn-icons-png.flaticon.com/512/724/724664.png' });
                   document.getElementById("notifSound")?.play().catch(()=>{});
               }
           });
@@ -292,7 +211,6 @@
       }, 3000); 
   }
 
-  // --- CORE FIX: POLLER LOGIC ---
   async function poll() {
       if(store.isPolling) return; store.isPolling = true;
       try {
@@ -301,48 +219,34 @@
             data.messages.filter(m=>m.direction==="inbound" && !store.lastInboundSidSeen.has(m.sid)).forEach(async m => {
                 store.lastInboundSidSeen.add(m.sid);
                 const phone = m.from.replace(/\D/g,'').length===10?`+1${m.from.replace(/\D/g,'')}`:m.from;
-                const msgTime = new Date(m.dateCreated).getTime();
+                const msgTime = new Date(m.dateCreated).getTime(); // Use Twilio Time!
                 
-                // 1. Save msg
-                await setDoc(doc(getMsgsCol(phone), m.sid), { body:m.body, direction:"received", createdAt: serverTimestamp(), sid:m.sid, mediaUrls: m.mediaUrls||[] });
+                await setDoc(doc(getMsgsCol(phone), m.sid), { body:m.body, direction:"received", createdAt: new Date(msgTime), sid:m.sid, mediaUrls: m.mediaUrls||[] });
                 
                 const t = store.threads.find(x => x.id === phone);
-                const name = t ? (t.name || phone) : phone;
-                
-                // 2. Queue notification if we aren't viewing it
                 const isViewing = (store.activeThreadId === phone && document.visibilityState === 'visible');
-                if (!isViewing) queueNotification(phone, name, m.body);
+                if (!isViewing) queueNotification(phone, t ? (t.name || phone) : phone, m.body);
 
-                // 3. COMPARE TIMESTAMPS: Only update LastMessage if this inbound message is actually newer
                 const currentLastMs = t ? (t.lastMessageAtMs || 0) : 0;
-                
                 if (msgTime > currentLastMs) {
-                    await setDoc(getThreadDoc(phone), { 
-                        lastMessageText: m.body, 
-                        lastMessageAtMs: msgTime, 
-                        unread: isViewing ? 0 : increment(1) 
-                    }, { merge: true });
-                } else {
-                    // It's an old message (we probably replied already). Don't update snippet/unread.
+                    await setDoc(getThreadDoc(phone), { lastMessageText: m.body, lastMessageAtMs: msgTime, unread: isViewing ? 0 : increment(1) }, { merge: true });
                 }
             });
           }
       } catch(e){} finally { store.isPolling=false; }
   }
 
-  // --- NAVIGATION ---
-  window.switchView = (viewName) => {
-      ['inbox', 'contacts', 'broadcast', 'logs'].forEach(v => document.getElementById(`view-${v}`).classList.add('hidden'));
-      document.getElementById(`view-${viewName}`).classList.remove('hidden');
+  window.switchView = (v) => {
+      ['inbox', 'contacts', 'broadcast', 'logs'].forEach(x => document.getElementById(`view-${x}`).classList.add('hidden'));
+      document.getElementById(`view-${v}`).classList.remove('hidden');
       document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-      document.getElementById(`nav-${viewName}`).classList.add('active');
-      if(viewName === 'contacts') window.renderContactsManagerTable();
-      if(viewName === 'broadcast') document.getElementById('massCountDisplay').innerText = store.threads.filter(t=>t.phone && t.phone.length > 5).length;
-      if(viewName === 'logs') window.renderLogbook();
+      document.getElementById(`nav-${v}`).classList.add('active');
+      if(v === 'contacts') window.renderContactsManagerTable();
+      if(v === 'broadcast') document.getElementById('massCountDisplay').innerText = store.threads.filter(t=>t.phone && t.phone.length > 5).length;
+      if(v === 'logs') window.renderLogbook();
   };
-  window.toggleInfoPanel = () => { const p = document.getElementById("infoPanel"); p.classList.toggle("hidden"); };
+  window.toggleInfoPanel = () => document.getElementById("infoPanel").classList.toggle("hidden");
 
-  // --- CORE CHAT ---
   let unsubMessages = null;
   const getThreadsCol = () => collection(db, "organizations", SHARED_ORG_ID, "threads");
   const getThreadDoc  = (id) => doc(db, "organizations", SHARED_ORG_ID, "threads", id);
@@ -352,18 +256,14 @@
       const el = document.getElementById("contactList");
       const tagRow = document.getElementById("tagFilterRow");
       const s = (document.getElementById("searchContacts").value || "").toLowerCase();
-      
       document.getElementById("filterUnread").className = `px-3 py-1 rounded-md text-[10px] font-bold border uppercase transition ${store.onlyUnread?'bg-blue-600 text-white border-blue-600':'bg-white border-gray-200 text-gray-500'}`;
       document.getElementById("filterUrgent").className = `px-3 py-1 rounded-md text-[10px] font-bold border uppercase transition ${store.onlyUrgent?'bg-rose-500 text-white border-rose-500':'bg-white border-gray-200 text-gray-500'}`;
-
+      
       const allTags = new Set(); store.threads.forEach(t => (t.tags||[]).forEach(tag => allTags.add(tag)));
       if(allTags.size > 0) {
           tagRow.classList.remove("hidden");
-          let tagHtml = `<button onclick="window.filterByTag(null)" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${!store.tagFilter ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}">ALL</button>`;
-          Array.from(allTags).sort().forEach(tag => {
-              const active = store.tagFilter === tag;
-              tagHtml += `<button onclick="window.filterByTag('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'}">${tag}</button>`;
-          });
+          let tagHtml = `<button onclick="window.filterByTag(null)" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${!store.tagFilter ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200'}">ALL</button>`;
+          Array.from(allTags).sort().forEach(tag => tagHtml += `<button onclick="window.filterByTag('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter===tag ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">${tag}</button>`);
           tagRow.innerHTML = tagHtml;
       } else { tagRow.classList.add("hidden"); }
 
@@ -377,64 +277,35 @@
       });
 
       el.innerHTML = list.map(t => {
-          const isActive = t.id === store.activeThreadId;
-          const isUnread = (t.unread||0) > 0;
+          const isActive = t.id === store.activeThreadId, isUnread = (t.unread||0) > 0;
           return `<div onclick="window.loadThread('${t.id}')" class="p-3 rounded-xl cursor-pointer mb-1 transition flex items-center gap-3 ${isActive ? 'bg-blue-50 border border-blue-100 shadow-sm' : 'hover:bg-slate-50 border border-transparent'}">
-            <div class="relative w-10 h-10 rounded-full ${isActive?'bg-blue-600 text-white':(isUnread?'bg-blue-100 text-blue-600':'bg-gray-100 text-gray-500')} flex items-center justify-center font-bold text-xs shrink-0 transition-colors">
-                ${initials(t.name)}
-                ${isUnread ? '<div class="absolute top-0 right-0 w-3 h-3 bg-blue-500 rounded-full border-2 border-white"></div>':''}
-                ${t.isUrgent ? '<div class="absolute -top-1 -right-1 text-rose-500 animate-pulse"><i class="fa-solid fa-bell"></i></div>':''}
-            </div>
-            <div class="flex-1 min-w-0">
-                <div class="flex justify-between items-baseline">
-                    <span class="font-bold text-sm ${isUnread?'text-gray-900':'text-gray-700'} truncate">${escapeHtml(t.name)}</span>
-                    <span class="text-[10px] text-gray-400 whitespace-nowrap">${relativeTime(t.lastMessageAtMs)}</span>
-                </div>
-                <div class="text-xs text-gray-500 truncate h-4 leading-4 opacity-80">${escapeHtml(t.lastMessageText || "No messages")}</div>
-                ${t.tags && t.tags.length ? `<div class="flex gap-1 mt-1 overflow-hidden h-4">${t.tags.slice(0,3).map(g=>`<span class="px-1 bg-slate-100 text-slate-500 text-[9px] rounded border border-slate-200">${g}</span>`).join("")}</div>` : ''}
-            </div>
+            <div class="relative w-10 h-10 rounded-full ${isActive?'bg-blue-600 text-white':(isUnread?'bg-blue-100 text-blue-600':'bg-gray-100 text-gray-500')} flex items-center justify-center font-bold text-xs shrink-0 transition-colors">${initials(t.name)}${isUnread ? '<div class="absolute top-0 right-0 w-3 h-3 bg-blue-500 rounded-full border-2 border-white"></div>':''}${t.isUrgent ? '<div class="absolute -top-1 -right-1 text-rose-500 animate-pulse"><i class="fa-solid fa-bell"></i></div>':''}</div>
+            <div class="flex-1 min-w-0"><div class="flex justify-between items-baseline"><span class="font-bold text-sm ${isUnread?'text-gray-900':'text-gray-700'} truncate">${escapeHtml(t.name)}</span><span class="text-[10px] text-gray-400 whitespace-nowrap">${relativeTime(t.lastMessageAtMs)}</span></div><div class="text-xs text-gray-500 truncate h-4 leading-4 opacity-80">${escapeHtml(t.lastMessageText || "No messages")}</div>${t.tags && t.tags.length ? `<div class="flex gap-1 mt-1 overflow-hidden h-4">${t.tags.slice(0,3).map(g=>`<span class="px-1 bg-slate-100 text-slate-500 text-[9px] rounded border border-slate-200">${g}</span>`).join("")}</div>` : ''}</div>
           </div>`;
       }).join("");
   };
 
   window.filterByTag = (tag) => { store.tagFilter = tag; window.renderThreadList(); };
-
   window.loadThread = async (id) => {
-      if(unsubMessages) unsubMessages();
-      store.activeThreadId = id; store.activeThread = store.threads.find(t=>t.id===id);
-      
+      if(unsubMessages) unsubMessages(); store.activeThreadId = id; store.activeThread = store.threads.find(t=>t.id===id);
       if(store.activeThread) { store.activeThread.unread = 0; window.renderThreadList(); }
-
       document.getElementById("welcomeState").classList.add("hidden");
-      document.getElementById("activeContactName").innerText = store.activeThread?.name || id;
-      document.getElementById("activeContactPhone").innerText = store.activeThread?.phone || id;
+      document.getElementById("activeContactName").innerText = store.activeThread?.name || id; document.getElementById("activeContactPhone").innerText = store.activeThread?.phone || id;
       document.getElementById("activeContactAvatar").innerText = initials(store.activeThread?.name);
-      document.getElementById("detailsName").innerText = store.activeThread?.name || id;
-      document.getElementById("detailsPhone").innerText = store.activeThread?.phone;
-      document.getElementById("detailsTagsInput").value = (store.activeThread?.tags||[]).join(", ");
-      document.getElementById("detailsNotes").value = store.activeThread?.notes||"";
+      document.getElementById("detailsName").innerText = store.activeThread?.name || id; document.getElementById("detailsPhone").innerText = store.activeThread?.phone;
+      document.getElementById("detailsTagsInput").value = (store.activeThread?.tags||[]).join(", "); document.getElementById("detailsNotes").value = store.activeThread?.notes||"";
       document.getElementById("msgInput").value = store.drafts[id] || "";
-      document.getElementById("headerUrgentBtn").className = store.activeThread.isUrgent ? "w-8 h-8 flex items-center justify-center rounded bg-rose-100 text-rose-500" : "w-8 h-8 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-500 text-slate-400 transition";
-      
+      document.getElementById("headerUrgentBtn").className = store.activeThread.isUrgent ? "w-8 h-8 flex items-center justify-center rounded bg-rose-100 text-rose-500" : "w-8 h-8 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-500 text-slate-400";
       try { await updateDoc(getThreadDoc(id), { unread: 0, lastReadAtMs: Date.now() }); } catch {}
       
       const q = query(getMsgsCol(id), orderBy("createdAt", "asc"));
       unsubMessages = onSnapshot(q, s => {
-          const div = document.getElementById("messageList"); div.innerHTML = "";
-          const atts = [];
+          const div = document.getElementById("messageList"); div.innerHTML = ""; const atts = [];
           s.forEach(d => {
               const m = d.data(); const isMe = m.direction === "sent";
               if(m.mediaUrls) m.mediaUrls.forEach(u=>atts.push(u));
-              let mediaHtml = "";
-              if(m.mediaUrls && m.mediaUrls.length) mediaHtml = `<div class="flex flex-col gap-2 mt-2">` + m.mediaUrls.map(u => `<a href="${u}" target="_blank"><img src="${u}" class="rounded-lg max-h-48 border bg-white object-cover"></a>`).join("") + `</div>`;
-              div.innerHTML += `<div class="flex w-full ${isMe ? "justify-end" : "justify-start"} fade-in">
-                <div class="max-w-[85%] lg:max-w-[70%]">
-                    <div class="px-4 py-2.5 text-sm shadow-sm ${isMe ? 'msg-sent' : 'msg-received'}">
-                        ${escapeHtml(m.body)}${mediaHtml}
-                    </div>
-                    <div class="text-[10px] text-gray-400 mt-1 ${isMe?'text-right':''} opacity-75">${formatTime(m.createdAt?.toMillis?.())}</div>
-                </div>
-              </div>`;
+              let mediaHtml = ""; if(m.mediaUrls && m.mediaUrls.length) mediaHtml = `<div class="flex flex-col gap-2 mt-2">` + m.mediaUrls.map(u => `<a href="${u}" target="_blank"><img src="${u}" class="rounded-lg max-h-48 border bg-white object-cover"></a>`).join("") + `</div>`;
+              div.innerHTML += `<div class="flex w-full ${isMe ? "justify-end" : "justify-start"} fade-in"><div class="max-w-[85%] lg:max-w-[70%]"><div class="px-4 py-2.5 text-sm shadow-sm ${isMe ? 'msg-sent' : 'msg-received'}">${escapeHtml(m.body)}${mediaHtml}</div><div class="text-[10px] text-gray-400 mt-1 ${isMe?'text-right':''} opacity-75">${formatTime(m.createdAt?.toMillis?.())}</div></div></div>`;
           });
           div.scrollTop = div.scrollHeight; document.getElementById("chatContainer").scrollTop = document.getElementById("chatContainer").scrollHeight;
           document.getElementById("detailsAttachments").innerHTML = atts.slice(0,9).map(u => `<a href="${u}" target="_blank" class="block h-20 rounded-lg bg-slate-50 border bg-cover bg-center" style="background-image:url('${u}')"></a>`).join("");
@@ -448,97 +319,53 @@
     try {
         let mediaUrls = [];
         if(store.pendingMedia.length) {
-             mediaUrls = await Promise.all(store.pendingMedia.map(async (file, i) => { 
-                const snap = await uploadBytesResumable(storageRef(storage, `mms/${SHARED_ORG_ID}/${store.activeThreadId}/${Date.now()}_${i}`), file); 
-                return getDownloadURL(snap.ref); 
-             }));
+             mediaUrls = await Promise.all(store.pendingMedia.map(async (file, i) => { const snap = await uploadBytesResumable(storageRef(storage, `mms/${SHARED_ORG_ID}/${store.activeThreadId}/${Date.now()}_${i}`), file); return getDownloadURL(snap.ref); }));
         }
-        const res = await fetch(TWILIO_SEND_URL, { 
-            method: "POST", headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to: store.activeThread.phone, body: txt, mediaUrls }) 
-        });
+        const res = await fetch(TWILIO_SEND_URL, { method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: store.activeThread.phone, body: txt, mediaUrls }) });
         if(!res.ok) throw new Error("API Fail");
         const sid = `loc-${Date.now()}`;
         await setDoc(doc(getMsgsCol(store.activeThreadId), sid), { body: txt, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls });
         await updateDoc(getThreadDoc(store.activeThreadId), { lastMessageText: txt || "[Attachment]", lastMessageAtMs: Date.now() });
-        document.getElementById("msgInput").value = ""; store.pendingMedia=[]; window.updateMmsStrip();
-    } catch(e) { console.error(e); window.showToast("Send failed", "error"); }
-    finally { btn.disabled = false; }
+        document.getElementById("msgInput").value = ""; 
+        document.getElementById("msgInput").style.height = 'auto'; // RESET HEIGHT
+        store.pendingMedia=[]; window.updateMmsStrip();
+    } catch(e) { console.error(e); window.showToast("Send failed", "error"); } finally { btn.disabled = false; }
   };
   
   let broadcastActive = false;
   window.startBroadcast = async () => {
-      const txt = document.getElementById("massMsgInput").value.trim();
-      const contacts = store.threads.filter(t => t.phone && t.phone.length > 5);
+      const txt = document.getElementById("massMsgInput").value.trim(); const contacts = store.threads.filter(t => t.phone && t.phone.length > 5);
       if(!txt || !contacts.length || !confirm(`Send to ${contacts.length} people?`)) return;
-      broadcastActive = true;
-      document.getElementById("massComposeArea").classList.add("hidden");
-      document.getElementById("massProgressArea").classList.remove("hidden");
-      document.getElementById("massProgressArea").classList.add("flex");
-      const log = document.getElementById("massLogBox");
-      const pBar = document.getElementById("massProgressBar");
-      document.getElementById("massTotalCount").innerText = contacts.length;
-      let sent = 0;
+      broadcastActive = true; document.getElementById("massComposeArea").classList.add("hidden"); document.getElementById("massProgressArea").classList.remove("hidden"); document.getElementById("massProgressArea").classList.add("flex");
+      const log = document.getElementById("massLogBox"); const pBar = document.getElementById("massProgressBar");
+      document.getElementById("massTotalCount").innerText = contacts.length; let sent = 0;
       await addDoc(collection(db, "organizations", SHARED_ORG_ID, "logs"), { type:"broadcast_start", count: contacts.length, message:txt, createdAt: serverTimestamp() });
       for(let i=0; i<contacts.length; i++) {
-          if(!broadcastActive) break;
-          const t = contacts[i];
-          log.innerHTML += `<div>Sending to ${t.name}...</div>`;
+          if(!broadcastActive) break; const t = contacts[i]; log.innerHTML += `<div>Sending to ${t.name}...</div>`;
           try {
              const res = await fetch(TWILIO_SEND_URL, { method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: t.phone, body: txt, mediaUrls: [] }) });
-             if(res.ok) {
-                 const sid = `mass-${Date.now()}-${Math.random()}`;
-                 await setDoc(doc(getMsgsCol(t.id), sid), { body: txt, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls: [] });
-                 await updateDoc(getThreadDoc(t.id), { lastMessageText: txt, lastMessageAtMs: Date.now() });
-                 sent++;
-                 document.getElementById("massSentCount").innerText = sent;
-                 pBar.style.width = `${(sent/contacts.length)*100}%`;
-             } else { log.innerHTML += `<div class="text-rose-400">Failed: ${t.phone}</div>`; }
+             if(res.ok) { const sid = `mass-${Date.now()}-${Math.random()}`; await setDoc(doc(getMsgsCol(t.id), sid), { body: txt, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls: [] }); await updateDoc(getThreadDoc(t.id), { lastMessageText: txt, lastMessageAtMs: Date.now() }); sent++; document.getElementById("massSentCount").innerText = sent; pBar.style.width = `${(sent/contacts.length)*100}%`; } else { log.innerHTML += `<div class="text-rose-400">Failed: ${t.phone}</div>`; }
           } catch(e) { log.innerHTML += `<div class="text-rose-400">Error: ${e.message}</div>`; }
-          log.scrollTop = log.scrollHeight;
-          await new Promise(r => setTimeout(r, 400)); 
+          log.scrollTop = log.scrollHeight; await new Promise(r => setTimeout(r, 400)); 
       }
-      broadcastActive = false;
-      log.innerHTML += `<div class="text-white mt-2">>> FINISHED. Sent ${sent}.</div>`;
-      window.showToast("Broadcast Complete");
+      broadcastActive = false; log.innerHTML += `<div class="text-white mt-2">>> FINISHED. Sent ${sent}.</div>`; window.showToast("Broadcast Complete");
   };
   window.cancelBroadcast = () => { broadcastActive = false; window.showToast("Stopping..."); };
 
   window.renderContactsManagerTable = () => {
-      const s = (document.getElementById("cmSearch").value||"").toLowerCase();
-      const tbody = document.getElementById("cmList"); tbody.innerHTML = "";
-      store.threads.filter(t => (t.name||"").toLowerCase().includes(s) || (t.phone||"").includes(s)).forEach(t => {
-          tbody.innerHTML += `<tr>
-            <td class="p-4 pl-6"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">${initials(t.name)}</div><input class="cm-name bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-sm font-bold w-full text-slate-700" data-id="${t.id}" value="${escapeHtml(t.name)}"></div></td>
-            <td class="p-4 text-xs font-mono text-slate-500">${t.phone}</td>
-            <td class="p-4"><input class="cm-tags bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-xs w-full text-slate-600" data-id="${t.id}" value="${(t.tags||[]).join(",")}" placeholder="Add tags..."></td>
-            <td class="p-4 pr-6 text-right text-xs text-slate-400">${relativeTime(t.lastMessageAtMs)}</td>
-          </tr>`;
-      });
+      const s = (document.getElementById("cmSearch").value||"").toLowerCase(); const tbody = document.getElementById("cmList"); tbody.innerHTML = "";
+      store.threads.filter(t => (t.name||"").toLowerCase().includes(s) || (t.phone||"").includes(s)).forEach(t => tbody.innerHTML += `<tr><td class="p-4 pl-6"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">${initials(t.name)}</div><input class="cm-name bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-sm font-bold w-full text-slate-700" data-id="${t.id}" value="${escapeHtml(t.name)}"></div></td><td class="p-4 text-xs font-mono text-slate-500">${t.phone}</td><td class="p-4"><input class="cm-tags bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-xs w-full text-slate-600" data-id="${t.id}" value="${(t.tags||[]).join(",")}" placeholder="Tags"></td><td class="p-4 pr-6 text-right text-xs text-slate-400">${relativeTime(t.lastMessageAtMs)}</td></tr>`);
   };
   window.saveContactsManager = async () => {
-      const names = document.querySelectorAll(".cm-name"), tags = document.querySelectorAll(".cm-tags");
-      const updates = [];
-      for(let i=0; i<names.length; i++) {
-          const id=names[i].dataset.id, n=names[i].value.trim(), t=tags[i].value.split(",").filter(Boolean);
-          updates.push(updateDoc(getThreadDoc(id), { name: n, tags: t }));
-      }
+      const names = document.querySelectorAll(".cm-name"), tags = document.querySelectorAll(".cm-tags"), updates = [];
+      for(let i=0; i<names.length; i++) updates.push(updateDoc(getThreadDoc(names[i].dataset.id), { name: names[i].value.trim(), tags: tags[i].value.split(",").filter(Boolean) }));
       await Promise.all(updates); window.showToast("Directory Saved");
   };
 
   window.renderLogbook = async () => {
       const tbody = document.getElementById("logbookList"); tbody.innerHTML = "<tr><td colspan='4' class='p-4 text-center text-slate-400'>Loading...</td></tr>";
-      const snap = await getDocs(query(collection(db, "organizations", SHARED_ORG_ID, "logs"), orderBy("createdAt", "desc"), limit(20)));
-      tbody.innerHTML = "";
-      snap.forEach(d => {
-          const l = d.data();
-          tbody.innerHTML += `<tr>
-            <td class="p-4 pl-6 text-xs font-mono text-slate-500">${new Date(l.createdAt?.toMillis()).toLocaleString()}</td>
-            <td class="p-4 text-sm font-bold text-slate-800">${escapeHtml(l.threadName || l.phone || "System")}</td>
-            <td class="p-4 text-xs"><span class="font-bold uppercase text-slate-400 mr-2 text-[10px] tracking-wider border border-slate-200 px-1.5 py-0.5 rounded">${l.type}</span> ${escapeHtml(l.message||"")}</td>
-            <td class="p-4 pr-6 text-right"><button onclick="window.switchView('inbox'); window.loadThread('${l.threadId}')" class="text-blue-600 font-bold text-xs hover:underline">View</button></td>
-          </tr>`;
-      });
+      const snap = await getDocs(query(collection(db, "organizations", SHARED_ORG_ID, "logs"), orderBy("createdAt", "desc"), limit(20))); tbody.innerHTML = "";
+      snap.forEach(d => { const l = d.data(); tbody.innerHTML += `<tr><td class="p-4 pl-6 text-xs font-mono text-slate-500">${new Date(l.createdAt?.toMillis()).toLocaleString()}</td><td class="p-4 text-sm font-bold text-slate-800">${escapeHtml(l.threadName || l.phone || "System")}</td><td class="p-4 text-xs"><span class="font-bold uppercase text-slate-400 mr-2 text-[10px] tracking-wider border border-slate-200 px-1.5 py-0.5 rounded">${l.type}</span> ${escapeHtml(l.message||"")}</td><td class="p-4 pr-6 text-right"><button onclick="window.switchView('inbox'); window.loadThread('${l.threadId}')" class="text-blue-600 font-bold text-xs hover:underline">View</button></td></tr>`; });
   };
 
   window.openNewMsgModal = () => document.getElementById("newMsgModal").classList.remove("hidden");
@@ -575,6 +402,19 @@
               const t = store.threads.find(x => x.id === store.activeThreadId);
               if(t) { t.unread = 0; window.renderThreadList(); }
               await updateDoc(getThreadDoc(store.activeThreadId), { unread: 0, lastReadAtMs: Date.now() });
+          }
+      });
+      
+      // --- EVENT LISTENERS FOR INPUT ---
+      const msgInput = document.getElementById("msgInput");
+      msgInput.addEventListener('input', function() {
+          this.style.height = 'auto';
+          this.style.height = (this.scrollHeight) + 'px';
+      });
+      msgInput.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              window.sendMessage();
           }
       });
   })();
