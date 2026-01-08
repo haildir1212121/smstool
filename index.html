@@ -641,25 +641,76 @@
       await signInAnonymously(auth);
       onAuthStateChanged(auth, u => {
           if (!u) return; store.uid = u.uid;
-          unsubThreads = onSnapshot(query(getThreadsCol()), s => {
-              store.threads = []; 
-              s.forEach(d => {
-                  const t = d.data();
-                  store.threads.push(t);
-                  // Notification Logic
-                  if(!store.isFirstLoad && (t.unread||0) > 0 && t.lastMessageAtMs > store.maxKnownTime) {
-                      store.maxKnownTime = t.lastMessageAtMs;
-                      if (document.hidden || store.activeThreadId !== t.id) {
-                          document.getElementById("notifSound")?.play().catch(()=>{});
-                          sendBrowserNotification(`New from ${t.name||t.phone}`, t.lastMessageText || "Attachment", t.id);
-                      }
-                  }
-                  if(t.lastMessageAtMs > store.maxKnownTime) store.maxKnownTime = t.lastMessageAtMs;
-              });
-              store.isFirstLoad = false;
-              if(store.activeThreadId) store.activeThread = store.threads.find(t=>t.id===store.activeThreadId);
-              refreshDetailsPanel(); window.renderThreadList();
-          });
+          store.threadMap = new Map();
+store.notifiedKeys = new Set(); // de-dupe notifications by threadId:lastMessageAtMs
+
+function rememberNotified(key) {
+  store.notifiedKeys.add(key);
+  // keep it from growing forever
+  if (store.notifiedKeys.size > 5000) {
+    // delete oldest-ish (Set keeps insertion order)
+    const first = store.notifiedKeys.values().next().value;
+    store.notifiedKeys.delete(first);
+  }
+}
+
+// Replace your current unsubThreads onSnapshot with this:
+unsubThreads = onSnapshot(query(getThreadsCol()), (snap) => {
+  // Apply incremental updates first
+  snap.docChanges().forEach((ch) => {
+    const t = ch.doc.data();
+    const prev = store.threadMap.get(t.id);
+
+    // Update map immediately (so subsequent compares in same tick are consistent)
+    store.threadMap.set(t.id, t);
+
+    // No notifications on first load
+    if (store.isFirstLoad) return;
+
+    // Only notify on added/modified threads
+    if (ch.type !== "added" && ch.type !== "modified") return;
+
+    const prevLast = prev?.lastMessageAtMs || 0;
+    const nextLast = t.lastMessageAtMs || 0;
+
+    // "New message" means lastMessageAtMs advanced
+    const advanced = nextLast > prevLast;
+    if (!advanced) return;
+
+    const unread = t.unread || 0;
+    const shouldNotify =
+      unread > 0 &&
+      (document.hidden || store.activeThreadId !== t.id);
+
+    if (!shouldNotify) return;
+
+    const key = `${t.id}:${nextLast}`;
+    if (store.notifiedKeys.has(key)) return;
+
+    rememberNotified(key);
+
+    document.getElementById("notifSound")?.play().catch(() => {});
+    sendBrowserNotification(
+      `New from ${t.name || t.phone}`,
+      t.lastMessageText || "Attachment",
+      t.id
+    );
+  });
+
+  // Rebuild store.threads from the map (stable source of truth)
+  store.threads = Array.from(store.threadMap.values());
+
+  // Keep active thread object fresh
+  if (store.activeThreadId) {
+    store.activeThread = store.threadMap.get(store.activeThreadId) || null;
+  }
+
+  // Mark done with first-load after first snapshot processed
+  store.isFirstLoad = false;
+
+  refreshDetailsPanel();
+  window.renderThreadList();
+});
           setInterval(pollIncomingMessages, 10000);
       });
       document.getElementById("msgInput").addEventListener("keydown", e => { if(e.key==="Enter" && !e.shiftKey) { e.preventDefault(); window.sendMessage(); } });
