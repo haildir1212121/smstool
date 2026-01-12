@@ -367,11 +367,21 @@ const normalizePhone = (p) => {
       const s = (document.getElementById("cmSearch").value||"").toLowerCase(); const tbody = document.getElementById("cmList"); tbody.innerHTML = "";
       store.threads.filter(t => (t.name||"").toLowerCase().includes(s) || (t.phone||"").includes(s)).forEach(t => tbody.innerHTML += `<tr><td class="p-4 pl-6"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">${initials(t.name)}</div><input class="cm-name bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-sm font-bold w-full text-slate-700" data-id="${t.id}" value="${escapeHtml(t.name)}"></div></td><td class="p-4 text-xs font-mono text-slate-500">${t.phone}</td><td class="p-4"><input class="cm-tags bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-xs w-full text-slate-600" data-id="${t.id}" value="${(t.tags||[]).join(",")}" placeholder="Tags"></td><td class="p-4 pr-6 text-right text-xs text-slate-400">${relativeTime(t.lastMessageAtMs)}</td></tr>`);
   };
-  window.saveContactsManager = async () => {
-      const names = document.querySelectorAll(".cm-name"), tags = document.querySelectorAll(".cm-tags"), updates = [];
-      for(let i=0; i<names.length; i++) updates.push(updateDoc(getThreadDoc(names[i].dataset.id), { name: names[i].value.trim(), tags: tags[i].value.split(",").filter(Boolean) }));
-      await Promise.all(updates); window.showToast("Directory Saved");
-  };
+ window.saveContactsManager = async () => {
+    const names = document.querySelectorAll(".cm-name");
+    const tags = document.querySelectorAll(".cm-tags");
+    const updates = [];
+    
+    for(let i=0; i<names.length; i++) {
+        // We aren't updating the ID here (that's harder), but we can update the display phone
+        updates.push(updateDoc(getThreadDoc(names[i].dataset.id), { 
+            name: names[i].value.trim(), 
+            tags: tags[i].value.split(",").filter(Boolean) 
+        }));
+    }
+    await Promise.all(updates); 
+    window.showToast("Directory Saved");
+};
 
   window.renderLogbook = async () => {
       const tbody = document.getElementById("logbookList"); tbody.innerHTML = "<tr><td colspan='4' class='p-4 text-center text-slate-400'>Loading...</td></tr>";
