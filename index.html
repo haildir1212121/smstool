@@ -210,7 +210,18 @@
           store.notifQueue = {}; store.notifTimer = null;
       }, 3000); 
   }
+const normalizePhone = (p) => {
+    if (!p) return "";
+    let clean = p.replace(/\D/g, ''); // Strip all non-numbers
+    // If it's 10 digits (Standard US), add +1
+    if (clean.length === 10) return `+1${clean}`;
+    // If it's 11 digits and starts with 1, add +
+    if (clean.length === 11 && clean.startsWith('1')) return `+${clean}`;
+    // Fallback: Just return what we have with a + if it looks like a number
+    return clean.length > 0 ? `+${clean}` : ""; 
+};
 
+  
   async function poll() {
       if(store.isPolling) return; store.isPolling = true;
       try {
@@ -218,7 +229,7 @@
           if(data.success) {
             data.messages.filter(m=>m.direction==="inbound" && !store.lastInboundSidSeen.has(m.sid)).forEach(async m => {
                 store.lastInboundSidSeen.add(m.sid);
-                const phone = m.from.replace(/\D/g,'').length===10?`+1${m.from.replace(/\D/g,'')}`:m.from;
+                const phone = normalizePhone(m.from);
                 const msgTime = new Date(m.dateCreated).getTime(); // Use Twilio Time!
                 
                 await setDoc(doc(getMsgsCol(phone), m.sid), { body:m.body, direction:"received", createdAt: new Date(msgTime), sid:m.sid, mediaUrls: m.mediaUrls||[] });
@@ -369,8 +380,28 @@
   };
 
   window.openNewMsgModal = () => document.getElementById("newMsgModal").classList.remove("hidden");
-  window.createThreadFromModal = async () => { await setDoc(getThreadDoc(document.getElementById("newContactPhone").value), { id: document.getElementById("newContactPhone").value, phone: document.getElementById("newContactPhone").value, name: document.getElementById("newContactName").value, unread:0, lastMessageAtMs: Date.now() }, {merge:true}); document.getElementById("newMsgModal").classList.add("hidden"); };
-  window.toggleUrgentThread = async () => { if(store.activeThreadId) await updateDoc(getThreadDoc(store.activeThreadId), { isUrgent: !store.activeThread.isUrgent }); };
+ window.createThreadFromModal = async () => { 
+    const rawPhone = document.getElementById("newContactPhone").value;
+    const cleanPhone = normalizePhone(rawPhone); // <--- THE FIX
+    const name = document.getElementById("newContactName").value;
+
+    if(cleanPhone.length < 10) {
+        window.showToast("Invalid Phone Number", "error");
+        return;
+    }
+
+    // We use cleanPhone for both the ID and the phone field
+    await setDoc(getThreadDoc(cleanPhone), { 
+        id: cleanPhone, 
+        phone: cleanPhone, 
+        name: name, 
+        unread:0, 
+        lastMessageAtMs: Date.now() 
+    }, {merge:true}); 
+    
+    document.getElementById("newMsgModal").classList.add("hidden"); 
+    window.loadThread(cleanPhone); // Automatically open the new chat
+};
   window.toggleUnreadOnly = () => { store.onlyUnread = !store.onlyUnread; window.renderThreadList(); };
   window.toggleUrgentOnly = () => { store.onlyUrgent = !store.onlyUrgent; window.renderThreadList(); };
   window.openSettingsModal = () => { document.getElementById("settingsModal").classList.remove("hidden"); document.getElementById("cannedRepliesInput").value = store.cannedReplies.join("\n"); };
