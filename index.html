@@ -168,8 +168,11 @@
   </div>
 
   <div id="view-logs" class="hidden flex-1 h-full flex-col bg-white fade-in">
-      <div class="h-16 border-b border-gray-200 flex items-center px-8 bg-white/90 sticky top-0 z-10"><h2 class="text-lg font-bold">Shift Logs</h2></div>
-      <div class="flex-1 overflow-auto bg-slate-50 p-6"><div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-w-4xl mx-auto"><table class="w-full text-left"><tbody id="logbookList" class="divide-y divide-gray-100"></tbody></table></div></div>
+      <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10">
+          <h2 class="text-lg font-bold text-slate-800 tracking-tight">Shift Logs</h2>
+          <div id="logTagRow" class="flex gap-2 overflow-x-auto scrollbar-hide max-w-xl"></div>
+      </div>
+      <div class="flex-1 overflow-auto bg-slate-50 p-6"><div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-w-5xl mx-auto"><table class="w-full text-left"><tbody id="logbookList" class="divide-y divide-gray-100"></tbody></table></div></div>
   </div>
 
 <script type="module">
@@ -210,18 +213,8 @@
           store.notifQueue = {}; store.notifTimer = null;
       }, 3000); 
   }
-const normalizePhone = (p) => {
-    if (!p) return "";
-    let clean = p.replace(/\D/g, ''); // Strip all non-numbers
-    // If it's 10 digits (Standard US), add +1
-    if (clean.length === 10) return `+1${clean}`;
-    // If it's 11 digits and starts with 1, add +
-    if (clean.length === 11 && clean.startsWith('1')) return `+${clean}`;
-    // Fallback: Just return what we have with a + if it looks like a number
-    return clean.length > 0 ? `+${clean}` : ""; 
-};
+  const normalizePhone = (p) => { if (!p) return ""; let clean = p.replace(/\D/g, ''); if (clean.length === 10) return `+1${clean}`; if (clean.length === 11 && clean.startsWith('1')) return `+${clean}`; return clean.length > 0 ? `+${clean}` : ""; };
 
-  
   async function poll() {
       if(store.isPolling) return; store.isPolling = true;
       try {
@@ -230,7 +223,7 @@ const normalizePhone = (p) => {
             data.messages.filter(m=>m.direction==="inbound" && !store.lastInboundSidSeen.has(m.sid)).forEach(async m => {
                 store.lastInboundSidSeen.add(m.sid);
                 const phone = normalizePhone(m.from);
-                const msgTime = new Date(m.dateCreated).getTime(); // Use Twilio Time!
+                const msgTime = new Date(m.dateCreated).getTime(); 
                 
                 await setDoc(doc(getMsgsCol(phone), m.sid), { body:m.body, direction:"received", createdAt: new Date(msgTime), sid:m.sid, mediaUrls: m.mediaUrls||[] });
                 
@@ -238,9 +231,12 @@ const normalizePhone = (p) => {
                 const isViewing = (store.activeThreadId === phone && document.visibilityState === 'visible');
                 if (!isViewing) queueNotification(phone, t ? (t.name || phone) : phone, m.body);
 
+                const updateData = { lastMessageText: m.body, lastMessageAtMs: msgTime, unread: isViewing ? 0 : increment(1), id: phone, phone: phone };
+                if (!t) updateData.name = phone; 
+
                 const currentLastMs = t ? (t.lastMessageAtMs || 0) : 0;
                 if (msgTime > currentLastMs) {
-                    await setDoc(getThreadDoc(phone), { lastMessageText: m.body, lastMessageAtMs: msgTime, unread: isViewing ? 0 : increment(1) }, { merge: true });
+                    await setDoc(getThreadDoc(phone), updateData, { merge: true });
                 }
             });
           }
@@ -296,7 +292,7 @@ const normalizePhone = (p) => {
       }).join("");
   };
 
-  window.filterByTag = (tag) => { store.tagFilter = tag; window.renderThreadList(); };
+  window.filterByTag = (tag) => { store.tagFilter = tag; window.renderThreadList(); window.renderLogbook(); };
   window.loadThread = async (id) => {
       if(unsubMessages) unsubMessages(); store.activeThreadId = id; store.activeThread = store.threads.find(t=>t.id===id);
       if(store.activeThread) { store.activeThread.unread = 0; window.renderThreadList(); }
@@ -323,11 +319,19 @@ const normalizePhone = (p) => {
       });
   };
 
+  // --- AUTOMATED LOGGING ---
+  const shiftKeywords = ["call it a day", "head home", "last trip", "good to go home", "done for the day", "you are clear"];
+
   window.sendMessage = async () => {
     const txt = document.getElementById("msgInput").value.trim();
     if((!txt && !store.pendingMedia.length) || !store.activeThreadId) return;
     const btn = document.getElementById("sendBtn"); btn.disabled = true;
     try {
+        const lowerTxt = txt.toLowerCase();
+        if (shiftKeywords.some(k => lowerTxt.includes(k))) {
+            await addDoc(collection(db, "organizations", SHARED_ORG_ID, "logs"), { type:"end_shift", threadName: store.activeThread.name||"Unknown", phone: store.activeThread.phone, message:txt, threadId: store.activeThreadId, createdAt: serverTimestamp() });
+            window.showToast("Logged: End of Shift");
+        }
         let mediaUrls = [];
         if(store.pendingMedia.length) {
              mediaUrls = await Promise.all(store.pendingMedia.map(async (file, i) => { const snap = await uploadBytesResumable(storageRef(storage, `mms/${SHARED_ORG_ID}/${store.activeThreadId}/${Date.now()}_${i}`), file); return getDownloadURL(snap.ref); }));
@@ -371,47 +375,71 @@ const normalizePhone = (p) => {
     const names = document.querySelectorAll(".cm-name");
     const tags = document.querySelectorAll(".cm-tags");
     const updates = [];
-    
     for(let i=0; i<names.length; i++) {
-        // We aren't updating the ID here (that's harder), but we can update the display phone
-        updates.push(updateDoc(getThreadDoc(names[i].dataset.id), { 
-            name: names[i].value.trim(), 
-            tags: tags[i].value.split(",").filter(Boolean) 
-        }));
+        updates.push(updateDoc(getThreadDoc(names[i].dataset.id), { name: names[i].value.trim(), tags: tags[i].value.split(",").filter(Boolean) }));
     }
     await Promise.all(updates); 
     window.showToast("Directory Saved");
 };
 
+  // --- UPDATED LOGS RENDER ---
   window.renderLogbook = async () => {
-      const tbody = document.getElementById("logbookList"); tbody.innerHTML = "<tr><td colspan='4' class='p-4 text-center text-slate-400'>Loading...</td></tr>";
-      const snap = await getDocs(query(collection(db, "organizations", SHARED_ORG_ID, "logs"), orderBy("createdAt", "desc"), limit(20))); tbody.innerHTML = "";
-      snap.forEach(d => { const l = d.data(); tbody.innerHTML += `<tr><td class="p-4 pl-6 text-xs font-mono text-slate-500">${new Date(l.createdAt?.toMillis()).toLocaleString()}</td><td class="p-4 text-sm font-bold text-slate-800">${escapeHtml(l.threadName || l.phone || "System")}</td><td class="p-4 text-xs"><span class="font-bold uppercase text-slate-400 mr-2 text-[10px] tracking-wider border border-slate-200 px-1.5 py-0.5 rounded">${l.type}</span> ${escapeHtml(l.message||"")}</td><td class="p-4 pr-6 text-right"><button onclick="window.switchView('inbox'); window.loadThread('${l.threadId}')" class="text-blue-600 font-bold text-xs hover:underline">View</button></td></tr>`; });
+      // 1. Render Tags in Header
+      const tagRow = document.getElementById("logTagRow");
+      if(tagRow) {
+          const allTags = new Set(); store.threads.forEach(t => (t.tags||[]).forEach(tag => allTags.add(tag)));
+          let tagHtml = `<button onclick="window.filterByTag(null)" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${!store.tagFilter ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}">ALL</button>`;
+          Array.from(allTags).sort().forEach(tag => {
+              const active = store.tagFilter === tag;
+              tagHtml += `<button onclick="window.filterByTag('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'}">${tag}</button>`;
+          });
+          tagRow.innerHTML = tagHtml;
+      }
+
+      // 2. Fetch and Render Logs
+      const tbody = document.getElementById("logbookList"); 
+      tbody.innerHTML = "<tr><td colspan='4' class='p-4 text-center text-slate-400'>Loading...</td></tr>";
+      const snap = await getDocs(query(collection(db, "organizations", SHARED_ORG_ID, "logs"), orderBy("createdAt", "desc"), limit(50))); 
+      tbody.innerHTML = "";
+      
+      snap.forEach(d => { 
+          const l = d.data();
+          // Find the thread associated with this log
+          const thread = store.threads.find(t => t.id === l.threadId || t.phone === l.phone);
+          const threadTags = thread ? (thread.tags || []) : [];
+
+          // Filter Logic
+          if (store.tagFilter && !threadTags.includes(store.tagFilter)) return;
+
+          // Render Row
+          const tagBadges = threadTags.slice(0,2).map(tag => `<span class="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px] border border-slate-200 font-bold mr-1">${tag}</span>`).join("");
+
+          tbody.innerHTML += `<tr>
+            <td class="p-4 pl-6 text-xs font-mono text-slate-500">${new Date(l.createdAt?.toMillis()).toLocaleString()}</td>
+            <td class="p-4 text-sm font-bold text-slate-800">
+                ${escapeHtml(l.threadName || l.phone || "System")}
+                <div class="mt-1">${tagBadges}</div>
+            </td>
+            <td class="p-4 text-xs">
+                <span class="font-bold uppercase text-slate-400 mr-2 text-[10px] tracking-wider border border-slate-200 px-1.5 py-0.5 rounded">${l.type}</span> 
+                ${escapeHtml(l.message||"")}
+            </td>
+            <td class="p-4 pr-6 text-right"><button onclick="window.switchView('inbox'); window.loadThread('${l.threadId}')" class="text-blue-600 font-bold text-xs hover:underline">View</button></td>
+          </tr>`; 
+      });
   };
 
   window.openNewMsgModal = () => document.getElementById("newMsgModal").classList.remove("hidden");
  window.createThreadFromModal = async () => { 
     const rawPhone = document.getElementById("newContactPhone").value;
-    const cleanPhone = normalizePhone(rawPhone); // <--- THE FIX
+    const cleanPhone = normalizePhone(rawPhone); 
     const name = document.getElementById("newContactName").value;
-
-    if(cleanPhone.length < 10) {
-        window.showToast("Invalid Phone Number", "error");
-        return;
-    }
-
-    // We use cleanPhone for both the ID and the phone field
-    await setDoc(getThreadDoc(cleanPhone), { 
-        id: cleanPhone, 
-        phone: cleanPhone, 
-        name: name, 
-        unread:0, 
-        lastMessageAtMs: Date.now() 
-    }, {merge:true}); 
-    
+    if(cleanPhone.length < 10) { window.showToast("Invalid Phone Number", "error"); return; }
+    await setDoc(getThreadDoc(cleanPhone), { id: cleanPhone, phone: cleanPhone, name: name, unread:0, lastMessageAtMs: Date.now() }, {merge:true}); 
     document.getElementById("newMsgModal").classList.add("hidden"); 
-    window.loadThread(cleanPhone); // Automatically open the new chat
+    window.loadThread(cleanPhone); 
 };
+  window.toggleUrgentThread = async () => { if(store.activeThreadId) await updateDoc(getThreadDoc(store.activeThreadId), { isUrgent: !store.activeThread.isUrgent }); };
   window.toggleUnreadOnly = () => { store.onlyUnread = !store.onlyUnread; window.renderThreadList(); };
   window.toggleUrgentOnly = () => { store.onlyUrgent = !store.onlyUrgent; window.renderThreadList(); };
   window.openSettingsModal = () => { document.getElementById("settingsModal").classList.remove("hidden"); document.getElementById("cannedRepliesInput").value = store.cannedReplies.join("\n"); };
@@ -430,7 +458,7 @@ const normalizePhone = (p) => {
       onAuthStateChanged(auth, u => {
           if(!u) return;
           onSnapshot(query(getThreadsCol()), s => {
-              store.threads = s.docs.map(d => d.data());
+              store.threads = s.docs.map(d => { const data = d.data(); if (!data.id) data.id = d.id; return data; });
               if(store.activeThreadId) store.activeThread = store.threads.find(t=>t.id===store.activeThreadId);
               window.renderThreadList();
               if(store.activeThreadId && store.activeThread) document.getElementById("activeContactName").innerText = store.activeThread.name; 
@@ -446,18 +474,9 @@ const normalizePhone = (p) => {
           }
       });
       
-      // --- EVENT LISTENERS FOR INPUT ---
       const msgInput = document.getElementById("msgInput");
-      msgInput.addEventListener('input', function() {
-          this.style.height = 'auto';
-          this.style.height = (this.scrollHeight) + 'px';
-      });
-      msgInput.addEventListener('keydown', function(e) {
-          if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              window.sendMessage();
-          }
-      });
+      msgInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; });
+      msgInput.addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.sendMessage(); } });
   })();
 </script>
 </body>
