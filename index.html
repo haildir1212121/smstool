@@ -93,9 +93,7 @@
             <div class="flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-2xl p-1.5 focus-within:ring-4 focus-within:ring-blue-50 focus-within:border-blue-300 transition shadow-sm">
                 <button onclick="document.getElementById('mmsFileInput').click()" class="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-white hover:text-blue-500 transition shrink-0"><i class="fa-solid fa-paperclip"></i></button>
                 <input type="file" id="mmsFileInput" class="hidden" multiple accept="image/*,video/*" onchange="window.handleMmsFiles(this)">
-                
                 <textarea id="msgInput" rows="1" class="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2.5 px-2 max-h-32 resize-none text-slate-800 placeholder-slate-400" placeholder="Type a message..."></textarea>
-                
                 <div class="relative shrink-0">
                     <select id="templateSelect" onchange="window.insertTemplate()" class="absolute inset-0 opacity-0 cursor-pointer w-full"><option value="">T</option><option value="Please sign into your tablet.">Login</option><option value="Copy. Thank you.">Copy</option></select>
                     <button class="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-white hover:text-blue-500 transition"><i class="fa-regular fa-file-lines"></i></button>
@@ -142,27 +140,34 @@
       </div>
   </div>
 
-  <div id="view-contacts" class="hidden flex-1 h-full flex-col bg-white fade-in">
+  <div id="view-contacts" class="hidden flex-1 h-full flex-col bg-white fade-in overflow-hidden">
     <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
         <div class="flex items-center gap-4">
             <h2 class="text-lg font-bold text-slate-800">Directory</h2>
             <div id="contactsTagRow" class="flex gap-2 overflow-x-auto scrollbar-hide max-w-lg"></div>
         </div>
-        <div class="flex gap-3"><input id="cmSearch" oninput="window.renderContactsManagerTable()" placeholder="Search..." class="bg-slate-50 border border-slate-200 rounded-xl pl-4 py-2 text-sm w-64 outline-none"><button onclick="window.saveContactsManager()" class="px-5 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold">Save</button></div>
+        <div class="flex gap-3"><input id="cmSearch" oninput="window.store.cmPage=1; window.renderContactsManagerTable()" placeholder="Search..." class="bg-slate-50 border border-slate-200 rounded-xl pl-4 py-2 text-sm w-64 outline-none"><button onclick="window.saveContactsManager()" class="px-5 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold">Save</button></div>
     </div>
     <div class="flex-1 overflow-y-auto bg-slate-50 p-6">
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 max-w-5xl mx-auto">
-            <table class="w-full text-left">
-              <thead class="bg-slate-50 text-xs uppercase text-slate-500 font-semibold border-b border-gray-200">
-                <tr><th class="p-4 pl-6">Name</th><th class="p-4">Phone</th><th class="p-4">Tags</th><th class="p-4 text-right">Last Active</th><th class="p-4"></th></tr>
-              </thead>
-              <tbody id="cmList" class="divide-y divide-gray-100"></tbody>
-            </table>
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 max-w-5xl mx-auto flex flex-col">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left">
+                <thead class="bg-slate-50 text-xs uppercase text-slate-500 font-semibold border-b border-gray-200">
+                  <tr><th class="p-4 pl-6">Name</th><th class="p-4">Phone</th><th class="p-4">Tags</th><th class="p-4 text-right">Last Active</th><th class="p-4"></th></tr>
+                </thead>
+                <tbody id="cmList" class="divide-y divide-gray-100"></tbody>
+              </table>
+            </div>
+            <div class="p-4 border-t border-gray-100 flex justify-between items-center bg-gray-50/50 rounded-b-2xl">
+                <button onclick="window.changeCmPage(-1)" class="px-3 py-1 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm">Previous</button>
+                <span id="cmPageInfo" class="text-xs font-mono text-gray-400">Page 1</span>
+                <button onclick="window.changeCmPage(1)" class="px-3 py-1 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm">Next</button>
+            </div>
         </div>
     </div>
   </div>
 
-  <div id="view-broadcast" class="hidden flex-1 h-full flex-col bg-slate-50 fade-in items-center justify-center p-6">
+  <div id="view-broadcast" class="hidden flex-1 h-full flex-col bg-slate-50 fade-in items-center justify-center p-6 overflow-hidden">
       <div class="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-2xl overflow-hidden flex flex-col h-[600px]">
           <div class="p-6 border-b border-gray-100 bg-white flex items-center gap-4"><div class="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-lg"><i class="fa-solid fa-bullhorn"></i></div><div><h2 class="text-xl font-bold">Mass Broadcast</h2></div></div>
           <div class="flex-1 p-8 flex flex-col bg-slate-50/50">
@@ -181,12 +186,26 @@
       </div>
   </div>
 
-  <div id="view-logs" class="hidden flex-1 h-full flex-col bg-white fade-in">
+  <div id="view-logs" class="hidden flex-1 h-full flex-col bg-white fade-in overflow-hidden">
       <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
           <h2 class="text-lg font-bold text-slate-800 tracking-tight">Shift Logs</h2>
           <div id="logTagRow" class="flex gap-2 overflow-x-auto scrollbar-hide max-w-xl"></div>
       </div>
-      <div class="flex-1 overflow-auto bg-slate-50 p-6"><div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-w-5xl mx-auto"><table class="w-full text-left"><tbody id="logbookList" class="divide-y divide-gray-100"></tbody></table></div></div>
+      <div class="flex-1 overflow-auto bg-slate-50 p-6">
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-w-5xl mx-auto flex flex-col">
+              <table class="w-full text-left">
+                  <thead class="bg-slate-50 text-xs uppercase text-slate-500 font-semibold border-b border-gray-200">
+                      <tr><th class="p-4 pl-6">Time</th><th class="p-4">Contact</th><th class="p-4">Event</th><th class="p-4 text-right pr-6">Action</th></tr>
+                  </thead>
+                  <tbody id="logbookList" class="divide-y divide-gray-100"></tbody>
+              </table>
+              <div class="p-4 border-t border-gray-100 flex justify-between items-center bg-gray-50/50">
+                  <button onclick="window.changeLogPage(-1)" class="px-3 py-1 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm">Previous</button>
+                  <span id="logPageInfo" class="text-xs font-mono text-gray-400">Page 1</span>
+                  <button onclick="window.changeLogPage(1)" class="px-3 py-1 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm">Next</button>
+              </div>
+          </div>
+      </div>
   </div>
 
 <script type="module">
@@ -203,7 +222,11 @@
   const app = initializeApp({ apiKey: "AIzaSyCaypEoug2f7OTJjKOdkkJPaZDypcr3NF8", authDomain: "sms-dlx.firebaseapp.com", projectId: "sms-dlx", storageBucket: "sms-dlx.firebasestorage.app", messagingSenderId: "522453095698", appId: "1:522453095698:web:ea217285e6e5160ee4cfcb" });
   const auth = getAuth(app); const db = getFirestore(app); const storage = getStorage(app);
 
-  let store = { threads: [], activeThreadId: null, activeThread: null, pinned: new Set(), drafts: {}, cannedReplies: [], deletedSids: new Set(), lastInboundSidSeen: new Set(), isPolling: false, pendingMedia: [], isFirstLoad: true, onlyUnread: false, onlyUrgent: false, tagFilter: new Set(), notifQueue: {}, notifTimer: null };
+  // ADDED PAGINATION STATE
+  let store = { threads: [], logs: [], activeThreadId: null, activeThread: null, pinned: new Set(), drafts: {}, cannedReplies: [], deletedSids: new Set(), lastInboundSidSeen: new Set(), isPolling: false, pendingMedia: [], isFirstLoad: true, onlyUnread: false, onlyUrgent: false, tagFilter: new Set(), notifQueue: {}, notifTimer: null, cmPage: 1, logPage: 1, itemsPerPage: 15 };
+  
+  // Make store global so pagination buttons can access it
+  window.store = store;
 
   const escapeHtml = (t) => { const d = document.createElement("div"); d.textContent = t ?? ""; return d.innerHTML; };
   const initials = (s) => (s || "?").trim().slice(0, 2).toUpperCase() || "?";
@@ -229,6 +252,8 @@
   }
   const normalizePhone = (p) => { if (!p) return ""; let clean = p.replace(/\D/g, ''); if (clean.length === 10) return `+1${clean}`; if (clean.length === 11 && clean.startsWith('1')) return `+${clean}`; return clean.length > 0 ? `+${clean}` : ""; };
 
+  const vehicleKeywords = ["oil change", "repair", "red triangle", "check engine", "engine light", "won't start", "wont start", "not starting", "flat tire", "break down", "breakdown", "tow", "not turning on"];
+
   async function poll() {
       if(store.isPolling) return; store.isPolling = true;
       try {
@@ -245,7 +270,23 @@
                 const isViewing = (store.activeThreadId === phone && document.visibilityState === 'visible');
                 if (!isViewing) queueNotification(phone, t ? (t.name || phone) : phone, m.body);
 
+                const lowerBody = m.body.toLowerCase();
+                const isMaintenance = vehicleKeywords.some(k => lowerBody.includes(k));
+                
+                if (isMaintenance) {
+                    await addDoc(collection(db, "organizations", SHARED_ORG_ID, "logs"), {
+                        type: "vehicle_alert",
+                        threadName: t ? (t.name || phone) : phone,
+                        phone: phone,
+                        message: m.body,
+                        threadId: phone,
+                        createdAt: serverTimestamp()
+                    });
+                    window.showToast("Vehicle Issue Detected!", "error");
+                }
+
                 const updateData = { lastMessageText: m.body, lastMessageAtMs: msgTime, unread: isViewing ? 0 : increment(1), id: phone, phone: phone };
+                if (isMaintenance) updateData.isUrgent = true; 
                 if (!t) updateData.name = phone; 
 
                 const currentLastMs = t ? (t.lastMessageAtMs || 0) : 0;
@@ -262,9 +303,9 @@
       document.getElementById(`view-${v}`).classList.remove('hidden');
       document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
       document.getElementById(`nav-${v}`).classList.add('active');
-      if(v === 'contacts') window.renderContactsManagerTable();
+      if(v === 'contacts') { store.cmPage = 1; window.renderContactsManagerTable(); }
       if(v === 'broadcast') document.getElementById('massCountDisplay').innerText = store.threads.filter(t=>t.phone && t.phone.length > 5).length;
-      if(v === 'logs') window.renderLogbook();
+      if(v === 'logs') { store.logPage = 1; window.renderLogbook(); }
   };
   window.toggleInfoPanel = () => document.getElementById("infoPanel").classList.toggle("hidden");
 
@@ -298,7 +339,6 @@
       window.showToast("Contact Deleted");
   };
 
-  // --- UPDATED RENDER THREADS (INBOX) WITH UNTAGGED SUPPORT ---
   window.renderThreadList = () => {
       const el = document.getElementById("contactList");
       const tagRow = document.getElementById("tagFilterRow");
@@ -310,11 +350,8 @@
       if(allTags.size > 0 || store.threads.length > 0) {
           tagRow.classList.remove("hidden");
           let tagHtml = `<button onclick="window.clearTagFilter()" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter.size===0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200'}">ALL</button>`;
-          
-          // Untagged Button
           const untaggedActive = store.tagFilter.has("__untagged__");
           tagHtml += `<button onclick="window.toggleTagFilter('__untagged__')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${untaggedActive ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">Untagged</button>`;
-
           Array.from(allTags).sort().forEach(tag => {
               const active = store.tagFilter.has(tag);
               tagHtml += `<button onclick="window.toggleTagFilter('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">${tag}</button>`;
@@ -327,15 +364,11 @@
           if (s && !`${t.name} ${t.phone}`.toLowerCase().includes(s)) return false;
           if (store.onlyUnread && !t.unread) return false;
           if (store.onlyUrgent && !t.isUrgent) return false;
-          
-          // UPDATED MULTI-TAG LOGIC (Supports Union/OR + Untagged)
           if (store.tagFilter.size > 0) {
               const tTags = t.tags || [];
               const wantsUntagged = store.tagFilter.has("__untagged__");
-              
               const hasTagMatch = tTags.some(tag => store.tagFilter.has(tag));
               const isUntaggedMatch = wantsUntagged && tTags.length === 0;
-              
               if (!hasTagMatch && !isUntaggedMatch) return false;
           }
           return true;
@@ -343,8 +376,20 @@
 
       el.innerHTML = list.map(t => {
           const isActive = t.id === store.activeThreadId, isUnread = (t.unread||0) > 0;
-          return `<div onclick="window.loadThread('${t.id}')" class="p-3 rounded-xl cursor-pointer mb-1 transition flex items-center gap-3 ${isActive ? 'bg-blue-50 border border-blue-100 shadow-sm' : 'hover:bg-slate-50 border border-transparent'}">
-            <div class="relative w-10 h-10 rounded-full ${isActive?'bg-blue-600 text-white':(isUnread?'bg-blue-100 text-blue-600':'bg-gray-100 text-gray-500')} flex items-center justify-center font-bold text-xs shrink-0 transition-colors">${initials(t.name)}${isUnread ? '<div class="absolute top-0 right-0 w-3 h-3 bg-blue-500 rounded-full border-2 border-white"></div>':''}${t.isUrgent ? '<div class="absolute -top-1 -right-1 text-rose-500 animate-pulse"><i class="fa-solid fa-bell"></i></div>':''}</div>
+          const isVehicleAlert = t.isUrgent && vehicleKeywords.some(k => (t.lastMessageText||'').toLowerCase().includes(k));
+          let cardClass = isActive ? 'bg-blue-50 border border-blue-100 shadow-sm' : 'hover:bg-slate-50 border border-transparent';
+          let iconClass = isActive ? 'bg-blue-600 text-white' : (isUnread ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500');
+          let urgentIcon = '';
+
+          if (isVehicleAlert) {
+              cardClass = isActive ? 'bg-amber-100 border-l-4 border-amber-500' : 'bg-amber-50 border-l-4 border-amber-400 hover:bg-amber-100';
+              urgentIcon = '<div class="absolute -top-1 -right-1 text-amber-600 animate-pulse"><i class="fa-solid fa-wrench"></i></div>';
+          } else if (t.isUrgent) {
+              urgentIcon = '<div class="absolute -top-1 -right-1 text-rose-500 animate-pulse"><i class="fa-solid fa-bell"></i></div>';
+          }
+
+          return `<div onclick="window.loadThread('${t.id}')" class="p-3 rounded-xl cursor-pointer mb-1 transition flex items-center gap-3 ${cardClass}">
+            <div class="relative w-10 h-10 rounded-full ${iconClass} flex items-center justify-center font-bold text-xs shrink-0 transition-colors">${initials(t.name)}${isUnread ? '<div class="absolute top-0 right-0 w-3 h-3 bg-blue-500 rounded-full border-2 border-white"></div>':''}${urgentIcon}</div>
             <div class="flex-1 min-w-0"><div class="flex justify-between items-baseline"><span class="font-bold text-sm ${isUnread?'text-gray-900':'text-gray-700'} truncate">${escapeHtml(t.name)}</span><span class="text-[10px] text-gray-400 whitespace-nowrap">${relativeTime(t.lastMessageAtMs)}</span></div><div class="text-xs text-gray-500 truncate h-4 leading-4 opacity-80">${escapeHtml(t.lastMessageText || "No messages")}</div>${t.tags && t.tags.length ? `<div class="flex gap-1 mt-1 overflow-hidden h-4">${t.tags.slice(0,3).map(g=>`<span class="px-1 bg-slate-100 text-slate-500 text-[9px] rounded border border-slate-200">${g}</span>`).join("")}</div>` : ''}</div>
           </div>`;
       }).join("");
@@ -426,16 +471,14 @@
   };
   window.cancelBroadcast = () => { broadcastActive = false; window.showToast("Stopping..."); };
 
-  // --- UPDATED RENDER DIRECTORY WITH UNTAGGED SUPPORT ---
+  // --- PAGINATED RENDER FUNCTIONS ---
   window.renderContactsManagerTable = () => {
       const tagRow = document.getElementById("contactsTagRow");
       if(tagRow) {
           const allTags = new Set(); store.threads.forEach(t => (t.tags||[]).forEach(tag => allTags.add(tag)));
           let tagHtml = `<button onclick="window.clearTagFilter()" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter.size===0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}">ALL</button>`;
-          
           const untaggedActive = store.tagFilter.has("__untagged__");
           tagHtml += `<button onclick="window.toggleTagFilter('__untagged__')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${untaggedActive ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">Untagged</button>`;
-
           Array.from(allTags).sort().forEach(tag => {
               const active = store.tagFilter.has(tag);
               tagHtml += `<button onclick="window.toggleTagFilter('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'}">${tag}</button>`;
@@ -447,22 +490,32 @@
       const tbody = document.getElementById("cmList"); 
       tbody.innerHTML = "";
       
-      store.threads.filter(t => {
+      const filtered = store.threads.filter(t => {
           if (!((t.name||"").toLowerCase().includes(s) || (t.phone||"").includes(s))) return false;
           if (store.tagFilter.size > 0) {
               const tTags = t.tags || [];
               const wantsUntagged = store.tagFilter.has("__untagged__");
-              
               const hasTagMatch = tTags.some(tag => store.tagFilter.has(tag));
               const isUntaggedMatch = wantsUntagged && tTags.length === 0;
-              
               if (!hasTagMatch && !isUntaggedMatch) return false;
           }
           return true;
-      }).forEach(t => {
+      });
+
+      // Pagination Logic
+      const totalPages = Math.ceil(filtered.length / store.itemsPerPage) || 1;
+      store.cmPage = Math.max(1, Math.min(store.cmPage, totalPages));
+      document.getElementById("cmPageInfo").innerText = `Page ${store.cmPage} of ${totalPages}`;
+      
+      const start = (store.cmPage - 1) * store.itemsPerPage;
+      const paginated = filtered.slice(start, start + store.itemsPerPage);
+
+      paginated.forEach(t => {
           tbody.innerHTML += `<tr><td class="p-4 pl-6"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">${initials(t.name)}</div><input class="cm-name bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-sm font-bold w-full text-slate-700" data-id="${t.id}" value="${escapeHtml(t.name)}"></div></td><td class="p-4 text-xs font-mono text-slate-500">${t.phone}</td><td class="p-4"><input class="cm-tags bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-xs w-full text-slate-600" data-id="${t.id}" value="${(t.tags||[]).join(",")}" placeholder="Tags"></td><td class="p-4 pr-6 text-right text-xs text-slate-400">${relativeTime(t.lastMessageAtMs)}</td><td class="p-4 text-right"><button onclick="window.deleteContact('${t.id}')" class="text-slate-400 hover:text-rose-600 transition"><i class="fa-solid fa-trash"></i></button></td></tr>`;
       });
   };
+
+  window.changeCmPage = (dir) => { store.cmPage += dir; window.renderContactsManagerTable(); };
 
  window.saveContactsManager = async () => {
     const names = document.querySelectorAll(".cm-name");
@@ -475,16 +528,13 @@
     window.showToast("Directory Saved");
 };
 
-  // --- UPDATED LOGS RENDER WITH UNTAGGED SUPPORT ---
   window.renderLogbook = async () => {
       const tagRow = document.getElementById("logTagRow");
       if(tagRow) {
           const allTags = new Set(); store.threads.forEach(t => (t.tags||[]).forEach(tag => allTags.add(tag)));
           let tagHtml = `<button onclick="window.clearTagFilter()" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter.size===0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}">ALL</button>`;
-          
           const untaggedActive = store.tagFilter.has("__untagged__");
           tagHtml += `<button onclick="window.toggleTagFilter('__untagged__')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${untaggedActive ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">Untagged</button>`;
-
           Array.from(allTags).sort().forEach(tag => {
               const active = store.tagFilter.has(tag);
               tagHtml += `<button onclick="window.toggleTagFilter('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'}">${tag}</button>`;
@@ -492,26 +542,39 @@
           tagRow.innerHTML = tagHtml;
       }
 
+      // LOAD ALL LOGS ONCE IF EMPTY (Client-side cache)
+      if (store.logs.length === 0) {
+          const snap = await getDocs(query(collection(db, "organizations", SHARED_ORG_ID, "logs"), orderBy("createdAt", "desc"), limit(200))); 
+          store.logs = snap.docs.map(d => d.data());
+      }
+
       const tbody = document.getElementById("logbookList"); 
-      tbody.innerHTML = "<tr><td colspan='4' class='p-4 text-center text-slate-400'>Loading...</td></tr>";
-      const snap = await getDocs(query(collection(db, "organizations", SHARED_ORG_ID, "logs"), orderBy("createdAt", "desc"), limit(50))); 
       tbody.innerHTML = "";
       
-      snap.forEach(d => { 
-          const l = d.data();
+      const filtered = store.logs.filter(l => {
           const thread = store.threads.find(t => t.id === l.threadId || t.phone === l.phone);
           const threadTags = thread ? (thread.tags || []) : [];
 
           if (store.tagFilter.size > 0) {
-              const tTags = threadTags;
               const wantsUntagged = store.tagFilter.has("__untagged__");
-              
-              const hasTagMatch = tTags.some(tag => store.tagFilter.has(tag));
-              const isUntaggedMatch = wantsUntagged && tTags.length === 0;
-              
-              if (!hasTagMatch && !isUntaggedMatch) return;
+              const hasTagMatch = threadTags.some(tag => store.tagFilter.has(tag));
+              const isUntaggedMatch = wantsUntagged && threadTags.length === 0;
+              if (!hasTagMatch && !isUntaggedMatch) return false;
           }
+          return true;
+      });
 
+      // Pagination Logic
+      const totalPages = Math.ceil(filtered.length / store.itemsPerPage) || 1;
+      store.logPage = Math.max(1, Math.min(store.logPage, totalPages));
+      document.getElementById("logPageInfo").innerText = `Page ${store.logPage} of ${totalPages}`;
+      
+      const start = (store.logPage - 1) * store.itemsPerPage;
+      const paginated = filtered.slice(start, start + store.itemsPerPage);
+
+      paginated.forEach(l => { 
+          const thread = store.threads.find(t => t.id === l.threadId || t.phone === l.phone);
+          const threadTags = thread ? (thread.tags || []) : [];
           const tagBadges = threadTags.slice(0,2).map(tag => `<span class="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px] border border-slate-200 font-bold mr-1">${tag}</span>`).join("");
 
           tbody.innerHTML += `<tr>
@@ -528,6 +591,8 @@
           </tr>`; 
       });
   };
+
+  window.changeLogPage = (dir) => { store.logPage += dir; window.renderLogbook(); };
 
   window.openNewMsgModal = () => document.getElementById("newMsgModal").classList.remove("hidden");
  window.createThreadFromModal = async () => { 
