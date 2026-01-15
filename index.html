@@ -70,6 +70,8 @@
              </div>
          </div>
          <div class="flex items-center gap-2 text-slate-400">
+             <button onclick="window.deleteActiveThread()" class="w-8 h-8 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-600 transition" title="Delete Conversation"><i class="fa-regular fa-trash-can"></i></button>
+             <div class="h-4 w-px bg-slate-200 mx-1"></div>
              <button onclick="window.toggleUrgentThread()" id="headerUrgentBtn" class="w-8 h-8 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-500 transition"><i class="fa-solid fa-bell"></i></button>
              <div class="h-4 w-px bg-slate-200 mx-1"></div>
              <button onclick="window.toggleInfoPanel()" class="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 hover:text-blue-600 transition"><i class="fa-solid fa-circle-info"></i></button>
@@ -141,11 +143,23 @@
   </div>
 
   <div id="view-contacts" class="hidden flex-1 h-full flex-col bg-white fade-in">
-    <div class="h-16 border-b border-gray-200 flex items-center justify-between px-8 bg-white/90 sticky top-0 z-10">
-        <h2 class="text-lg font-bold text-slate-800">Directory</h2>
+    <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
+        <div class="flex items-center gap-4">
+            <h2 class="text-lg font-bold text-slate-800">Directory</h2>
+            <div id="contactsTagRow" class="flex gap-2 overflow-x-auto scrollbar-hide max-w-lg"></div>
+        </div>
         <div class="flex gap-3"><input id="cmSearch" oninput="window.renderContactsManagerTable()" placeholder="Search..." class="bg-slate-50 border border-slate-200 rounded-xl pl-4 py-2 text-sm w-64 outline-none"><button onclick="window.saveContactsManager()" class="px-5 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold">Save</button></div>
     </div>
-    <div class="flex-1 overflow-auto bg-slate-50 p-6"><div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-w-5xl mx-auto"><table class="w-full text-left"><tbody id="cmList" class="divide-y divide-gray-100"></tbody></table></div></div>
+    <div class="flex-1 overflow-y-auto bg-slate-50 p-6">
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 max-w-5xl mx-auto">
+            <table class="w-full text-left">
+              <thead class="bg-slate-50 text-xs uppercase text-slate-500 font-semibold border-b border-gray-200">
+                <tr><th class="p-4 pl-6">Name</th><th class="p-4">Phone</th><th class="p-4">Tags</th><th class="p-4 text-right">Last Active</th><th class="p-4"></th></tr>
+              </thead>
+              <tbody id="cmList" class="divide-y divide-gray-100"></tbody>
+            </table>
+        </div>
+    </div>
   </div>
 
   <div id="view-broadcast" class="hidden flex-1 h-full flex-col bg-slate-50 fade-in items-center justify-center p-6">
@@ -168,7 +182,7 @@
   </div>
 
   <div id="view-logs" class="hidden flex-1 h-full flex-col bg-white fade-in">
-      <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10">
+      <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
           <h2 class="text-lg font-bold text-slate-800 tracking-tight">Shift Logs</h2>
           <div id="logTagRow" class="flex gap-2 overflow-x-auto scrollbar-hide max-w-xl"></div>
       </div>
@@ -183,13 +197,13 @@
   
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-  import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp, where, getDocs, increment } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp, where, getDocs, increment, writeBatch } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
   import { getStorage, ref as storageRef, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js";
 
   const app = initializeApp({ apiKey: "AIzaSyCaypEoug2f7OTJjKOdkkJPaZDypcr3NF8", authDomain: "sms-dlx.firebaseapp.com", projectId: "sms-dlx", storageBucket: "sms-dlx.firebasestorage.app", messagingSenderId: "522453095698", appId: "1:522453095698:web:ea217285e6e5160ee4cfcb" });
   const auth = getAuth(app); const db = getFirestore(app); const storage = getStorage(app);
 
-  let store = { threads: [], activeThreadId: null, activeThread: null, pinned: new Set(), drafts: {}, cannedReplies: [], deletedSids: new Set(), lastInboundSidSeen: new Set(), isPolling: false, pendingMedia: [], isFirstLoad: true, onlyUnread: false, onlyUrgent: false, tagFilter: null, notifQueue: {}, notifTimer: null };
+  let store = { threads: [], activeThreadId: null, activeThread: null, pinned: new Set(), drafts: {}, cannedReplies: [], deletedSids: new Set(), lastInboundSidSeen: new Set(), isPolling: false, pendingMedia: [], isFirstLoad: true, onlyUnread: false, onlyUrgent: false, tagFilter: new Set(), notifQueue: {}, notifTimer: null };
 
   const escapeHtml = (t) => { const d = document.createElement("div"); d.textContent = t ?? ""; return d.innerHTML; };
   const initials = (s) => (s || "?").trim().slice(0, 2).toUpperCase() || "?";
@@ -259,6 +273,32 @@
   const getThreadDoc  = (id) => doc(db, "organizations", SHARED_ORG_ID, "threads", id);
   const getMsgsCol    = (id) => collection(db, "organizations", SHARED_ORG_ID, "threads", id, "messages");
 
+  window.deleteActiveThread = async () => {
+      if(!store.activeThreadId || !confirm("Permanently delete this conversation?")) return;
+      await deleteDoc(getThreadDoc(store.activeThreadId));
+      const snap = await getDocs(getMsgsCol(store.activeThreadId));
+      const batch = writeBatch(db);
+      snap.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      store.activeThreadId = null;
+      document.getElementById("messageList").innerHTML = "";
+      document.getElementById("welcomeState").classList.remove("hidden");
+      window.renderThreadList();
+      window.showToast("Thread Deleted");
+  };
+
+  window.deleteContact = async (id) => {
+      if(!confirm("Delete this contact and all their messages?")) return;
+      await deleteDoc(getThreadDoc(id));
+      const snap = await getDocs(getMsgsCol(id));
+      const batch = writeBatch(db);
+      snap.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      window.renderContactsManagerTable();
+      window.showToast("Contact Deleted");
+  };
+
+  // --- UPDATED RENDER THREADS (INBOX) WITH UNTAGGED SUPPORT ---
   window.renderThreadList = () => {
       const el = document.getElementById("contactList");
       const tagRow = document.getElementById("tagFilterRow");
@@ -267,10 +307,18 @@
       document.getElementById("filterUrgent").className = `px-3 py-1 rounded-md text-[10px] font-bold border uppercase transition ${store.onlyUrgent?'bg-rose-500 text-white border-rose-500':'bg-white border-gray-200 text-gray-500'}`;
       
       const allTags = new Set(); store.threads.forEach(t => (t.tags||[]).forEach(tag => allTags.add(tag)));
-      if(allTags.size > 0) {
+      if(allTags.size > 0 || store.threads.length > 0) {
           tagRow.classList.remove("hidden");
-          let tagHtml = `<button onclick="window.filterByTag(null)" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${!store.tagFilter ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200'}">ALL</button>`;
-          Array.from(allTags).sort().forEach(tag => tagHtml += `<button onclick="window.filterByTag('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter===tag ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">${tag}</button>`);
+          let tagHtml = `<button onclick="window.clearTagFilter()" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter.size===0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200'}">ALL</button>`;
+          
+          // Untagged Button
+          const untaggedActive = store.tagFilter.has("__untagged__");
+          tagHtml += `<button onclick="window.toggleTagFilter('__untagged__')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${untaggedActive ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">Untagged</button>`;
+
+          Array.from(allTags).sort().forEach(tag => {
+              const active = store.tagFilter.has(tag);
+              tagHtml += `<button onclick="window.toggleTagFilter('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">${tag}</button>`;
+          });
           tagRow.innerHTML = tagHtml;
       } else { tagRow.classList.add("hidden"); }
 
@@ -279,7 +327,17 @@
           if (s && !`${t.name} ${t.phone}`.toLowerCase().includes(s)) return false;
           if (store.onlyUnread && !t.unread) return false;
           if (store.onlyUrgent && !t.isUrgent) return false;
-          if (store.tagFilter && !(t.tags||[]).includes(store.tagFilter)) return false;
+          
+          // UPDATED MULTI-TAG LOGIC (Supports Union/OR + Untagged)
+          if (store.tagFilter.size > 0) {
+              const tTags = t.tags || [];
+              const wantsUntagged = store.tagFilter.has("__untagged__");
+              
+              const hasTagMatch = tTags.some(tag => store.tagFilter.has(tag));
+              const isUntaggedMatch = wantsUntagged && tTags.length === 0;
+              
+              if (!hasTagMatch && !isUntaggedMatch) return false;
+          }
           return true;
       });
 
@@ -292,7 +350,9 @@
       }).join("");
   };
 
-  window.filterByTag = (tag) => { store.tagFilter = tag; window.renderThreadList(); window.renderLogbook(); };
+  window.toggleTagFilter = (tag) => { if (store.tagFilter.has(tag)) store.tagFilter.delete(tag); else store.tagFilter.add(tag); window.renderThreadList(); window.renderLogbook(); window.renderContactsManagerTable(); };
+  window.clearTagFilter = () => { store.tagFilter.clear(); window.renderThreadList(); window.renderLogbook(); window.renderContactsManagerTable(); };
+
   window.loadThread = async (id) => {
       if(unsubMessages) unsubMessages(); store.activeThreadId = id; store.activeThread = store.threads.find(t=>t.id===id);
       if(store.activeThread) { store.activeThread.unread = 0; window.renderThreadList(); }
@@ -319,7 +379,6 @@
       });
   };
 
-  // --- AUTOMATED LOGGING ---
   const shiftKeywords = ["call it a day", "head home", "last trip", "good to go home", "done for the day", "you are clear"];
 
   window.sendMessage = async () => {
@@ -367,10 +426,44 @@
   };
   window.cancelBroadcast = () => { broadcastActive = false; window.showToast("Stopping..."); };
 
+  // --- UPDATED RENDER DIRECTORY WITH UNTAGGED SUPPORT ---
   window.renderContactsManagerTable = () => {
-      const s = (document.getElementById("cmSearch").value||"").toLowerCase(); const tbody = document.getElementById("cmList"); tbody.innerHTML = "";
-      store.threads.filter(t => (t.name||"").toLowerCase().includes(s) || (t.phone||"").includes(s)).forEach(t => tbody.innerHTML += `<tr><td class="p-4 pl-6"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">${initials(t.name)}</div><input class="cm-name bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-sm font-bold w-full text-slate-700" data-id="${t.id}" value="${escapeHtml(t.name)}"></div></td><td class="p-4 text-xs font-mono text-slate-500">${t.phone}</td><td class="p-4"><input class="cm-tags bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-xs w-full text-slate-600" data-id="${t.id}" value="${(t.tags||[]).join(",")}" placeholder="Tags"></td><td class="p-4 pr-6 text-right text-xs text-slate-400">${relativeTime(t.lastMessageAtMs)}</td></tr>`);
+      const tagRow = document.getElementById("contactsTagRow");
+      if(tagRow) {
+          const allTags = new Set(); store.threads.forEach(t => (t.tags||[]).forEach(tag => allTags.add(tag)));
+          let tagHtml = `<button onclick="window.clearTagFilter()" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter.size===0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}">ALL</button>`;
+          
+          const untaggedActive = store.tagFilter.has("__untagged__");
+          tagHtml += `<button onclick="window.toggleTagFilter('__untagged__')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${untaggedActive ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">Untagged</button>`;
+
+          Array.from(allTags).sort().forEach(tag => {
+              const active = store.tagFilter.has(tag);
+              tagHtml += `<button onclick="window.toggleTagFilter('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'}">${tag}</button>`;
+          });
+          tagRow.innerHTML = tagHtml;
+      }
+
+      const s = (document.getElementById("cmSearch").value||"").toLowerCase(); 
+      const tbody = document.getElementById("cmList"); 
+      tbody.innerHTML = "";
+      
+      store.threads.filter(t => {
+          if (!((t.name||"").toLowerCase().includes(s) || (t.phone||"").includes(s))) return false;
+          if (store.tagFilter.size > 0) {
+              const tTags = t.tags || [];
+              const wantsUntagged = store.tagFilter.has("__untagged__");
+              
+              const hasTagMatch = tTags.some(tag => store.tagFilter.has(tag));
+              const isUntaggedMatch = wantsUntagged && tTags.length === 0;
+              
+              if (!hasTagMatch && !isUntaggedMatch) return false;
+          }
+          return true;
+      }).forEach(t => {
+          tbody.innerHTML += `<tr><td class="p-4 pl-6"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">${initials(t.name)}</div><input class="cm-name bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-sm font-bold w-full text-slate-700" data-id="${t.id}" value="${escapeHtml(t.name)}"></div></td><td class="p-4 text-xs font-mono text-slate-500">${t.phone}</td><td class="p-4"><input class="cm-tags bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-xs w-full text-slate-600" data-id="${t.id}" value="${(t.tags||[]).join(",")}" placeholder="Tags"></td><td class="p-4 pr-6 text-right text-xs text-slate-400">${relativeTime(t.lastMessageAtMs)}</td><td class="p-4 text-right"><button onclick="window.deleteContact('${t.id}')" class="text-slate-400 hover:text-rose-600 transition"><i class="fa-solid fa-trash"></i></button></td></tr>`;
+      });
   };
+
  window.saveContactsManager = async () => {
     const names = document.querySelectorAll(".cm-name");
     const tags = document.querySelectorAll(".cm-tags");
@@ -382,21 +475,23 @@
     window.showToast("Directory Saved");
 };
 
-  // --- UPDATED LOGS RENDER ---
+  // --- UPDATED LOGS RENDER WITH UNTAGGED SUPPORT ---
   window.renderLogbook = async () => {
-      // 1. Render Tags in Header
       const tagRow = document.getElementById("logTagRow");
       if(tagRow) {
           const allTags = new Set(); store.threads.forEach(t => (t.tags||[]).forEach(tag => allTags.add(tag)));
-          let tagHtml = `<button onclick="window.filterByTag(null)" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${!store.tagFilter ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}">ALL</button>`;
+          let tagHtml = `<button onclick="window.clearTagFilter()" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter.size===0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}">ALL</button>`;
+          
+          const untaggedActive = store.tagFilter.has("__untagged__");
+          tagHtml += `<button onclick="window.toggleTagFilter('__untagged__')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${untaggedActive ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">Untagged</button>`;
+
           Array.from(allTags).sort().forEach(tag => {
-              const active = store.tagFilter === tag;
-              tagHtml += `<button onclick="window.filterByTag('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'}">${tag}</button>`;
+              const active = store.tagFilter.has(tag);
+              tagHtml += `<button onclick="window.toggleTagFilter('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'}">${tag}</button>`;
           });
           tagRow.innerHTML = tagHtml;
       }
 
-      // 2. Fetch and Render Logs
       const tbody = document.getElementById("logbookList"); 
       tbody.innerHTML = "<tr><td colspan='4' class='p-4 text-center text-slate-400'>Loading...</td></tr>";
       const snap = await getDocs(query(collection(db, "organizations", SHARED_ORG_ID, "logs"), orderBy("createdAt", "desc"), limit(50))); 
@@ -404,14 +499,19 @@
       
       snap.forEach(d => { 
           const l = d.data();
-          // Find the thread associated with this log
           const thread = store.threads.find(t => t.id === l.threadId || t.phone === l.phone);
           const threadTags = thread ? (thread.tags || []) : [];
 
-          // Filter Logic
-          if (store.tagFilter && !threadTags.includes(store.tagFilter)) return;
+          if (store.tagFilter.size > 0) {
+              const tTags = threadTags;
+              const wantsUntagged = store.tagFilter.has("__untagged__");
+              
+              const hasTagMatch = tTags.some(tag => store.tagFilter.has(tag));
+              const isUntaggedMatch = wantsUntagged && tTags.length === 0;
+              
+              if (!hasTagMatch && !isUntaggedMatch) return;
+          }
 
-          // Render Row
           const tagBadges = threadTags.slice(0,2).map(tag => `<span class="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px] border border-slate-200 font-bold mr-1">${tag}</span>`).join("");
 
           tbody.innerHTML += `<tr>
@@ -477,6 +577,14 @@
       const msgInput = document.getElementById("msgInput");
       msgInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; });
       msgInput.addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.sendMessage(); } });
+
+      const tagRow = document.getElementById("tagFilterRow");
+      const logTagRow = document.getElementById("logTagRow");
+      const contactTagRow = document.getElementById("contactsTagRow");
+      const handleScroll = (evt) => { evt.preventDefault(); evt.currentTarget.scrollLeft += evt.deltaY; };
+      if(tagRow) tagRow.addEventListener("wheel", handleScroll);
+      if(logTagRow) logTagRow.addEventListener("wheel", handleScroll);
+      if(contactTagRow) contactTagRow.addEventListener("wheel", handleScroll);
   })();
 </script>
 </body>
