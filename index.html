@@ -186,12 +186,13 @@
       </div>
   </div>
 
-  <div id="view-logs" class="hidden flex-1 h-full flex-col bg-white fade-in overflow-hidden">
+  <div id="view-logs" class="hidden flex-1 h-full flex flex-col bg-white fade-in min-w-0">
+
       <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
           <h2 class="text-lg font-bold text-slate-800 tracking-tight">Shift Logs</h2>
           <div id="logTagRow" class="flex gap-2 overflow-x-auto scrollbar-hide max-w-xl"></div>
       </div>
-      <div class="flex-1 overflow-auto bg-slate-50 p-6">
+      <div class="flex-1 overflow-y-auto bg-slate-50 p-6 min-h-0">
           <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-w-5xl mx-auto flex flex-col">
               <table class="w-full text-left">
                   <thead class="bg-slate-50 text-xs uppercase text-slate-500 font-semibold border-b border-gray-200">
@@ -231,6 +232,17 @@
   const escapeHtml = (t) => { const d = document.createElement("div"); d.textContent = t ?? ""; return d.innerHTML; };
   const initials = (s) => (s || "?").trim().slice(0, 2).toUpperCase() || "?";
   const formatTime = (ms) => (!ms) ? "" : new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const formatDate = (ms) => (!ms) ? "" : new Date(ms).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+const formatDateLong = (ms) => (!ms) ? "" : new Date(ms).toLocaleDateString([], { weekday: "short", year: "numeric", month: "long", day: "numeric" });
+
+const ymd = (ms) => {
+  if (!ms) return "";
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const da = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${da}`;
+};
   function relativeTime(ms) { if (!ms) return ""; const diff = Date.now() - ms; const min = 60000; if (diff < min) return "now"; if (diff < 60*min) return Math.floor(diff/min) + "m"; if (diff < 24*60*min) return Math.floor(diff/(60*min)) + "h"; return Math.floor(diff/(24*60*min)) + "d"; }
   window.showToast = (msg, type) => { const t = document.getElementById("toast"); document.getElementById("toastMsg").innerText=msg; document.getElementById("toastIcon").className = type==="error"?"fa-solid fa-circle-exclamation text-rose-400":"fa-solid fa-check-circle text-emerald-400"; t.classList.remove("translate-y-20","opacity-0"); setTimeout(()=>t.classList.add("translate-y-20","opacity-0"), 2500); };
   
@@ -413,12 +425,52 @@
       const q = query(getMsgsCol(id), orderBy("createdAt", "asc"));
       unsubMessages = onSnapshot(q, s => {
           const div = document.getElementById("messageList"); div.innerHTML = ""; const atts = [];
-          s.forEach(d => {
-              const m = d.data(); const isMe = m.direction === "sent";
-              if(m.mediaUrls) m.mediaUrls.forEach(u=>atts.push(u));
-              let mediaHtml = ""; if(m.mediaUrls && m.mediaUrls.length) mediaHtml = `<div class="flex flex-col gap-2 mt-2">` + m.mediaUrls.map(u => `<a href="${u}" target="_blank"><img src="${u}" class="rounded-lg max-h-48 border bg-white object-cover"></a>`).join("") + `</div>`;
-              div.innerHTML += `<div class="flex w-full ${isMe ? "justify-end" : "justify-start"} fade-in"><div class="max-w-[85%] lg:max-w-[70%]"><div class="px-4 py-2.5 text-sm shadow-sm ${isMe ? 'msg-sent' : 'msg-received'}">${escapeHtml(m.body)}${mediaHtml}</div><div class="text-[10px] text-gray-400 mt-1 ${isMe?'text-right':''} opacity-75">${formatTime(m.createdAt?.toMillis?.())}</div></div></div>`;
-          });
+          let lastDay = null;
+
+s.forEach(d => {
+  const m = d.data();
+  const isMe = m.direction === "sent";
+
+  if (m.mediaUrls) m.mediaUrls.forEach(u => atts.push(u));
+
+  const ts = m.createdAt?.toMillis?.() || null;
+  const dayKey = ymd(ts);
+
+  // Date divider when day changes
+  if (dayKey && dayKey !== lastDay) {
+    lastDay = dayKey;
+    div.innerHTML += `
+      <div class="flex justify-center my-3">
+        <div class="px-3 py-1 rounded-full text-[11px] font-bold text-slate-500 bg-white border border-slate-200 shadow-sm">
+          ${escapeHtml(formatDateLong(ts))}
+        </div>
+      </div>
+    `;
+  }
+
+  let mediaHtml = "";
+  if (m.mediaUrls && m.mediaUrls.length) {
+    mediaHtml =
+      `<div class="flex flex-col gap-2 mt-2">` +
+      m.mediaUrls
+        .map(u => `<a href="${u}" target="_blank"><img src="${u}" class="rounded-lg max-h-48 border bg-white object-cover"></a>`)
+        .join("") +
+      `</div>`;
+  }
+
+  div.innerHTML += `
+    <div class="flex w-full ${isMe ? "justify-end" : "justify-start"} fade-in">
+      <div class="max-w-[85%] lg:max-w-[70%]">
+        <div class="px-4 py-2.5 text-sm shadow-sm ${isMe ? "msg-sent" : "msg-received"}">
+          ${escapeHtml(m.body)}${mediaHtml}
+        </div>
+        <div class="text-[10px] text-gray-400 mt-1 ${isMe ? "text-right" : ""} opacity-75">
+          ${ts ? `${escapeHtml(formatDate(ts))} • ${escapeHtml(formatTime(ts))}` : ""}
+        </div>
+      </div>
+    </div>
+  `;
+});
           div.scrollTop = div.scrollHeight; document.getElementById("chatContainer").scrollTop = document.getElementById("chatContainer").scrollHeight;
           document.getElementById("detailsAttachments").innerHTML = atts.slice(0,9).map(u => `<a href="${u}" target="_blank" class="block h-20 rounded-lg bg-slate-50 border bg-cover bg-center" style="background-image:url('${u}')"></a>`).join("");
       });
