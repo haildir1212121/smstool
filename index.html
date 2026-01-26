@@ -218,11 +218,10 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
   import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp, where, getDocs, increment, writeBatch } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-  import { getStorage, ref as storageRef, getDownloadURL, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js";
+  import { getStorage, ref as storageRef, getDownloadURL, uploadBytes } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js";
 
   const app = initializeApp({ apiKey: "AIzaSyCaypEoug2f7OTJjKOdkkJPaZDypcr3NF8", authDomain: "sms-dlx.firebaseapp.com", projectId: "sms-dlx", storageBucket: "sms-dlx.firebasestorage.app", messagingSenderId: "522453095698", appId: "1:522453095698:web:ea217285e6e5160ee4cfcb" });
   const auth = getAuth(app); const db = getFirestore(app); const storage = getStorage(app);
-
   // ADDED PAGINATION STATE
   let store = { threads: [], logs: [], activeThreadId: null, activeThread: null, pinned: new Set(), drafts: {}, cannedReplies: [], deletedSids: new Set(), lastInboundSidSeen: new Set(), isPolling: false, pendingMedia: [], isFirstLoad: true, onlyUnread: false, onlyUrgent: false, tagFilter: new Set(), notifQueue: {}, notifTimer: null, cmPage: 1, logPage: 1, itemsPerPage: 15 };
   
@@ -489,9 +488,15 @@ s.forEach(d => {
             window.showToast("Logged: End of Shift");
         }
         let mediaUrls = [];
-        if(store.pendingMedia.length) {
-             mediaUrls = await Promise.all(store.pendingMedia.map(async (file, i) => { const snap = await uploadBytesResumable(storageRef(storage, `mms/${SHARED_ORG_ID}/${store.activeThreadId}/${Date.now()}_${i}`), file); return getDownloadURL(snap.ref); }));
-        }
+        if (store.pendingMedia.length) {
+  mediaUrls = await Promise.all(
+    store.pendingMedia.map(async (file, i) => {
+      const ref = storageRef(storage, `mms/${SHARED_ORG_ID}/${store.activeThreadId}/${Date.now()}_${i}`);
+      const snap = await uploadBytes(ref, file);
+      return await getDownloadURL(snap.ref);
+    })
+  );
+}
         const res = await fetch(TWILIO_SEND_URL, { method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: store.activeThread.phone, body: txt, mediaUrls }) });
         if(!res.ok) throw new Error("API Fail");
         const sid = `loc-${Date.now()}`;
