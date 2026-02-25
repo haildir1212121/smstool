@@ -8,7 +8,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"
+          onerror="document.getElementById('loginError').textContent='Failed to load authentication library. Check network/ad-blockers.';document.getElementById('loginError').classList.remove('hidden');"></script>
   
   <style>
     body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; overflow: hidden; }
@@ -237,20 +238,32 @@
   // =========================================================================
   // MSAL (Microsoft Authentication Library) Setup
   // =========================================================================
-  const msalConfig = {
-    auth: {
-      clientId: AZURE_AD_CLIENT_ID,
-      authority: `https://login.microsoftonline.com/${AZURE_AD_TENANT_ID}`,
-      redirectUri: AZURE_AD_REDIRECT_URI,
-    },
-    cache: { cacheLocation: "localStorage", storeAuthStateInCookie: false },
-  };
-  const msalInstance = new msal.PublicClientApplication(msalConfig);
-  const loginRequest = { scopes: [`${AZURE_AD_CLIENT_ID}/.default`] };
-
+  let msalInstance = null;
+  const loginRequest = { scopes: [] }; // populated in boot()
   let accessToken = null;
 
+  function ensureMsal() {
+    if (msalInstance) return true;
+    if (typeof msal === "undefined" || !msal.PublicClientApplication) {
+      const errEl = document.getElementById("loginError");
+      errEl.textContent = "Authentication library failed to load. Check your network connection or disable ad-blockers.";
+      errEl.classList.remove("hidden");
+      return false;
+    }
+    msalInstance = new msal.PublicClientApplication({
+      auth: {
+        clientId: AZURE_AD_CLIENT_ID,
+        authority: `https://login.microsoftonline.com/${AZURE_AD_TENANT_ID}`,
+        redirectUri: AZURE_AD_REDIRECT_URI,
+      },
+      cache: { cacheLocation: "localStorage", storeAuthStateInCookie: false },
+    });
+    loginRequest.scopes = [`${AZURE_AD_CLIENT_ID}/.default`];
+    return true;
+  }
+
   async function getToken() {
+    if (!msalInstance) return null;
     const accounts = msalInstance.getAllAccounts();
     if (accounts.length === 0) return null;
     try {
@@ -278,6 +291,7 @@
 
   window.signIn = async () => {
     try {
+      if (!ensureMsal()) return;
       document.getElementById("loginError").classList.add("hidden");
       await msalInstance.loginPopup(loginRequest);
       await getToken();
@@ -291,7 +305,7 @@
   };
 
   window.signOut = () => {
-    msalInstance.logoutPopup();
+    if (msalInstance) msalInstance.logoutPopup();
     document.getElementById("loginOverlay").classList.remove("hidden");
   };
 
@@ -789,8 +803,9 @@ const ymd = (ms) => {
 
   // Check for existing MSAL session on page load
   (async function boot() {
+      if (!ensureMsal()) return; // MSAL library not available — login overlay shows error
       await msalInstance.initialize();
-      const resp = await msalInstance.handleRedirectPromise();
+      await msalInstance.handleRedirectPromise();
       const accounts = msalInstance.getAllAccounts();
       if (accounts.length > 0) {
           // Already signed in — hide login overlay and start app
