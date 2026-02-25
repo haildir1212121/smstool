@@ -1,0 +1,5 @@
+node_modules/
+api/local.settings.json
+*.env
+firebase-sa-key.json
+.vscode/
