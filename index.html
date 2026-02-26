@@ -241,7 +241,7 @@
   const loginRequest = { scopes: [] }; // populated in boot()
   let accessToken = null;
 
-  function ensureMsal() {
+  async function ensureMsal() {
     if (msalInstance) return true;
     if (typeof msal === "undefined" || !msal.PublicClientApplication) {
       const errEl = document.getElementById("loginError");
@@ -249,16 +249,25 @@
       errEl.classList.remove("hidden");
       return false;
     }
-    msalInstance = new msal.PublicClientApplication({
-      auth: {
-        clientId: AZURE_AD_CLIENT_ID,
-        authority: `https://login.microsoftonline.com/${AZURE_AD_TENANT_ID}`,
-        redirectUri: AZURE_AD_REDIRECT_URI,
-      },
-      cache: { cacheLocation: "localStorage", storeAuthStateInCookie: false },
-    });
-    loginRequest.scopes = [`${AZURE_AD_CLIENT_ID}/.default`];
-    return true;
+    try {
+      msalInstance = new msal.PublicClientApplication({
+        auth: {
+          clientId: AZURE_AD_CLIENT_ID,
+          authority: `https://login.microsoftonline.com/${AZURE_AD_TENANT_ID}`,
+          redirectUri: AZURE_AD_REDIRECT_URI,
+        },
+        cache: { cacheLocation: "localStorage", storeAuthStateInCookie: false },
+      });
+      loginRequest.scopes = [`${AZURE_AD_CLIENT_ID}/.default`];
+      await msalInstance.initialize();
+      return true;
+    } catch (e) {
+      msalInstance = null;
+      const errEl = document.getElementById("loginError");
+      errEl.textContent = "Authentication failed to initialize: " + (e.message || "Unknown error");
+      errEl.classList.remove("hidden");
+      return false;
+    }
   }
 
   async function getToken() {
@@ -290,7 +299,7 @@
 
   window.signIn = async () => {
     try {
-      if (!ensureMsal()) return;
+      if (!await ensureMsal()) return;
       document.getElementById("loginError").classList.add("hidden");
       await msalInstance.loginPopup(loginRequest);
       await getToken();
@@ -802,8 +811,7 @@ const ymd = (ms) => {
 
   // Check for existing MSAL session on page load
   (async function boot() {
-      if (!ensureMsal()) return; // MSAL library not available — login overlay shows error
-      await msalInstance.initialize();
+      if (!await ensureMsal()) return; // MSAL library not available — login overlay shows error
       await msalInstance.handleRedirectPromise();
       const accounts = msalInstance.getAllAccounts();
       if (accounts.length > 0) {
