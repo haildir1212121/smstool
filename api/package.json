@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@azure/cosmos": "^4.2.0",
-    "@azure/communication-sms": "^1.1.0",
+    "twilio": "^5.4.0",
     "@azure/storage-blob": "^12.24.0",
     "@azure/functions": "^4.6.0",
     "jsonwebtoken": "^9.0.2",

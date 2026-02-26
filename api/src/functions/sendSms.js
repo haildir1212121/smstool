@@ -1,8 +1,8 @@
 const { app } = require("@azure/functions");
-const { SmsClient } = require("@azure/communication-sms");
+const twilio = require("twilio");
 const { requireAuth } = require("../shared/auth");
 
-// POST /api/send-sms - Send an SMS via Azure Communication Services
+// POST /api/send-sms - Send an SMS/MMS via Twilio
 app.http("sendSms", {
   methods: ["POST"],
   authLevel: "anonymous",
@@ -18,10 +18,11 @@ app.http("sendSms", {
       };
     }
 
-    const connectionString = process.env.ACS_CONNECTION_STRING;
-    const fromNumber = process.env.ACS_PHONE_NUMBER;
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
 
-    if (!connectionString || !fromNumber) {
+    if (!accountSid || !authToken || !fromNumber) {
       return {
         status: 500,
         jsonBody: { error: "SMS service not configured" },
@@ -29,30 +30,27 @@ app.http("sendSms", {
     }
 
     try {
-      const smsClient = new SmsClient(connectionString);
+      const client = twilio(accountSid, authToken);
 
-      const sendResults = await smsClient.send({
+      const messageOptions = {
         from: fromNumber,
-        to: [to],
-        message: messageBody,
-      });
+        to,
+        body: messageBody,
+      };
 
-      const result = sendResults[0];
-      if (result.successful) {
-        return {
-          jsonBody: {
-            success: true,
-            messageId: result.messageId,
-          },
-        };
-      } else {
-        return {
-          status: 500,
-          jsonBody: {
-            error: `SMS send failed: ${result.errorMessage}`,
-          },
-        };
+      // Attach media URLs for MMS if provided
+      if (mediaUrls && mediaUrls.length > 0) {
+        messageOptions.mediaUrl = mediaUrls;
       }
+
+      const message = await client.messages.create(messageOptions);
+
+      return {
+        jsonBody: {
+          success: true,
+          messageId: message.sid,
+        },
+      };
     } catch (e) {
       context.log("SMS send error:", e.message);
       return {
