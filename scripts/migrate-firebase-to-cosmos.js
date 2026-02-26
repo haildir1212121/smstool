@@ -27,7 +27,8 @@
 const admin = require("firebase-admin");
 const { CosmosClient } = require("@azure/cosmos");
 
-const ORG_ID = "dispatch_team_main";
+const ORG_ID = process.env.ORG_ID || "dispatch_team_main";
+const DISCOVER_MODE = process.argv.includes("--discover");
 
 async function main() {
   // ── Validate env ──────────────────────────────────────────────────────
@@ -36,9 +37,8 @@ async function main() {
   const cosmosKey = process.env.COSMOS_KEY;
   const cosmosDbName = process.env.COSMOS_DATABASE || "dispatchcommand";
 
-  if (!saPath || !cosmosEndpoint || !cosmosKey) {
-    console.error("Missing required environment variables.");
-    console.error("  FIREBASE_SERVICE_ACCOUNT_PATH, COSMOS_ENDPOINT, COSMOS_KEY");
+  if (!saPath) {
+    console.error("Missing FIREBASE_SERVICE_ACCOUNT_PATH");
     process.exit(1);
   }
 
@@ -46,6 +46,54 @@ async function main() {
   const serviceAccount = require(saPath.startsWith("/") ? saPath : `${process.cwd()}/${saPath}`);
   admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
   const firestore = admin.firestore();
+
+  // ── Discovery mode: list top-level collections and structure ─────────
+  if (DISCOVER_MODE) {
+    console.log("══════════════════════════════════════════════════════════");
+    console.log("  DISCOVERY MODE — scanning Firestore structure");
+    console.log("══════════════════════════════════════════════════════════\n");
+
+    const topCollections = await firestore.listCollections();
+    if (topCollections.length === 0) {
+      console.log("  No top-level collections found. Is the service account for the right project?");
+      process.exit(0);
+    }
+
+    for (const col of topCollections) {
+      console.log(`Collection: ${col.id}`);
+      const docs = await col.limit(5).get();
+      for (const doc of docs.docs) {
+        console.log(`  Doc: ${col.id}/${doc.id}`);
+        const subCollections = await doc.ref.listCollections();
+        for (const sub of subCollections) {
+          const subDocs = await sub.limit(3).get();
+          console.log(`    Sub-collection: ${sub.id} (${subDocs.size}+ docs)`);
+          if (subDocs.size > 0) {
+            const firstDoc = subDocs.docs[0];
+            const subSubCollections = await firstDoc.ref.listCollections();
+            for (const subSub of subSubCollections) {
+              const subSubDocs = await subSub.limit(1).get();
+              console.log(`      Sub-sub-collection: ${subSub.id} (${subSubDocs.size}+ docs)`);
+            }
+          }
+        }
+      }
+    }
+
+    console.log("\n══════════════════════════════════════════════════════════");
+    console.log("  Once you identify the right paths, run the migration:");
+    console.log("  Set ORG_ID env var if the org doc is not 'dispatch_team_main'");
+    console.log("  Example: ORG_ID=my_org_id node migrate-firebase-to-cosmos.js");
+    console.log("══════════════════════════════════════════════════════════");
+    process.exit(0);
+  }
+
+  // ── Full migration: validate Cosmos env vars ──────────────────────────
+  if (!cosmosEndpoint || !cosmosKey) {
+    console.error("Missing required environment variables.");
+    console.error("  COSMOS_ENDPOINT, COSMOS_KEY");
+    process.exit(1);
+  }
 
   // ── Initialize Cosmos DB ──────────────────────────────────────────────
   const cosmosClient = new CosmosClient({ endpoint: cosmosEndpoint, key: cosmosKey });
@@ -67,6 +115,7 @@ async function main() {
   const logsContainer = database.container("logs");
 
   // ── Migrate Threads ───────────────────────────────────────────────────
+  console.log(`\nUsing ORG_ID: "${ORG_ID}"`);
   console.log("\n── Migrating Threads ──────────────────────────────────────");
   const threadsSnap = await firestore
     .collection("organizations")
