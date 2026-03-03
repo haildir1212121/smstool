@@ -249,6 +249,7 @@
   let msalInstance = null;
   const loginRequest = { scopes: [] }; // populated in boot()
   let accessToken = null;
+  let msalReady = false; // true once handleRedirectPromise completes
 
   async function ensureMsal() {
     if (msalInstance) return true;
@@ -311,6 +312,7 @@
   window.signIn = async () => {
     try {
       if (!await ensureMsal()) return;
+      if (!msalReady) return; // boot() is still processing the redirect — ignore click
       document.getElementById("loginError").classList.add("hidden");
       await msalInstance.loginRedirect(loginRequest);
     } catch (e) {
@@ -821,6 +823,7 @@ const ymd = (ms) => {
       if (!await ensureMsal()) return; // MSAL library not available — login overlay shows error
       try {
           const redirectResult = await msalInstance.handleRedirectPromise();
+          msalReady = true; // redirect processing done — safe to call loginRedirect now
           if (redirectResult) {
               // Just returned from Microsoft redirect — use the token directly
               accessToken = redirectResult.accessToken;
@@ -840,6 +843,7 @@ const ymd = (ms) => {
               initApp();
           }
       } catch (e) {
+          msalReady = true; // even on error, allow user to try signing in
           console.error("Redirect handling failed:", e);
           // Show login screen so user can try again
       }
