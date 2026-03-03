@@ -281,6 +281,7 @@
 
   async function getToken() {
     if (!msalInstance) return null;
+    if (accessToken) return accessToken;
     const accounts = msalInstance.getAllAccounts();
     if (accounts.length === 0) return null;
     try {
@@ -288,9 +289,10 @@
       accessToken = resp.accessToken;
       return accessToken;
     } catch (e) {
-      // Silent token acquisition failed — redirect to login
+      // Silent token acquisition failed — force re-login via redirect
+      console.warn("Token expired, redirecting to login", e);
       await msalInstance.acquireTokenRedirect(loginRequest);
-      return null;
+      return null; // page will redirect, this won't execute
     }
   }
 
@@ -817,13 +819,29 @@ const ymd = (ms) => {
   // Check for existing MSAL session on page load
   (async function boot() {
       if (!await ensureMsal()) return; // MSAL library not available — login overlay shows error
-      await msalInstance.handleRedirectPromise();
-      const accounts = msalInstance.getAllAccounts();
-      if (accounts.length > 0) {
-          // Already signed in — hide login overlay and start app
-          await getToken();
-          document.getElementById("loginOverlay").classList.add("hidden");
-          initApp();
+      try {
+          const redirectResult = await msalInstance.handleRedirectPromise();
+          if (redirectResult) {
+              // Just returned from Microsoft redirect — use the token directly
+              accessToken = redirectResult.accessToken;
+          }
+          const accounts = msalInstance.getAllAccounts();
+          if (accounts.length > 0) {
+              // If we didn't get a token from the redirect, try silent acquisition
+              if (!accessToken) {
+                  try {
+                      const resp = await msalInstance.acquireTokenSilent({ ...loginRequest, account: accounts[0] });
+                      accessToken = resp.accessToken;
+                  } catch (e) {
+                      console.warn("Silent token acquisition failed, will retry on next API call", e);
+                  }
+              }
+              document.getElementById("loginOverlay").classList.add("hidden");
+              initApp();
+          }
+      } catch (e) {
+          console.error("Redirect handling failed:", e);
+          // Show login screen so user can try again
       }
       // Otherwise, loginOverlay stays visible; user clicks "Sign in with Microsoft"
   })();
