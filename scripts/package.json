@@ -1,0 +1,13 @@
+{
+  "name": "dispatch-command-migration",
+  "version": "1.0.0",
+  "description": "Firebase to Azure Cosmos DB migration scripts",
+  "scripts": {
+    "migrate": "node migrate-firebase-to-cosmos.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "@azure/cosmos": "^4.2.0",
+    "@azure/storage-blob": "^12.24.0"
+  }
+}

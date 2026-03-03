@@ -8,6 +8,16 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@azure/msal-browser@2.38.3/lib/msal-browser.min.js" crossorigin="anonymous"></script>
+  <script>
+    // Fallback: if the primary CDN was blocked, try unpkg
+    if (typeof msal === "undefined") {
+      var s = document.createElement("script");
+      s.src = "https://unpkg.com/@azure/msal-browser@2.38.3/lib/msal-browser.min.js";
+      s.crossOrigin = "anonymous";
+      document.head.appendChild(s);
+    }
+  </script>
   
   <style>
     body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; overflow: hidden; }
@@ -22,10 +32,25 @@
     .msg-received { background: #ffffff; color: #1e293b; border: 1px solid #e2e8f0; border-radius: 18px 18px 18px 4px; }
     .nav-item.active { background-color: #334155; color: #60a5fa; border-left: 3px solid #60a5fa; }
     .nav-item { border-left: 3px solid transparent; }
+    #loginOverlay { z-index: 200; }
   </style>
 </head>
 
 <body class="h-screen w-full flex text-slate-800 bg-slate-50">
+
+  <!-- Azure AD Login Overlay -->
+  <div id="loginOverlay" class="fixed inset-0 bg-slate-900 flex items-center justify-center">
+    <div class="text-center">
+      <div class="w-20 h-20 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-bold text-3xl mx-auto mb-6 shadow-lg">D</div>
+      <h1 class="text-2xl font-bold text-white mb-2">Dispatch Command</h1>
+      <p class="text-slate-400 mb-8 text-sm">Sign in with your company account to continue</p>
+      <button onclick="window.signIn()" class="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition shadow-lg flex items-center gap-3 mx-auto">
+        <svg width="20" height="20" viewBox="0 0 21 21" fill="none"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+        Sign in with Microsoft
+      </button>
+      <p id="loginError" class="text-rose-400 text-sm mt-4 hidden"></p>
+    </div>
+  </div>
 
   <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3"></audio>
 
@@ -209,23 +234,102 @@
       </div>
   </div>
 
-<script type="module">
-  const SMS_BACKEND_BASE = "https://sms-backend-3488.twil.io";
-  const SHARED_ORG_ID = "dispatch_team_main";
-  const TWILIO_SEND_URL = `${SMS_BACKEND_BASE}/send-sms`;
-  const TWILIO_GET_URL  = `${SMS_BACKEND_BASE}/get-messages`;
-  
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-  import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp, where, getDocs, increment, writeBatch } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-  import { getStorage, ref as storageRef, getDownloadURL, uploadBytes } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js";
+<script>
+  // =========================================================================
+  // Azure Configuration — replace these values with your Azure resource IDs
+  // =========================================================================
+  const AZURE_AD_CLIENT_ID = "16cbe67e-1a93-481e-b6af-2c6f00bb0a3b";       // App Registration client ID
+  const AZURE_AD_TENANT_ID = "7da30f5a-f37e-4a03-8647-1d9bfd4d4b77";       // Azure AD tenant ID
+  const AZURE_AD_REDIRECT_URI = window.location.origin + "/";  // Redirect URI registered in Azure
+  const API_BASE = "/api";  // Azure Functions API base (use relative path when co-hosted via Azure Static Web Apps, or full URL for separate deployment)
 
-  const app = initializeApp({ apiKey: "AIzaSyCaypEoug2f7OTJjKOdkkJPaZDypcr3NF8", authDomain: "sms-dlx.firebaseapp.com", projectId: "sms-dlx", storageBucket: "sms-dlx.firebasestorage.app", messagingSenderId: "522453095698", appId: "1:522453095698:web:ea217285e6e5160ee4cfcb" });
-  const auth = getAuth(app); const db = getFirestore(app); const storage = getStorage(app);
-  // ADDED PAGINATION STATE
+  // =========================================================================
+  // MSAL (Microsoft Authentication Library) Setup
+  // =========================================================================
+  let msalInstance = null;
+  const loginRequest = { scopes: [] }; // populated in boot()
+  let accessToken = null;
+  let msalReady = false; // true once handleRedirectPromise completes
+
+  async function ensureMsal() {
+    if (msalInstance) return true;
+    if (typeof msal === "undefined" || !msal.PublicClientApplication) {
+      const errEl = document.getElementById("loginError");
+      errEl.textContent = "Authentication library failed to load. Check your network connection or disable ad-blockers.";
+      errEl.classList.remove("hidden");
+      return false;
+    }
+    try {
+      msalInstance = new msal.PublicClientApplication({
+        auth: {
+          clientId: AZURE_AD_CLIENT_ID,
+          authority: `https://login.microsoftonline.com/${AZURE_AD_TENANT_ID}`,
+          redirectUri: AZURE_AD_REDIRECT_URI,
+        },
+        cache: { cacheLocation: "localStorage", storeAuthStateInCookie: false },
+      });
+      loginRequest.scopes = [`${AZURE_AD_CLIENT_ID}/.default`];
+      await msalInstance.initialize();
+      return true;
+    } catch (e) {
+      msalInstance = null;
+      const errEl = document.getElementById("loginError");
+      errEl.textContent = "Authentication failed to initialize: " + (e.message || "Unknown error");
+      errEl.classList.remove("hidden");
+      return false;
+    }
+  }
+
+  async function getToken() {
+    if (!msalInstance) return null;
+    if (accessToken) return accessToken;
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) return null;
+    try {
+      const resp = await msalInstance.acquireTokenSilent({ ...loginRequest, account: accounts[0] });
+      accessToken = resp.accessToken;
+      return accessToken;
+    } catch (e) {
+      // Silent token acquisition failed — force re-login via redirect
+      console.warn("Token expired, redirecting to login", e);
+      await msalInstance.acquireTokenRedirect(loginRequest);
+      return null; // page will redirect, this won't execute
+    }
+  }
+
+  async function apiFetch(path, options = {}) {
+    const token = await getToken();
+    if (!token) { window.signOut(); return null; }
+    const headers = { "Authorization": `Bearer ${token}`, ...options.headers };
+    if (options.body && !(options.body instanceof FormData)) {
+      headers["Content-Type"] = "application/json";
+    }
+    const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    if (res.status === 401) { window.signOut(); return null; }
+    return res.json();
+  }
+
+  window.signIn = async () => {
+    try {
+      if (!await ensureMsal()) return;
+      if (!msalReady) return; // boot() is still processing the redirect — ignore click
+      document.getElementById("loginError").classList.add("hidden");
+      await msalInstance.loginRedirect(loginRequest);
+    } catch (e) {
+      const errEl = document.getElementById("loginError");
+      errEl.textContent = e.message || "Sign-in failed. Please try again.";
+      errEl.classList.remove("hidden");
+    }
+  };
+
+  window.signOut = () => {
+    if (msalInstance) msalInstance.logoutRedirect();
+  };
+
+  // =========================================================================
+  // Application State
+  // =========================================================================
   let store = { threads: [], logs: [], activeThreadId: null, activeThread: null, pinned: new Set(), drafts: {}, cannedReplies: [], deletedSids: new Set(), lastInboundSidSeen: new Set(), isPolling: false, pendingMedia: [], isFirstLoad: true, onlyUnread: false, onlyUrgent: false, tagFilter: new Set(), notifQueue: {}, notifTimer: null, cmPage: 1, logPage: 1, itemsPerPage: 15 };
-  
-  // Make store global so pagination buttons can access it
   window.store = store;
 
   const escapeHtml = (t) => { const d = document.createElement("div"); d.textContent = t ?? ""; return d.innerHTML; };
@@ -268,45 +372,55 @@ const ymd = (ms) => {
   async function poll() {
       if(store.isPolling) return; store.isPolling = true;
       try {
-          const res = await fetch(`${TWILIO_GET_URL}?after=${Date.now()-15000}`); const data = await res.json();
-          if(data.success) {
-            data.messages.filter(m=>m.direction==="inbound" && !store.lastInboundSidSeen.has(m.sid)).forEach(async m => {
+          const data = await apiFetch(`/poll-messages?after=${Date.now()-15000}`);
+          if(data && data.success) {
+            for (const m of data.messages.filter(m=>m.direction==="received" && !store.lastInboundSidSeen.has(m.sid))) {
                 store.lastInboundSidSeen.add(m.sid);
                 const phone = normalizePhone(m.from);
-                const msgTime = new Date(m.dateCreated).getTime(); 
-                
-                await setDoc(doc(getMsgsCol(phone), m.sid), { body:m.body, direction:"received", createdAt: new Date(msgTime), sid:m.sid, mediaUrls: m.mediaUrls||[] });
-                
+                const msgTime = new Date(m.dateCreated).getTime();
+
                 const t = store.threads.find(x => x.id === phone);
                 const isViewing = (store.activeThreadId === phone && document.visibilityState === 'visible');
                 if (!isViewing) queueNotification(phone, t ? (t.name || phone) : phone, m.body);
 
                 const lowerBody = m.body.toLowerCase();
                 const isMaintenance = vehicleKeywords.some(k => lowerBody.includes(k));
-                
+
                 if (isMaintenance) {
-                    await addDoc(collection(db, "organizations", SHARED_ORG_ID, "logs"), {
+                    await apiFetch("/logs", { method: "POST", body: JSON.stringify({
                         type: "vehicle_alert",
                         threadName: t ? (t.name || phone) : phone,
                         phone: phone,
                         message: m.body,
                         threadId: phone,
-                        createdAt: serverTimestamp()
-                    });
+                    }) });
                     window.showToast("Vehicle Issue Detected!", "error");
                 }
 
-                const updateData = { lastMessageText: m.body, lastMessageAtMs: msgTime, unread: isViewing ? 0 : increment(1), id: phone, phone: phone };
-                if (isMaintenance) updateData.isUrgent = true; 
-                if (!t) updateData.name = phone; 
+                const updateData = { lastMessageText: m.body, lastMessageAtMs: msgTime, id: phone, phone: phone };
+                if (!isViewing) updateData.unreadIncrement = 1;
+                if (isMaintenance) updateData.isUrgent = true;
+                if (!t) updateData.name = phone;
 
                 const currentLastMs = t ? (t.lastMessageAtMs || 0) : 0;
                 if (msgTime > currentLastMs) {
-                    await setDoc(getThreadDoc(phone), updateData, { merge: true });
+                    await apiFetch(`/threads/${encodeURIComponent(phone)}`, { method: "PATCH", body: JSON.stringify(updateData) });
                 }
-            });
+            }
           }
-      } catch(e){} finally { store.isPolling=false; }
+          // Refresh threads list
+          await refreshThreads();
+      } catch(e){ console.error("Poll error:", e); } finally { store.isPolling=false; }
+  }
+
+  async function refreshThreads() {
+      const data = await apiFetch("/threads");
+      if (data && data.success) {
+          store.threads = data.threads.filter(t => t.type !== "message");
+          if(store.activeThreadId) store.activeThread = store.threads.find(t=>t.id===store.activeThreadId);
+          window.renderThreadList();
+          if(store.activeThreadId && store.activeThread) document.getElementById("activeContactName").innerText = store.activeThread.name;
+      }
   }
 
   window.switchView = (v) => {
@@ -320,32 +434,22 @@ const ymd = (ms) => {
   };
   window.toggleInfoPanel = () => document.getElementById("infoPanel").classList.toggle("hidden");
 
-  let unsubMessages = null;
-  const getThreadsCol = () => collection(db, "organizations", SHARED_ORG_ID, "threads");
-  const getThreadDoc  = (id) => doc(db, "organizations", SHARED_ORG_ID, "threads", id);
-  const getMsgsCol    = (id) => collection(db, "organizations", SHARED_ORG_ID, "threads", id, "messages");
+  let messagesPollTimer = null;
 
   window.deleteActiveThread = async () => {
       if(!store.activeThreadId || !confirm("Permanently delete this conversation?")) return;
-      await deleteDoc(getThreadDoc(store.activeThreadId));
-      const snap = await getDocs(getMsgsCol(store.activeThreadId));
-      const batch = writeBatch(db);
-      snap.forEach(d => batch.delete(d.ref));
-      await batch.commit();
+      await apiFetch(`/threads/${encodeURIComponent(store.activeThreadId)}`, { method: "DELETE" });
       store.activeThreadId = null;
       document.getElementById("messageList").innerHTML = "";
       document.getElementById("welcomeState").classList.remove("hidden");
-      window.renderThreadList();
+      await refreshThreads();
       window.showToast("Thread Deleted");
   };
 
   window.deleteContact = async (id) => {
       if(!confirm("Delete this contact and all their messages?")) return;
-      await deleteDoc(getThreadDoc(id));
-      const snap = await getDocs(getMsgsCol(id));
-      const batch = writeBatch(db);
-      snap.forEach(d => batch.delete(d.ref));
-      await batch.commit();
+      await apiFetch(`/threads/${encodeURIComponent(id)}`, { method: "DELETE" });
+      await refreshThreads();
       window.renderContactsManagerTable();
       window.showToast("Contact Deleted");
   };
@@ -409,8 +513,63 @@ const ymd = (ms) => {
   window.toggleTagFilter = (tag) => { if (store.tagFilter.has(tag)) store.tagFilter.delete(tag); else store.tagFilter.add(tag); window.renderThreadList(); window.renderLogbook(); window.renderContactsManagerTable(); };
   window.clearTagFilter = () => { store.tagFilter.clear(); window.renderThreadList(); window.renderLogbook(); window.renderContactsManagerTable(); };
 
+  function renderMessages(messages) {
+      const div = document.getElementById("messageList"); div.innerHTML = ""; const atts = [];
+      let lastDay = null;
+
+      messages.forEach(m => {
+        const isMe = m.direction === "sent";
+        if (m.mediaUrls) m.mediaUrls.forEach(u => atts.push(u));
+
+        const ts = m.createdAtMs || null;
+        const dayKey = ymd(ts);
+
+        if (dayKey && dayKey !== lastDay) {
+          lastDay = dayKey;
+          div.innerHTML += `
+            <div class="flex justify-center my-3">
+              <div class="px-3 py-1 rounded-full text-[11px] font-bold text-slate-500 bg-white border border-slate-200 shadow-sm">
+                ${escapeHtml(formatDateLong(ts))}
+              </div>
+            </div>
+          `;
+        }
+
+        let mediaHtml = "";
+        if (m.mediaUrls && m.mediaUrls.length) {
+          mediaHtml =
+            `<div class="flex flex-col gap-2 mt-2">` +
+            m.mediaUrls
+              .map(u => `<a href="${u}" target="_blank"><img src="${u}" class="rounded-lg max-h-48 border bg-white object-cover"></a>`)
+              .join("") +
+            `</div>`;
+        }
+
+        div.innerHTML += `
+          <div class="flex w-full ${isMe ? "justify-end" : "justify-start"} fade-in">
+            <div class="max-w-[85%] lg:max-w-[70%]">
+              <div class="px-4 py-2.5 text-sm shadow-sm ${isMe ? "msg-sent" : "msg-received"}">
+                ${escapeHtml(m.body)}${mediaHtml}
+              </div>
+              <div class="text-[10px] text-gray-400 mt-1 ${isMe ? "text-right" : ""} opacity-75">
+                ${ts ? `${escapeHtml(formatDate(ts))} • ${escapeHtml(formatTime(ts))}` : ""}
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      div.scrollTop = div.scrollHeight; document.getElementById("chatContainer").scrollTop = document.getElementById("chatContainer").scrollHeight;
+      document.getElementById("detailsAttachments").innerHTML = atts.slice(0,9).map(u => `<a href="${u}" target="_blank" class="block h-20 rounded-lg bg-slate-50 border bg-cover bg-center" style="background-image:url('${u}')"></a>`).join("");
+  }
+
+  async function loadMessages(threadId) {
+      const data = await apiFetch(`/threads/${encodeURIComponent(threadId)}/messages`);
+      if (data && data.success) renderMessages(data.messages);
+  }
+
   window.loadThread = async (id) => {
-      if(unsubMessages) unsubMessages(); store.activeThreadId = id; store.activeThread = store.threads.find(t=>t.id===id);
+      if(messagesPollTimer) clearInterval(messagesPollTimer);
+      store.activeThreadId = id; store.activeThread = store.threads.find(t=>t.id===id);
       if(store.activeThread) { store.activeThread.unread = 0; window.renderThreadList(); }
       document.getElementById("welcomeState").classList.add("hidden");
       document.getElementById("activeContactName").innerText = store.activeThread?.name || id; document.getElementById("activeContactPhone").innerText = store.activeThread?.phone || id;
@@ -419,60 +578,11 @@ const ymd = (ms) => {
       document.getElementById("detailsTagsInput").value = (store.activeThread?.tags||[]).join(", "); document.getElementById("detailsNotes").value = store.activeThread?.notes||"";
       document.getElementById("msgInput").value = store.drafts[id] || "";
       document.getElementById("headerUrgentBtn").className = store.activeThread.isUrgent ? "w-8 h-8 flex items-center justify-center rounded bg-rose-100 text-rose-500" : "w-8 h-8 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-500 text-slate-400";
-      try { await updateDoc(getThreadDoc(id), { unread: 0, lastReadAtMs: Date.now() }); } catch {}
-      
-      const q = query(getMsgsCol(id), orderBy("createdAt", "asc"));
-      unsubMessages = onSnapshot(q, s => {
-          const div = document.getElementById("messageList"); div.innerHTML = ""; const atts = [];
-          let lastDay = null;
+      try { await apiFetch(`/threads/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ unread: 0, lastReadAtMs: Date.now() }) }); } catch {}
 
-s.forEach(d => {
-  const m = d.data();
-  const isMe = m.direction === "sent";
-
-  if (m.mediaUrls) m.mediaUrls.forEach(u => atts.push(u));
-
-  const ts = m.createdAt?.toMillis?.() || null;
-  const dayKey = ymd(ts);
-
-  // Date divider when day changes
-  if (dayKey && dayKey !== lastDay) {
-    lastDay = dayKey;
-    div.innerHTML += `
-      <div class="flex justify-center my-3">
-        <div class="px-3 py-1 rounded-full text-[11px] font-bold text-slate-500 bg-white border border-slate-200 shadow-sm">
-          ${escapeHtml(formatDateLong(ts))}
-        </div>
-      </div>
-    `;
-  }
-
-  let mediaHtml = "";
-  if (m.mediaUrls && m.mediaUrls.length) {
-    mediaHtml =
-      `<div class="flex flex-col gap-2 mt-2">` +
-      m.mediaUrls
-        .map(u => `<a href="${u}" target="_blank"><img src="${u}" class="rounded-lg max-h-48 border bg-white object-cover"></a>`)
-        .join("") +
-      `</div>`;
-  }
-
-  div.innerHTML += `
-    <div class="flex w-full ${isMe ? "justify-end" : "justify-start"} fade-in">
-      <div class="max-w-[85%] lg:max-w-[70%]">
-        <div class="px-4 py-2.5 text-sm shadow-sm ${isMe ? "msg-sent" : "msg-received"}">
-          ${escapeHtml(m.body)}${mediaHtml}
-        </div>
-        <div class="text-[10px] text-gray-400 mt-1 ${isMe ? "text-right" : ""} opacity-75">
-          ${ts ? `${escapeHtml(formatDate(ts))} • ${escapeHtml(formatTime(ts))}` : ""}
-        </div>
-      </div>
-    </div>
-  `;
-});
-          div.scrollTop = div.scrollHeight; document.getElementById("chatContainer").scrollTop = document.getElementById("chatContainer").scrollHeight;
-          document.getElementById("detailsAttachments").innerHTML = atts.slice(0,9).map(u => `<a href="${u}" target="_blank" class="block h-20 rounded-lg bg-slate-50 border bg-cover bg-center" style="background-image:url('${u}')"></a>`).join("");
-      });
+      await loadMessages(id);
+      // Poll for new messages in the active thread every 5 seconds
+      messagesPollTimer = setInterval(() => { if (store.activeThreadId === id) loadMessages(id); }, 5000);
   };
 
   const shiftKeywords = ["call it a day", "head home", "last trip", "good to go home", "done for the day", "you are clear"];
@@ -484,27 +594,31 @@ s.forEach(d => {
     try {
         const lowerTxt = txt.toLowerCase();
         if (shiftKeywords.some(k => lowerTxt.includes(k))) {
-            await addDoc(collection(db, "organizations", SHARED_ORG_ID, "logs"), { type:"end_shift", threadName: store.activeThread.name||"Unknown", phone: store.activeThread.phone, message:txt, threadId: store.activeThreadId, createdAt: serverTimestamp() });
+            await apiFetch("/logs", { method: "POST", body: JSON.stringify({ type:"end_shift", threadName: store.activeThread.name||"Unknown", phone: store.activeThread.phone, message:txt, threadId: store.activeThreadId }) });
             window.showToast("Logged: End of Shift");
         }
         let mediaUrls = [];
         if (store.pendingMedia.length) {
-  mediaUrls = await Promise.all(
-    store.pendingMedia.map(async (file, i) => {
-      const ref = storageRef(storage, `mms/${SHARED_ORG_ID}/${store.activeThreadId}/${Date.now()}_${i}`);
-      const snap = await uploadBytes(ref, file);
-      return await getDownloadURL(snap.ref);
-    })
-  );
-}
-        const res = await fetch(TWILIO_SEND_URL, { method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: store.activeThread.phone, body: txt, mediaUrls }) });
-        if(!res.ok) throw new Error("API Fail");
-        const sid = `loc-${Date.now()}`;
-        await setDoc(doc(getMsgsCol(store.activeThreadId), sid), { body: txt, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls });
-        await updateDoc(getThreadDoc(store.activeThreadId), { lastMessageText: txt || "[Attachment]", lastMessageAtMs: Date.now() });
-        document.getElementById("msgInput").value = ""; 
-        document.getElementById("msgInput").style.height = 'auto'; // RESET HEIGHT
+          const formData = new FormData();
+          store.pendingMedia.forEach((file, i) => formData.append(`file${i}`, file));
+          const token = await getToken();
+          const uploadRes = await fetch(`${API_BASE}/upload-media?threadId=${encodeURIComponent(store.activeThreadId)}`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}` },
+            body: formData
+          });
+          const uploadData = await uploadRes.json();
+          if (uploadData.success) mediaUrls = uploadData.urls;
+        }
+        const smsResult = await apiFetch("/send-sms", { method: "POST", body: JSON.stringify({ to: store.activeThread.phone, body: txt, mediaUrls }) });
+        if(!smsResult || !smsResult.success) throw new Error("SMS send failed");
+        const sid = smsResult.messageId || `loc-${Date.now()}`;
+        await apiFetch(`/threads/${encodeURIComponent(store.activeThreadId)}/messages`, { method: "POST", body: JSON.stringify({ body: txt, direction: "sent", createdAtMs: Date.now(), sid, mediaUrls }) });
+        await apiFetch(`/threads/${encodeURIComponent(store.activeThreadId)}`, { method: "PATCH", body: JSON.stringify({ lastMessageText: txt || "[Attachment]", lastMessageAtMs: Date.now() }) });
+        document.getElementById("msgInput").value = "";
+        document.getElementById("msgInput").style.height = 'auto';
         store.pendingMedia=[]; window.updateMmsStrip();
+        await loadMessages(store.activeThreadId);
     } catch(e) { console.error(e); window.showToast("Send failed", "error"); } finally { btn.disabled = false; }
   };
   
@@ -515,14 +629,14 @@ s.forEach(d => {
       broadcastActive = true; document.getElementById("massComposeArea").classList.add("hidden"); document.getElementById("massProgressArea").classList.remove("hidden"); document.getElementById("massProgressArea").classList.add("flex");
       const log = document.getElementById("massLogBox"); const pBar = document.getElementById("massProgressBar");
       document.getElementById("massTotalCount").innerText = contacts.length; let sent = 0;
-      await addDoc(collection(db, "organizations", SHARED_ORG_ID, "logs"), { type:"broadcast_start", count: contacts.length, message:txt, createdAt: serverTimestamp() });
+      await apiFetch("/logs", { method: "POST", body: JSON.stringify({ type:"broadcast_start", count: contacts.length, message:txt }) });
       for(let i=0; i<contacts.length; i++) {
           if(!broadcastActive) break; const t = contacts[i]; log.innerHTML += `<div>Sending to ${t.name}...</div>`;
           try {
-             const res = await fetch(TWILIO_SEND_URL, { method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: t.phone, body: txt, mediaUrls: [] }) });
-             if(res.ok) { const sid = `mass-${Date.now()}-${Math.random()}`; await setDoc(doc(getMsgsCol(t.id), sid), { body: txt, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls: [] }); await updateDoc(getThreadDoc(t.id), { lastMessageText: txt, lastMessageAtMs: Date.now() }); sent++; document.getElementById("massSentCount").innerText = sent; pBar.style.width = `${(sent/contacts.length)*100}%`; } else { log.innerHTML += `<div class="text-rose-400">Failed: ${t.phone}</div>`; }
+             const smsResult = await apiFetch("/send-sms", { method: "POST", body: JSON.stringify({ to: t.phone, body: txt, mediaUrls: [] }) });
+             if(smsResult && smsResult.success) { const sid = smsResult.messageId || `mass-${Date.now()}-${Math.random()}`; await apiFetch(`/threads/${encodeURIComponent(t.id)}/messages`, { method: "POST", body: JSON.stringify({ body: txt, direction: "sent", createdAtMs: Date.now(), sid, mediaUrls: [] }) }); await apiFetch(`/threads/${encodeURIComponent(t.id)}`, { method: "PATCH", body: JSON.stringify({ lastMessageText: txt, lastMessageAtMs: Date.now() }) }); sent++; document.getElementById("massSentCount").innerText = sent; pBar.style.width = `${(sent/contacts.length)*100}%`; } else { log.innerHTML += `<div class="text-rose-400">Failed: ${t.phone}</div>`; }
           } catch(e) { log.innerHTML += `<div class="text-rose-400">Error: ${e.message}</div>`; }
-          log.scrollTop = log.scrollHeight; await new Promise(r => setTimeout(r, 400)); 
+          log.scrollTop = log.scrollHeight; await new Promise(r => setTimeout(r, 400));
       }
       broadcastActive = false; log.innerHTML += `<div class="text-white mt-2">>> FINISHED. Sent ${sent}.</div>`; window.showToast("Broadcast Complete");
   };
@@ -579,9 +693,10 @@ s.forEach(d => {
     const tags = document.querySelectorAll(".cm-tags");
     const updates = [];
     for(let i=0; i<names.length; i++) {
-        updates.push(updateDoc(getThreadDoc(names[i].dataset.id), { name: names[i].value.trim(), tags: tags[i].value.split(",").filter(Boolean) }));
+        updates.push(apiFetch(`/threads/${encodeURIComponent(names[i].dataset.id)}`, { method: "PATCH", body: JSON.stringify({ name: names[i].value.trim(), tags: tags[i].value.split(",").filter(Boolean) }) }));
     }
-    await Promise.all(updates); 
+    await Promise.all(updates);
+    await refreshThreads();
     window.showToast("Directory Saved");
 };
 
@@ -599,15 +714,15 @@ s.forEach(d => {
           tagRow.innerHTML = tagHtml;
       }
 
-      // LOAD ALL LOGS ONCE IF EMPTY (Client-side cache)
+      // Load logs from Azure API (client-side cache)
       if (store.logs.length === 0) {
-          const snap = await getDocs(query(collection(db, "organizations", SHARED_ORG_ID, "logs"), orderBy("createdAt", "desc"), limit(200))); 
-          store.logs = snap.docs.map(d => d.data());
+          const data = await apiFetch("/logs?limit=200");
+          if (data && data.success) store.logs = data.logs;
       }
 
-      const tbody = document.getElementById("logbookList"); 
+      const tbody = document.getElementById("logbookList");
       tbody.innerHTML = "";
-      
+
       const filtered = store.logs.filter(l => {
           const thread = store.threads.find(t => t.id === l.threadId || t.phone === l.phone);
           const threadTags = thread ? (thread.tags || []) : [];
@@ -625,77 +740,71 @@ s.forEach(d => {
       const totalPages = Math.ceil(filtered.length / store.itemsPerPage) || 1;
       store.logPage = Math.max(1, Math.min(store.logPage, totalPages));
       document.getElementById("logPageInfo").innerText = `Page ${store.logPage} of ${totalPages}`;
-      
+
       const start = (store.logPage - 1) * store.itemsPerPage;
       const paginated = filtered.slice(start, start + store.itemsPerPage);
 
-      paginated.forEach(l => { 
+      paginated.forEach(l => {
           const thread = store.threads.find(t => t.id === l.threadId || t.phone === l.phone);
           const threadTags = thread ? (thread.tags || []) : [];
           const tagBadges = threadTags.slice(0,2).map(tag => `<span class="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px] border border-slate-200 font-bold mr-1">${tag}</span>`).join("");
 
           tbody.innerHTML += `<tr>
-            <td class="p-4 pl-6 text-xs font-mono text-slate-500">${new Date(l.createdAt?.toMillis()).toLocaleString()}</td>
+            <td class="p-4 pl-6 text-xs font-mono text-slate-500">${new Date(l.createdAtMs).toLocaleString()}</td>
             <td class="p-4 text-sm font-bold text-slate-800">
                 ${escapeHtml(l.threadName || l.phone || "System")}
                 <div class="mt-1">${tagBadges}</div>
             </td>
             <td class="p-4 text-xs">
-                <span class="font-bold uppercase text-slate-400 mr-2 text-[10px] tracking-wider border border-slate-200 px-1.5 py-0.5 rounded">${l.type}</span> 
+                <span class="font-bold uppercase text-slate-400 mr-2 text-[10px] tracking-wider border border-slate-200 px-1.5 py-0.5 rounded">${l.type}</span>
                 ${escapeHtml(l.message||"")}
             </td>
             <td class="p-4 pr-6 text-right"><button onclick="window.switchView('inbox'); window.loadThread('${l.threadId}')" class="text-blue-600 font-bold text-xs hover:underline">View</button></td>
-          </tr>`; 
+          </tr>`;
       });
   };
 
   window.changeLogPage = (dir) => { store.logPage += dir; window.renderLogbook(); };
 
   window.openNewMsgModal = () => document.getElementById("newMsgModal").classList.remove("hidden");
- window.createThreadFromModal = async () => { 
+ window.createThreadFromModal = async () => {
     const rawPhone = document.getElementById("newContactPhone").value;
-    const cleanPhone = normalizePhone(rawPhone); 
+    const cleanPhone = normalizePhone(rawPhone);
     const name = document.getElementById("newContactName").value;
     if(cleanPhone.length < 10) { window.showToast("Invalid Phone Number", "error"); return; }
-    await setDoc(getThreadDoc(cleanPhone), { id: cleanPhone, phone: cleanPhone, name: name, unread:0, lastMessageAtMs: Date.now() }, {merge:true}); 
-    document.getElementById("newMsgModal").classList.add("hidden"); 
-    window.loadThread(cleanPhone); 
+    await apiFetch(`/threads/${encodeURIComponent(cleanPhone)}`, { method: "PUT", body: JSON.stringify({ id: cleanPhone, phone: cleanPhone, name: name, unread:0, lastMessageAtMs: Date.now(), type: "thread" }) });
+    document.getElementById("newMsgModal").classList.add("hidden");
+    await refreshThreads();
+    window.loadThread(cleanPhone);
 };
-  window.toggleUrgentThread = async () => { if(store.activeThreadId) await updateDoc(getThreadDoc(store.activeThreadId), { isUrgent: !store.activeThread.isUrgent }); };
+  window.toggleUrgentThread = async () => { if(store.activeThreadId) await apiFetch(`/threads/${encodeURIComponent(store.activeThreadId)}`, { method: "PATCH", body: JSON.stringify({ isUrgent: !store.activeThread.isUrgent }) }); };
   window.toggleUnreadOnly = () => { store.onlyUnread = !store.onlyUnread; window.renderThreadList(); };
   window.toggleUrgentOnly = () => { store.onlyUrgent = !store.onlyUrgent; window.renderThreadList(); };
   window.openSettingsModal = () => { document.getElementById("settingsModal").classList.remove("hidden"); document.getElementById("cannedRepliesInput").value = store.cannedReplies.join("\n"); };
   window.saveSettings = () => { store.cannedReplies = document.getElementById("cannedRepliesInput").value.split("\n").filter(Boolean); localStorage.setItem("canned", JSON.stringify(store.cannedReplies)); document.getElementById("settingsModal").classList.add("hidden"); window.renderQuickReplies(); };
   window.renderQuickReplies = () => { const r = document.getElementById("quickRepliesRow"); r.innerHTML=""; (JSON.parse(localStorage.getItem("canned")||"[]")).forEach(t => { const b=document.createElement("button"); b.className="shrink-0 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs text-gray-600 whitespace-nowrap hover:border-blue-400 transition shadow-sm"; b.innerText=t; b.onclick=()=>{document.getElementById("msgInput").value+=t;}; r.appendChild(b); }); };
   window.insertTemplate = () => { const v = document.getElementById("templateSelect").value; if(v) document.getElementById("msgInput").value += v; document.getElementById("templateSelect").value = ""; };
-  window.saveDetailsTags = () => updateDoc(getThreadDoc(store.activeThreadId), { tags: document.getElementById("detailsTagsInput").value.split(",") });
-  window.saveDetailsNotes = () => updateDoc(getThreadDoc(store.activeThreadId), { notes: document.getElementById("detailsNotes").value });
+  window.saveDetailsTags = () => apiFetch(`/threads/${encodeURIComponent(store.activeThreadId)}`, { method: "PATCH", body: JSON.stringify({ tags: document.getElementById("detailsTagsInput").value.split(",").map(s=>s.trim()).filter(Boolean) }) });
+  window.saveDetailsNotes = () => apiFetch(`/threads/${encodeURIComponent(store.activeThreadId)}`, { method: "PATCH", body: JSON.stringify({ notes: document.getElementById("detailsNotes").value }) });
   window.handleMmsFiles = (inp) => { store.pendingMedia = Array.from(inp.files); window.updateMmsStrip(); };
   window.updateMmsStrip = () => { const d = document.getElementById("mmsStrip"); d.classList.toggle("hidden", !store.pendingMedia.length); d.innerHTML = store.pendingMedia.map(f => `<div class="h-10 w-10 bg-slate-200 rounded overflow-hidden flex items-center justify-center text-xs border border-slate-300"><i class="fa-solid fa-file"></i></div>`).join(""); };
   window.callActivePhone = () => window.open(`tel:${store.activeThread?.phone}`);
   window.copyActivePhone = () => { navigator.clipboard.writeText(store.activeThread?.phone); window.showToast("Copied"); };
   
-  (async function init() {
-      await signInAnonymously(auth);
-      onAuthStateChanged(auth, u => {
-          if(!u) return;
-          onSnapshot(query(getThreadsCol()), s => {
-              store.threads = s.docs.map(d => { const data = d.data(); if (!data.id) data.id = d.id; return data; });
-              if(store.activeThreadId) store.activeThread = store.threads.find(t=>t.id===store.activeThreadId);
-              window.renderThreadList();
-              if(store.activeThreadId && store.activeThread) document.getElementById("activeContactName").innerText = store.activeThread.name; 
-          });
-          setInterval(poll, 8000);
-      });
+  async function initApp() {
+      // Load initial threads from Azure API
+      await refreshThreads();
+      // Start polling for new inbound messages
+      setInterval(poll, 8000);
       store.cannedReplies = JSON.parse(localStorage.getItem("canned")||"[]"); window.renderQuickReplies();
       document.addEventListener("visibilitychange", async () => {
           if (document.visibilityState === "visible" && store.activeThreadId) {
               const t = store.threads.find(x => x.id === store.activeThreadId);
               if(t) { t.unread = 0; window.renderThreadList(); }
-              await updateDoc(getThreadDoc(store.activeThreadId), { unread: 0, lastReadAtMs: Date.now() });
+              await apiFetch(`/threads/${encodeURIComponent(store.activeThreadId)}`, { method: "PATCH", body: JSON.stringify({ unread: 0, lastReadAtMs: Date.now() }) });
           }
       });
-      
+
       const msgInput = document.getElementById("msgInput");
       msgInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; });
       msgInput.addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.sendMessage(); } });
@@ -707,7 +816,40 @@ s.forEach(d => {
       if(tagRow) tagRow.addEventListener("wheel", handleScroll);
       if(logTagRow) logTagRow.addEventListener("wheel", handleScroll);
       if(contactTagRow) contactTagRow.addEventListener("wheel", handleScroll);
+  }
+
+  // Check for existing MSAL session on page load
+  (async function boot() {
+      if (!await ensureMsal()) return; // MSAL library not available — login overlay shows error
+      try {
+          const redirectResult = await msalInstance.handleRedirectPromise();
+          msalReady = true; // redirect processing done — safe to call loginRedirect now
+          if (redirectResult) {
+              // Just returned from Microsoft redirect — use the token directly
+              accessToken = redirectResult.accessToken;
+          }
+          const accounts = msalInstance.getAllAccounts();
+          if (accounts.length > 0) {
+              // If we didn't get a token from the redirect, try silent acquisition
+              if (!accessToken) {
+                  try {
+                      const resp = await msalInstance.acquireTokenSilent({ ...loginRequest, account: accounts[0] });
+                      accessToken = resp.accessToken;
+                  } catch (e) {
+                      console.warn("Silent token acquisition failed, will retry on next API call", e);
+                  }
+              }
+              document.getElementById("loginOverlay").classList.add("hidden");
+              initApp();
+          }
+      } catch (e) {
+          msalReady = true; // even on error, allow user to try signing in
+          console.error("Redirect handling failed:", e);
+          // Show login screen so user can try again
+      }
+      // Otherwise, loginOverlay stays visible; user clicks "Sign in with Microsoft"
   })();
 </script>
 </body>
 </html>
+
