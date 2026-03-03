@@ -288,9 +288,9 @@
       accessToken = resp.accessToken;
       return accessToken;
     } catch (e) {
-      // Silent token acquisition failed — force interactive login
-      await msalInstance.acquireTokenPopup(loginRequest);
-      return getToken();
+      // Silent token acquisition failed — redirect to login
+      await msalInstance.acquireTokenRedirect(loginRequest);
+      return null;
     }
   }
 
@@ -310,10 +310,7 @@
     try {
       if (!await ensureMsal()) return;
       document.getElementById("loginError").classList.add("hidden");
-      await msalInstance.loginPopup(loginRequest);
-      await getToken();
-      document.getElementById("loginOverlay").classList.add("hidden");
-      initApp();
+      await msalInstance.loginRedirect(loginRequest);
     } catch (e) {
       const errEl = document.getElementById("loginError");
       errEl.textContent = e.message || "Sign-in failed. Please try again.";
@@ -322,8 +319,7 @@
   };
 
   window.signOut = () => {
-    if (msalInstance) msalInstance.logoutPopup();
-    document.getElementById("loginOverlay").classList.remove("hidden");
+    if (msalInstance) msalInstance.logoutRedirect();
   };
 
   // =========================================================================
