@@ -6,6 +6,7 @@
   <title>Dispatch Command</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
@@ -36,6 +37,7 @@
       <button onclick="window.switchView('contacts')" id="nav-contacts" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-regular fa-address-book text-xl"></i></button>
       <button onclick="window.switchView('broadcast')" id="nav-broadcast" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-solid fa-bullhorn text-xl"></i></button>
       <button onclick="window.switchView('logs')" id="nav-logs" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-solid fa-clipboard-check text-xl"></i></button>
+      <button onclick="window.switchView('triptexts')" id="nav-triptexts" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Trip Texts"><i class="fa-solid fa-route text-xl"></i></button>
     </div>
     <div class="flex-1"></div>
     <button onclick="window.openSettingsModal()" class="w-10 h-10 text-slate-500 hover:text-white transition mb-2"><i class="fa-solid fa-gear"></i></button>
@@ -209,6 +211,109 @@
       </div>
   </div>
 
+  <!-- TRIP TEXTS VIEW -->
+  <div id="view-triptexts" class="hidden flex-1 h-full flex-col bg-slate-50 fade-in overflow-hidden">
+    <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
+      <div class="flex items-center gap-4">
+        <h2 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-route mr-2 text-blue-600"></i>Trip Texts</h2>
+        <span id="ttDateBadge" class="text-xs font-mono text-slate-400"></span>
+      </div>
+      <div class="flex gap-3 items-center">
+        <button onclick="window.openIcabbiSettings()" class="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition"><i class="fa-solid fa-gear mr-1"></i>iCabbi API</button>
+        <label class="px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold cursor-pointer hover:bg-blue-700 transition shadow-sm">
+          <i class="fa-solid fa-file-excel mr-1"></i>Upload Sheet
+          <input type="file" id="ttFileInput" accept=".xlsx,.xls" class="hidden" onchange="window.handleTripSheetUpload(this)">
+        </label>
+      </div>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-6">
+      <!-- Empty state -->
+      <div id="ttEmptyState" class="flex flex-col items-center justify-center h-full text-slate-300">
+        <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-slate-100"><i class="fa-solid fa-file-excel text-3xl opacity-50"></i></div>
+        <p class="font-medium text-sm mb-1">Upload a Driver Messaging Template</p>
+        <p class="text-xs text-slate-400">The sheet will be parsed to find drivers, vehicles, and regions</p>
+      </div>
+
+      <!-- Results area (hidden until sheet uploaded) -->
+      <div id="ttResultsArea" class="hidden max-w-6xl mx-auto space-y-4">
+        <!-- Summary bar -->
+        <div class="flex gap-3 mb-4">
+          <div class="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
+            <i class="fa-solid fa-users text-blue-500"></i>
+            <div><div class="text-xs text-slate-400">Drivers Found</div><div id="ttDriverCount" class="text-lg font-bold text-slate-800">0</div></div>
+          </div>
+          <div class="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
+            <i class="fa-solid fa-address-book text-emerald-500"></i>
+            <div><div class="text-xs text-slate-400">Matched Contacts</div><div id="ttMatchedCount" class="text-lg font-bold text-emerald-600">0</div></div>
+          </div>
+          <div class="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
+            <i class="fa-solid fa-circle-xmark text-rose-400"></i>
+            <div><div class="text-xs text-slate-400">Unmatched</div><div id="ttUnmatchedCount" class="text-lg font-bold text-rose-500">0</div></div>
+          </div>
+          <div class="flex-1"></div>
+          <button onclick="window.fetchTripsForAllDrivers()" id="ttFetchTripsBtn" class="px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition shadow-sm self-center disabled:opacity-50 disabled:cursor-not-allowed">
+            <i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch Trips from iCabbi
+          </button>
+          <button onclick="window.openTripReviewModal()" id="ttReviewBtn" class="px-5 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition shadow-sm self-center hidden">
+            <i class="fa-solid fa-paper-plane mr-1"></i>Review &amp; Send
+          </button>
+        </div>
+
+        <!-- Region sections -->
+        <div id="ttRegionList" class="space-y-4"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- iCabbi Settings Modal -->
+  <div id="icabbiSettingsModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
+      <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold"><i class="fa-solid fa-taxi mr-2 text-amber-500"></i>iCabbi API Settings</h3><button onclick="document.getElementById('icabbiSettingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div>
+      <p class="text-xs text-slate-500 mb-4">Credentials are stored locally in your browser. They are used to fetch future trip data from the iCabbi dispatch system.</p>
+      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">API Base URL</label>
+      <input id="icabbiBaseUrl" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="https://your-fleet.api.icabbi.com">
+      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">App Key (Username)</label>
+      <input id="icabbiAppKey" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="app_key">
+      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Secret Key (Password)</label>
+      <input id="icabbiSecret" type="password" class="w-full bg-gray-50 border border-gray-200 p-3 mb-4 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="secret_key">
+      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Trip Date (for fetching)</label>
+      <input id="icabbiTripDate" type="date" class="w-full bg-gray-50 border border-gray-200 p-3 mb-4 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+      <div class="flex gap-2">
+        <button onclick="document.getElementById('icabbiSettingsModal').classList.add('hidden')" class="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-600">Cancel</button>
+        <button onclick="window.saveIcabbiSettings()" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trip Review & Send Modal -->
+  <div id="tripReviewModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden">
+      <div class="flex justify-between items-center p-6 border-b border-gray-100 shrink-0">
+        <div>
+          <h3 class="text-lg font-bold"><i class="fa-solid fa-paper-plane mr-2 text-blue-600"></i>Review Trip Messages</h3>
+          <p class="text-xs text-slate-400 mt-1">Review and edit messages before sending to drivers</p>
+        </div>
+        <button onclick="document.getElementById('tripReviewModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <div id="tripReviewList" class="flex-1 overflow-y-auto p-6 space-y-4"></div>
+      <div class="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
+        <div class="text-sm text-slate-500"><span id="tripReviewCount" class="font-bold text-slate-800">0</span> messages ready to send</div>
+        <div class="flex gap-3">
+          <button onclick="document.getElementById('tripReviewModal').classList.add('hidden')" class="px-5 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-600">Cancel</button>
+          <button onclick="window.sendTripTexts()" id="ttSendBtn" class="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition">Send All</button>
+        </div>
+      </div>
+      <!-- Send progress (hidden until sending) -->
+      <div id="ttSendProgress" class="hidden p-6 border-t border-gray-100 bg-slate-50 shrink-0">
+        <div class="flex items-center gap-4 mb-3">
+          <div class="text-sm font-bold text-slate-700"><span id="ttSendSentCount">0</span> / <span id="ttSendTotalCount">0</span> sent</div>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden"><div id="ttSendProgressBar" class="bg-blue-600 h-full w-0 transition-all duration-300"></div></div>
+      </div>
+    </div>
+  </div>
+
 <script type="module">
   const SMS_BACKEND_BASE = "https://sms-backend-3488.twil.io";
   const SHARED_ORG_ID = "dispatch_team_main";
@@ -310,7 +415,7 @@ const ymd = (ms) => {
   }
 
   window.switchView = (v) => {
-      ['inbox', 'contacts', 'broadcast', 'logs'].forEach(x => document.getElementById(`view-${x}`).classList.add('hidden'));
+      ['inbox', 'contacts', 'broadcast', 'logs', 'triptexts'].forEach(x => document.getElementById(`view-${x}`).classList.add('hidden'));
       document.getElementById(`view-${v}`).classList.remove('hidden');
       document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
       document.getElementById(`nav-${v}`).classList.add('active');
@@ -675,6 +780,461 @@ s.forEach(d => {
   window.callActivePhone = () => window.open(`tel:${store.activeThread?.phone}`);
   window.copyActivePhone = () => { navigator.clipboard.writeText(store.activeThread?.phone); window.showToast("Copied"); };
   
+  // ==========================================
+  // TRIP TEXTS FEATURE
+  // ==========================================
+  let ttDrivers = [];      // parsed from Excel: { name, vehicle, region, origin, tablet, matched: null|thread }
+  let ttTrips = {};         // keyed by vehicle ref: [ { pickup, dropoff, time, passenger, ... } ]
+  let ttMessages = [];      // final messages: { driver, phone, message, enabled }
+
+  // --- iCabbi Settings ---
+  window.openIcabbiSettings = () => {
+    const saved = JSON.parse(localStorage.getItem("icabbi_settings") || "{}");
+    document.getElementById("icabbiBaseUrl").value = saved.baseUrl || "";
+    document.getElementById("icabbiAppKey").value = saved.appKey || "";
+    document.getElementById("icabbiSecret").value = saved.secret || "";
+    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+    document.getElementById("icabbiTripDate").value = saved.tripDate || tomorrow.toISOString().split("T")[0];
+    document.getElementById("icabbiSettingsModal").classList.remove("hidden");
+  };
+
+  window.saveIcabbiSettings = () => {
+    const settings = {
+      baseUrl: document.getElementById("icabbiBaseUrl").value.trim().replace(/\/+$/, ""),
+      appKey: document.getElementById("icabbiAppKey").value.trim(),
+      secret: document.getElementById("icabbiSecret").value.trim(),
+      tripDate: document.getElementById("icabbiTripDate").value
+    };
+    localStorage.setItem("icabbi_settings", JSON.stringify(settings));
+    document.getElementById("icabbiSettingsModal").classList.add("hidden");
+    window.showToast("iCabbi Settings Saved");
+  };
+
+  function getIcabbiSettings() {
+    return JSON.parse(localStorage.getItem("icabbi_settings") || "{}");
+  }
+
+  // --- Excel Parsing ---
+  window.handleTripSheetUpload = async (input) => {
+    const file = input.files[0];
+    if (!file) return;
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data, { type: "array" });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    parseDriverSheet(ws);
+    input.value = "";
+  };
+
+  function parseDriverSheet(ws) {
+    ttDrivers = [];
+    ttTrips = {};
+    ttMessages = [];
+
+    // Read sheet date from N2
+    const dateCell = ws["N2"];
+    let sheetDate = "";
+    if (dateCell) {
+      if (dateCell.t === "n") {
+        const d = XLSX.SSF.parse_date_code(dateCell.v);
+        sheetDate = `${d.m}/${d.d}/${d.y}`;
+      } else if (dateCell.t === "d") {
+        sheetDate = dateCell.v.toLocaleDateString();
+      } else {
+        sheetDate = String(dateCell.v);
+      }
+    }
+    document.getElementById("ttDateBadge").innerText = sheetDate ? `Sheet Date: ${sheetDate}` : "";
+
+    // Define regions and their column layouts from the spreadsheet
+    // Each region: { name, nameCol, vehicleCol, originCol, tabletCol, headerRow, startRow, endRow }
+    const regions = detectRegions(ws);
+
+    regions.forEach(region => {
+      for (let r = region.startRow; r <= region.endRow; r++) {
+        const nameCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.nameCol })];
+        const vehCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.vehicleCol })];
+        if (!nameCell || !nameCell.v || !vehCell || !vehCell.v) continue;
+        const driverName = String(nameCell.v).trim();
+        const vehicle = String(Math.floor(Number(vehCell.v))).trim();
+        if (!driverName || !vehicle || vehicle === "NaN") continue;
+        // Skip header rows
+        if (driverName.toLowerCase() === "name") continue;
+
+        let origin = "";
+        if (region.originCol !== null) {
+          const oCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.originCol })];
+          if (oCell && oCell.v) origin = String(oCell.v).trim();
+        }
+
+        let tablet = "";
+        if (region.tabletCol !== null) {
+          const tCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.tabletCol })];
+          if (tCell && tCell.v) tablet = String(tCell.v).trim();
+        }
+
+        ttDrivers.push({ name: driverName, vehicle, region: region.name, origin, tablet, matched: null, trips: [] });
+      }
+    });
+
+    // Match against contacts
+    matchDriversToContacts();
+    renderTripTextsView();
+  }
+
+  function detectRegions(ws) {
+    // Based on the known Excel structure, define regions with their column mappings
+    // Column indices: A=0, B=1, C=2, D=3, E=4, F=5, G=6, H=7, I=8, J=9, K=10, L=11, M=12, N=13, O=14, P=15, Q=16, R=17
+    const regions = [];
+    const range = XLSX.utils.decode_range(ws["!ref"]);
+    const maxRow = range.e.r + 1;
+
+    // Scan for region headers by looking for known patterns
+    // Region header cells: A4="Eugene", G4="Albany/Corvallis/Salem", M4="Coast"
+    // Then sub-headers at row 5: Name, Vehicle, Tablet, End columns
+
+    // Strategy: find cells that match known region names or find "Name" header rows
+    const regionDefs = [
+      // Eugene block: A columns
+      { name: "Eugene", nameCol: 0, vehicleCol: 1, originCol: null, tabletCol: 2, headerRow: 5, startRow: 6, endRow: 22 },
+      // Albany/Corvallis/Salem block: G columns
+      { name: "Albany/Corvallis/Salem", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 5, startRow: 6, endRow: 24 },
+      // Coast block: M columns
+      { name: "Coast", nameCol: 12, vehicleCol: 14, originCol: 13, tabletCol: 15, headerRow: 5, startRow: 6, endRow: 32 },
+      // Roseburg block: G columns starting at row 27
+      { name: "Roseburg", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 27, startRow: 28, endRow: 36 },
+      // Portland/I-84 Corridor: A columns starting at row 41
+      { name: "Portland/I-84 Corridor", nameCol: 0, vehicleCol: 2, originCol: 1, tabletCol: 3, headerRow: 41, startRow: 42, endRow: 55 },
+      // LTD block: G columns starting at row 40
+      { name: "LTD", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 40, startRow: 41, endRow: 48 },
+      // Direct Medical Transport: M columns starting at row 34
+      { name: "Direct Medical Transport", nameCol: 12, vehicleCol: 14, originCol: 13, tabletCol: 15, headerRow: 34, startRow: 35, endRow: maxRow },
+    ];
+
+    // Dynamically validate: only include regions that actually have a "Name" header or data
+    regionDefs.forEach(rd => {
+      // Check if the header row has "Name" in the nameCol
+      const headerCell = ws[XLSX.utils.encode_cell({ r: rd.headerRow - 1, c: rd.nameCol })];
+      const hasHeader = headerCell && String(headerCell.v).toLowerCase() === "name";
+      // Even without header, check if first data row has data
+      const firstDataCell = ws[XLSX.utils.encode_cell({ r: rd.startRow - 1, c: rd.nameCol })];
+      if (hasHeader || (firstDataCell && firstDataCell.v)) {
+        regions.push(rd);
+      }
+    });
+
+    return regions;
+  }
+
+  function matchDriversToContacts() {
+    const normalize = (s) => s.toLowerCase().replace(/[^a-z]/g, "");
+    ttDrivers.forEach(d => {
+      d.matched = null;
+      const dNorm = normalize(d.name);
+      // Try exact match first
+      let match = store.threads.find(t => normalize(t.name || "") === dNorm);
+      if (!match) {
+        // Try partial: last name match + first initial
+        const parts = d.name.toLowerCase().split(/\s+/);
+        if (parts.length >= 2) {
+          const lastName = parts[parts.length - 1];
+          const firstInitial = parts[0][0];
+          match = store.threads.find(t => {
+            const tName = (t.name || "").toLowerCase();
+            return tName.includes(lastName) && tName.startsWith(firstInitial);
+          });
+        }
+      }
+      if (!match) {
+        // Try fuzzy: both first and last name appear in contact name
+        const parts = d.name.toLowerCase().split(/\s+/);
+        if (parts.length >= 2) {
+          match = store.threads.find(t => {
+            const tName = (t.name || "").toLowerCase();
+            return parts.every(p => tName.includes(p));
+          });
+        }
+      }
+      if (match) d.matched = match;
+    });
+  }
+
+  function renderTripTextsView() {
+    document.getElementById("ttEmptyState").classList.add("hidden");
+    document.getElementById("ttResultsArea").classList.remove("hidden");
+
+    const matched = ttDrivers.filter(d => d.matched);
+    const unmatched = ttDrivers.filter(d => !d.matched);
+    document.getElementById("ttDriverCount").innerText = ttDrivers.length;
+    document.getElementById("ttMatchedCount").innerText = matched.length;
+    document.getElementById("ttUnmatchedCount").innerText = unmatched.length;
+
+    // Group by region
+    const byRegion = {};
+    ttDrivers.forEach(d => {
+      if (!byRegion[d.region]) byRegion[d.region] = [];
+      byRegion[d.region].push(d);
+    });
+
+    const container = document.getElementById("ttRegionList");
+    container.innerHTML = "";
+
+    Object.entries(byRegion).forEach(([region, drivers]) => {
+      const matchedInRegion = drivers.filter(d => d.matched).length;
+      const html = `
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+          <div class="px-6 py-4 bg-slate-50 border-b border-gray-100 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <i class="fa-solid fa-map-marker-alt text-blue-500"></i>
+              <h3 class="font-bold text-slate-800">${escapeHtml(region)}</h3>
+              <span class="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">${drivers.length} drivers</span>
+              <span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">${matchedInRegion} matched</span>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead class="text-xs uppercase text-slate-400 font-semibold border-b border-gray-100">
+                <tr>
+                  <th class="px-6 py-3">Driver</th>
+                  <th class="px-6 py-3">Vehicle</th>
+                  <th class="px-6 py-3">Origin</th>
+                  <th class="px-6 py-3">Tablet</th>
+                  <th class="px-6 py-3">Contact Match</th>
+                  <th class="px-6 py-3">Trips</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-50">
+                ${drivers.map(d => `
+                  <tr class="${d.matched ? '' : 'bg-rose-50/50'}">
+                    <td class="px-6 py-3 text-sm font-bold text-slate-700">${escapeHtml(d.name)}</td>
+                    <td class="px-6 py-3 text-sm font-mono text-slate-600">${escapeHtml(d.vehicle)}</td>
+                    <td class="px-6 py-3 text-xs text-slate-500">${escapeHtml(d.origin || "-")}</td>
+                    <td class="px-6 py-3 text-xs text-slate-500">${escapeHtml(d.tablet || "-")}</td>
+                    <td class="px-6 py-3 text-xs">${d.matched
+                      ? `<span class="text-emerald-600 font-bold"><i class="fa-solid fa-check-circle mr-1"></i>${escapeHtml(d.matched.name)}</span>`
+                      : `<span class="text-rose-400"><i class="fa-solid fa-circle-xmark mr-1"></i>No match</span>`
+                    }</td>
+                    <td class="px-6 py-3 text-xs">${d.trips.length
+                      ? `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">${d.trips.length} trips</span>`
+                      : `<span class="text-slate-300">--</span>`
+                    }</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      container.innerHTML += html;
+    });
+  }
+
+  // --- iCabbi Trip Fetching ---
+  window.fetchTripsForAllDrivers = async () => {
+    const settings = getIcabbiSettings();
+    if (!settings.baseUrl || !settings.appKey || !settings.secret) {
+      window.showToast("Configure iCabbi API settings first", "error");
+      window.openIcabbiSettings();
+      return;
+    }
+
+    const btn = document.getElementById("ttFetchTripsBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Fetching...';
+
+    const tripDate = settings.tripDate || new Date(Date.now() + 86400000).toISOString().split("T")[0];
+    const authHeader = "Basic " + btoa(settings.appKey + ":" + settings.secret);
+
+    try {
+      // Fetch trips for the specified date from iCabbi
+      // The iCabbi API typically supports GET /bookings or /trips with date filters
+      const url = `${settings.baseUrl}/v1/bookings?date=${tripDate}&status=active,allocated,dispatched,pending`;
+      const res = await fetch(url, {
+        headers: { "Authorization": authHeader, "Accept": "application/json" }
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`API returned ${res.status}: ${errText.slice(0, 200)}`);
+      }
+
+      const data = await res.json();
+      const trips = Array.isArray(data) ? data : (data.bookings || data.trips || data.data || []);
+
+      // Map trips to vehicles
+      ttTrips = {};
+      trips.forEach(trip => {
+        const vehRef = String(trip.vehicle_ref || trip.vehicleRef || trip.vehicle_id || trip.vehicle?.ref || "").trim();
+        if (!vehRef) return;
+        if (!ttTrips[vehRef]) ttTrips[vehRef] = [];
+        ttTrips[vehRef].push({
+          id: trip.id || trip.booking_id || "",
+          time: trip.pickup_time || trip.pickupTime || trip.scheduled_time || trip.time || "",
+          pickup: trip.pickup_address || trip.pickupAddress || trip.pickup?.address || trip.from || "",
+          dropoff: trip.dropoff_address || trip.dropoffAddress || trip.dropoff?.address || trip.to || "",
+          passenger: trip.passenger_name || trip.passengerName || trip.passenger?.name || trip.customer_name || "",
+          passengerPhone: trip.passenger_phone || trip.passengerPhone || trip.passenger?.phone || "",
+          notes: trip.notes || trip.driver_notes || "",
+          status: trip.status || ""
+        });
+      });
+
+      // Sort each vehicle's trips by time
+      Object.values(ttTrips).forEach(arr => arr.sort((a, b) => (a.time || "").localeCompare(b.time || "")));
+
+      // Assign trips to drivers
+      ttDrivers.forEach(d => {
+        d.trips = ttTrips[d.vehicle] || [];
+      });
+
+      const totalTrips = Object.values(ttTrips).reduce((s, arr) => s + arr.length, 0);
+      window.showToast(`Fetched ${totalTrips} trips for ${Object.keys(ttTrips).length} vehicles`);
+
+      // Show review button
+      document.getElementById("ttReviewBtn").classList.remove("hidden");
+      renderTripTextsView();
+
+    } catch (e) {
+      console.error("iCabbi fetch error:", e);
+      window.showToast("Trip fetch failed: " + e.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch Trips from iCabbi';
+    }
+  };
+
+  // --- Message Generation & Review ---
+  function generateTripMessage(driver) {
+    const lines = [];
+    lines.push(`Hi ${driver.name.split(" ")[0]}, here are your trip assignments for tomorrow:`);
+    lines.push("");
+    lines.push(`Vehicle: ${driver.vehicle}`);
+    if (driver.origin) lines.push(`Origin: ${driver.origin}`);
+    if (driver.tablet && driver.tablet !== "APP") lines.push(`Tablet: ${driver.tablet}`);
+    lines.push("");
+
+    if (driver.trips.length === 0) {
+      lines.push("No trips currently assigned. Please check your tablet for updates.");
+    } else {
+      driver.trips.forEach((trip, i) => {
+        lines.push(`Trip ${i + 1}:`);
+        if (trip.time) lines.push(`  Time: ${trip.time}`);
+        if (trip.passenger) lines.push(`  Passenger: ${trip.passenger}`);
+        if (trip.pickup) lines.push(`  Pickup: ${trip.pickup}`);
+        if (trip.dropoff) lines.push(`  Dropoff: ${trip.dropoff}`);
+        if (trip.notes) lines.push(`  Notes: ${trip.notes}`);
+        lines.push("");
+      });
+    }
+
+    lines.push("Reply CONFIRM to acknowledge. Thank you!");
+    return lines.join("\n");
+  }
+
+  window.openTripReviewModal = () => {
+    ttMessages = [];
+    const matchedWithTrips = ttDrivers.filter(d => d.matched);
+
+    matchedWithTrips.forEach(d => {
+      ttMessages.push({
+        driver: d,
+        phone: d.matched.phone,
+        contactName: d.matched.name,
+        message: generateTripMessage(d),
+        enabled: true
+      });
+    });
+
+    renderReviewModal();
+    document.getElementById("tripReviewModal").classList.remove("hidden");
+  };
+
+  function renderReviewModal() {
+    const container = document.getElementById("tripReviewList");
+    const enabledCount = ttMessages.filter(m => m.enabled).length;
+    document.getElementById("tripReviewCount").innerText = enabledCount;
+
+    container.innerHTML = ttMessages.map((m, i) => `
+      <div class="border ${m.enabled ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200 bg-gray-50 opacity-60'} rounded-xl p-4 transition">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-3">
+            <input type="checkbox" ${m.enabled ? "checked" : ""} onchange="window.toggleTripMsg(${i})" class="w-4 h-4 accent-blue-600">
+            <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">${initials(m.contactName)}</div>
+            <div>
+              <div class="font-bold text-sm text-slate-800">${escapeHtml(m.contactName)}</div>
+              <div class="text-xs text-slate-400 font-mono">${escapeHtml(m.phone)} &middot; Vehicle ${escapeHtml(m.driver.vehicle)} &middot; ${m.driver.region}</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">${m.driver.trips.length} trips</span>
+          </div>
+        </div>
+        <textarea id="ttMsg${i}" rows="6" class="w-full bg-white border border-gray-200 rounded-lg p-3 text-xs font-mono text-slate-700 resize-none outline-none focus:ring-2 focus:ring-blue-300" ${m.enabled ? "" : "disabled"}>${escapeHtml(m.message)}</textarea>
+      </div>
+    `).join("");
+  }
+
+  window.toggleTripMsg = (i) => {
+    ttMessages[i].enabled = !ttMessages[i].enabled;
+    renderReviewModal();
+  };
+
+  // --- Send Trip Texts ---
+  window.sendTripTexts = async () => {
+    const toSend = ttMessages.filter(m => m.enabled);
+    if (!toSend.length) { window.showToast("No messages selected", "error"); return; }
+    if (!confirm(`Send ${toSend.length} trip text messages?`)) return;
+
+    const sendBtn = document.getElementById("ttSendBtn");
+    sendBtn.disabled = true;
+    document.getElementById("ttSendProgress").classList.remove("hidden");
+    document.getElementById("ttSendTotalCount").innerText = toSend.length;
+    const pBar = document.getElementById("ttSendProgressBar");
+    let sent = 0;
+
+    for (let i = 0; i < toSend.length; i++) {
+      const m = toSend[i];
+      // Grab possibly-edited message from textarea
+      const textarea = document.getElementById(`ttMsg${ttMessages.indexOf(m)}`);
+      const finalMsg = textarea ? textarea.value.trim() : m.message;
+
+      try {
+        const res = await fetch(TWILIO_SEND_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: m.phone, body: finalMsg, mediaUrls: [] })
+        });
+
+        if (res.ok) {
+          const sid = `trip-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+          await setDoc(doc(getMsgsCol(m.phone), sid), { body: finalMsg, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls: [] });
+          await updateDoc(getThreadDoc(m.phone), { lastMessageText: finalMsg.slice(0, 80) + "...", lastMessageAtMs: Date.now() });
+          sent++;
+        }
+      } catch (e) {
+        console.error("Trip text send error:", e);
+      }
+
+      document.getElementById("ttSendSentCount").innerText = sent;
+      pBar.style.width = `${((i + 1) / toSend.length) * 100}%`;
+      await new Promise(r => setTimeout(r, 400));
+    }
+
+    // Log the broadcast
+    await addDoc(collection(db, "organizations", SHARED_ORG_ID, "logs"), {
+      type: "trip_text_broadcast",
+      count: sent,
+      message: `Sent trip assignments to ${sent} drivers`,
+      createdAt: serverTimestamp()
+    });
+
+    sendBtn.disabled = false;
+    window.showToast(`Trip texts sent to ${sent} drivers`);
+    setTimeout(() => {
+      document.getElementById("tripReviewModal").classList.add("hidden");
+      document.getElementById("ttSendProgress").classList.add("hidden");
+    }, 2000);
+  };
+
   (async function init() {
       await signInAnonymously(auth);
       onAuthStateChanged(auth, u => {
