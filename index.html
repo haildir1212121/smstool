@@ -272,7 +272,7 @@
       <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold"><i class="fa-solid fa-taxi mr-2 text-amber-500"></i>iCabbi API Settings</h3><button onclick="document.getElementById('icabbiSettingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div>
       <p class="text-xs text-slate-500 mb-4">Credentials are stored locally in your browser. They are used to fetch future trip data from the iCabbi dispatch system.</p>
       <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">API Base URL</label>
-      <input id="icabbiBaseUrl" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="https://your-fleet.api.icabbi.com">
+      <input id="icabbiBaseUrl" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="https://api.icabbi.us/us4">
       <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">App Key (Username)</label>
       <input id="icabbiAppKey" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="app_key">
       <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Secret Key (Password)</label>
@@ -1109,9 +1109,8 @@ s.forEach(d => {
     const authHeader = "Basic " + btoa(settings.appKey + ":" + settings.secret);
 
     try {
-      // Fetch trips for the specified date from iCabbi
-      // The iCabbi API typically supports GET /bookings or /trips with date filters
-      const url = `${settings.baseUrl}/v1/bookings?date=${tripDate}&status=active,allocated,dispatched,pending`;
+      // Fetch upcoming trips from iCabbi
+      const url = `${settings.baseUrl}/bookings/upcoming_slim?date=${tripDate}`;
       const res = await fetch(url, {
         headers: { "Authorization": authHeader, "Accept": "application/json" }
       });
