@@ -286,6 +286,21 @@
     </div>
   </div>
 
+  <!-- Manual Contact Match Modal -->
+  <div id="manualMatchModal" class="fixed inset-0 bg-black/40 z-[95] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl flex flex-col max-h-[70vh]">
+      <div class="p-5 border-b border-gray-100 shrink-0">
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="text-base font-bold">Match Contact</h3>
+          <button onclick="document.getElementById('manualMatchModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="manualMatchDriver" class="text-xs text-slate-500 mb-3"></div>
+        <input id="manualMatchSearch" oninput="window.renderManualMatchList()" placeholder="Search contacts..." class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-3 py-2 text-sm focus:bg-white focus:border-blue-300 outline-none transition">
+      </div>
+      <div id="manualMatchList" class="flex-1 overflow-y-auto p-2"></div>
+    </div>
+  </div>
+
   <!-- Trip Review & Send Modal -->
   <div id="tripReviewModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden">
@@ -958,6 +973,55 @@ s.forEach(d => {
     });
   }
 
+  // --- Manual Contact Matching ---
+  let manualMatchDriverIdx = null;
+
+  window.openManualMatch = (driverIdx) => {
+    manualMatchDriverIdx = driverIdx;
+    const d = ttDrivers[driverIdx];
+    document.getElementById("manualMatchDriver").innerHTML = `Matching: <strong>${escapeHtml(d.name)}</strong> &middot; Vehicle ${escapeHtml(d.vehicle)} &middot; ${escapeHtml(d.region)}`;
+    document.getElementById("manualMatchSearch").value = d.name;
+    document.getElementById("manualMatchModal").classList.remove("hidden");
+    window.renderManualMatchList();
+    document.getElementById("manualMatchSearch").focus();
+  };
+
+  window.renderManualMatchList = () => {
+    const q = (document.getElementById("manualMatchSearch").value || "").toLowerCase();
+    const container = document.getElementById("manualMatchList");
+    const filtered = store.threads
+      .filter(t => t.phone && t.phone.length > 5)
+      .filter(t => !q || (t.name || "").toLowerCase().includes(q) || (t.phone || "").includes(q))
+      .slice(0, 30);
+
+    if (!filtered.length) {
+      container.innerHTML = '<div class="text-center text-xs text-slate-400 py-6">No contacts found</div>';
+      return;
+    }
+
+    container.innerHTML = filtered.map(t => `
+      <button onclick="window.selectManualMatch('${t.id}')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-blue-50 transition text-left group">
+        <div class="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-blue-100 flex items-center justify-center text-xs font-bold text-slate-500 group-hover:text-blue-700 shrink-0">${initials(t.name)}</div>
+        <div class="min-w-0 flex-1">
+          <div class="text-sm font-bold text-slate-700 truncate">${escapeHtml(t.name || "Unknown")}</div>
+          <div class="text-[11px] text-slate-400 font-mono truncate">${escapeHtml(t.phone)}</div>
+        </div>
+        <i class="fa-solid fa-chevron-right text-slate-300 text-xs group-hover:text-blue-400"></i>
+      </button>
+    `).join("");
+  };
+
+  window.selectManualMatch = (threadId) => {
+    if (manualMatchDriverIdx === null) return;
+    const thread = store.threads.find(t => t.id === threadId);
+    if (!thread) return;
+    ttDrivers[manualMatchDriverIdx].matched = thread;
+    document.getElementById("manualMatchModal").classList.add("hidden");
+    manualMatchDriverIdx = null;
+    renderTripTextsView();
+    window.showToast("Contact matched");
+  };
+
   function renderTripTextsView() {
     document.getElementById("ttEmptyState").classList.add("hidden");
     document.getElementById("ttResultsArea").classList.remove("hidden");
@@ -1010,8 +1074,8 @@ s.forEach(d => {
                     <td class="px-6 py-3 text-xs text-slate-500">${escapeHtml(d.origin || "-")}</td>
                     <td class="px-6 py-3 text-xs text-slate-500">${escapeHtml(d.tablet || "-")}</td>
                     <td class="px-6 py-3 text-xs">${d.matched
-                      ? `<span class="text-emerald-600 font-bold"><i class="fa-solid fa-check-circle mr-1"></i>${escapeHtml(d.matched.name)}</span>`
-                      : `<span class="text-rose-400"><i class="fa-solid fa-circle-xmark mr-1"></i>No match</span>`
+                      ? `<span class="text-emerald-600 font-bold"><i class="fa-solid fa-check-circle mr-1"></i>${escapeHtml(d.matched.name)}</span> <button onclick="window.openManualMatch(${ttDrivers.indexOf(d)})" class="text-slate-400 hover:text-blue-600 ml-1 text-[10px] underline">change</button>`
+                      : `<span class="text-rose-400 mr-2"><i class="fa-solid fa-circle-xmark mr-1"></i>No match</span><button onclick="window.openManualMatch(${ttDrivers.indexOf(d)})" class="px-2 py-0.5 bg-blue-600 text-white rounded text-[10px] font-bold hover:bg-blue-700 transition">Match</button>`
                     }</td>
                     <td class="px-6 py-3 text-xs">${d.trips.length
                       ? `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">${d.trips.length} trips</span>`
