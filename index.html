@@ -1108,10 +1108,15 @@ s.forEach(d => {
     const tripDate = settings.tripDate || new Date(Date.now() + 86400000).toISOString().split("T")[0];
     const authHeader = "Basic " + btoa(settings.appKey + ":" + settings.secret);
 
+    // Build vehicle_refs from uploaded spreadsheet
+    const vehicleRefs = ttDrivers.map(d => d.vehicle).filter(Boolean).join(",");
+
+    // Convert tripDate (YYYY-MM-DD) to full-day range in PST (UTC-8) with ISO 8601 milliseconds
+    const fromDate = new Date(tripDate + "T00:00:00.000-08:00").toISOString();
+    const toDate = new Date(tripDate + "T23:59:59.999-08:00").toISOString();
+
     try {
-      // Fetch upcoming trips from iCabbi using vehicle refs from uploaded spreadsheet
-      const vehicleRefs = ttDrivers.map(d => d.vehicle).filter(Boolean).join(",");
-      const url = `${settings.baseUrl}/bookings/upcoming_slim?date=${tripDate}&vehicle_refs=${encodeURIComponent(vehicleRefs)}`;
+      const url = `${settings.baseUrl}/bookings/upcoming_slim?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&vehicle_refs=${encodeURIComponent(vehicleRefs)}`;
       const res = await fetch(url, {
         headers: { "Authorization": authHeader, "Accept": "application/json" }
       });
