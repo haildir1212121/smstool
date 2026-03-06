@@ -1109,8 +1109,9 @@ s.forEach(d => {
     const authHeader = "Basic " + btoa(settings.appKey + ":" + settings.secret);
 
     try {
-      // Fetch upcoming trips from iCabbi
-      const url = `${settings.baseUrl}/bookings/upcoming_slim?date=${tripDate}`;
+      // Fetch upcoming trips from iCabbi using vehicle refs from uploaded spreadsheet
+      const vehicleRefs = ttDrivers.map(d => d.vehicle).filter(Boolean).join(",");
+      const url = `${settings.baseUrl}/bookings/upcoming_slim?vehicle_refs=${encodeURIComponent(vehicleRefs)}`;
       const res = await fetch(url, {
         headers: { "Authorization": authHeader, "Accept": "application/json" }
       });
