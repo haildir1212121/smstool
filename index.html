@@ -1127,7 +1127,7 @@ s.forEach(d => {
       }
 
       const data = await res.json();
-      const trips = Array.isArray(data) ? data : (data.bookings || data.trips || data.data || []);
+      const trips = Array.isArray(data) ? data : (data.body?.bookings || data.bookings || data.trips || data.data || []);
 
       // Map trips to vehicles
       ttTrips = {};
@@ -1137,7 +1137,7 @@ s.forEach(d => {
         if (!ttTrips[vehRef]) ttTrips[vehRef] = [];
         ttTrips[vehRef].push({
           id: trip.id || trip.booking_id || "",
-          time: trip.pickup_time || trip.pickupTime || trip.scheduled_time || trip.time || "",
+          time: trip.release_date || trip.pickup_time || trip.pickupTime || trip.scheduled_time || trip.time || "",
           pickup: trip.pickup_address || trip.pickupAddress || trip.pickup?.address || trip.from || "",
           dropoff: trip.dropoff_address || trip.dropoffAddress || trip.dropoff?.address || trip.to || "",
           passenger: trip.passenger_name || trip.passengerName || trip.passenger?.name || trip.customer_name || "",
