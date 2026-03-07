@@ -1116,7 +1116,7 @@ s.forEach(d => {
     const toDate = new Date(tripDate + "T23:59:59.999-08:00").toISOString();
 
     try {
-      const url = `${settings.baseUrl}/bookings/upcoming_slim?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&vehicle_refs=${encodeURIComponent(vehicleRefs)}`;
+      const url = `${settings.baseUrl}/bookings/upcoming_slim?limit=500&order=pickup_date&direction=ASC&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&vehicle_refs=${encodeURIComponent(vehicleRefs)}`;
       const res = await fetch(url, {
         headers: { "Authorization": authHeader, "Accept": "application/json" }
       });
@@ -1132,7 +1132,7 @@ s.forEach(d => {
       // Map trips to vehicles
       ttTrips = {};
       trips.forEach(trip => {
-        const vehRef = String(trip.vehicle_ref || trip.vehicleRef || trip.vehicle_id || trip.vehicle?.ref || "").trim();
+        const vehRef = String(trip.driver?.vehicle?.ref || trip.vehicle_ref || trip.vehicleRef || trip.vehicle_id || "").trim();
         if (!vehRef) return;
         if (!ttTrips[vehRef]) ttTrips[vehRef] = [];
         ttTrips[vehRef].push({
