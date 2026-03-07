@@ -1127,12 +1127,17 @@ s.forEach(d => {
       }
 
       const data = await res.json();
+      console.log("iCabbi API response:", JSON.stringify(data).slice(0, 500));
+      console.log("iCabbi API keys:", Object.keys(data));
       const trips = Array.isArray(data) ? data : (data.body?.bookings || data.bookings || data.trips || data.data || []);
+      console.log("Parsed trips count:", trips.length, "first trip:", JSON.stringify(trips[0] || {}).slice(0, 300));
 
       // Map trips to vehicles
       ttTrips = {};
+      console.log("Driver vehicles from spreadsheet:", ttDrivers.map(d => d.vehicle));
       trips.forEach(trip => {
         const vehRef = String(trip.driver?.vehicle?.ref || trip.vehicle_ref || trip.vehicleRef || trip.vehicle_id || "").trim();
+        console.log("Trip", trip.id, "vehRef:", vehRef);
         if (!vehRef) return;
         if (!ttTrips[vehRef]) ttTrips[vehRef] = [];
         ttTrips[vehRef].push({
