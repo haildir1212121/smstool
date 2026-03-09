@@ -264,11 +264,11 @@
               <i class="fa-solid fa-chevron-right text-[8px] text-slate-300"></i>
               <div id="ttStep2" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all bg-slate-50 text-slate-400 border-slate-200">
                 <i id="ttStep2Icon" class="fa-solid fa-car text-[10px]"></i>
-                <span>Vehicles</span>
+                <span>Trips</span>
               </div>
               <i class="fa-solid fa-chevron-right text-[8px] text-slate-300"></i>
               <div id="ttStep3" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all bg-slate-50 text-slate-400 border-slate-200">
-                <i id="ttStep3Icon" class="fa-solid fa-list-check text-[10px]"></i>
+                <i id="ttStep3Icon" class="fa-solid fa-comment-dots text-[10px]"></i>
                 <span>Format</span>
               </div>
             </div>
@@ -1150,7 +1150,7 @@ s.forEach(d => {
   function setStepState(stepNum, state, detail) {
     const el = document.getElementById(`ttStep${stepNum}`);
     const icon = document.getElementById(`ttStep${stepNum}Icon`);
-    const icons = { 1: "fa-magnifying-glass", 2: "fa-car", 3: "fa-list-check" };
+    const icons = { 1: "fa-magnifying-glass", 2: "fa-car", 3: "fa-comment-dots" };
     // Reset classes
     el.className = "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all";
     if (state === "pending") {
@@ -1178,7 +1178,7 @@ s.forEach(d => {
     ind.classList.remove("hidden");
     ind.classList.add("flex");
     setStepState(1, "pending", "Slim");
-    setStepState(2, "pending", "Vehicles");
+    setStepState(2, "pending", "Trips");
     setStepState(3, "pending", "Format");
   }
 
@@ -1246,7 +1246,7 @@ s.forEach(d => {
 
       // Step 2: For each vehicle ref, fetch bookings via vehicle/bookings?ref={ref}
       setStepState(2, "active", "0/" + matchedVehicleRefs.size);
-      const tripIdsByVehicle = {};
+      const bookingsByVehicle = {};
       const BATCH_SIZE = 10;
       const vehicleRefArr = [...matchedVehicleRefs];
 
@@ -1261,99 +1261,60 @@ s.forEach(d => {
               const vData = await vRes.json();
               console.log(`Step 2 - vehicle ${vRef} bookings:`, JSON.stringify(vData).slice(0, 500));
               const vTrips = Array.isArray(vData) ? vData : (vData.body?.bookings || vData.bookings || vData.trips || vData.data || []);
-              tripIdsByVehicle[vRef] = vTrips.map(t => t.id || t.booking_id || "").filter(Boolean);
+              bookingsByVehicle[vRef] = vTrips;
             } else {
               console.warn(`Step 2 - vehicle ${vRef} failed:`, vRes.status);
-              tripIdsByVehicle[vRef] = [];
+              bookingsByVehicle[vRef] = [];
             }
           } catch(e) {
             console.warn(`Step 2 - vehicle ${vRef} error:`, e);
-            tripIdsByVehicle[vRef] = [];
+            bookingsByVehicle[vRef] = [];
           }
         }));
         setStepState(2, "active", `${Math.min(i + BATCH_SIZE, vehicleRefArr.length)}/${vehicleRefArr.length}`);
       }
 
-      // Collect all unique trip IDs
-      const allTripIds = [...new Set(Object.values(tripIdsByVehicle).flat())];
-      console.log("Step 2 - total trip IDs to fetch:", allTripIds.length);
-      setStepState(2, "done", `${allTripIds.length} trips`);
+      const totalBookings = Object.values(bookingsByVehicle).reduce((s, arr) => s + arr.length, 0);
+      setStepState(2, "done", `${totalBookings} trips`);
 
-      // Build reverse lookup: tripId -> vehicleRef
-      const tripToVehicle = {};
-      for (const [vRef, ids] of Object.entries(tripIdsByVehicle)) {
-        ids.forEach(id => { tripToVehicle[id] = vRef; });
+      // Step 3: Extract & format trip data from Step 2 bookings
+      setStepState(3, "active", "Formatting...");
+
+      // Log first booking to see actual field names
+      const firstVRef = Object.keys(bookingsByVehicle).find(k => bookingsByVehicle[k].length > 0);
+      if (firstVRef && bookingsByVehicle[firstVRef][0]) {
+        const sample = bookingsByVehicle[firstVRef][0];
+        console.log("Step 3 - sample booking ALL KEYS:", Object.keys(sample));
+        console.log("Step 3 - sample booking DATA:", JSON.stringify(sample, null, 2).slice(0, 3000));
       }
 
-      // Step 3: Fetch full details for each trip via bookings/index/{tripId}
-      setStepState(3, "active", `0/${allTripIds.length}`);
-      const fullTrips = [];
-
-      for (let i = 0; i < allTripIds.length; i += BATCH_SIZE) {
-        const batch = allTripIds.slice(i, i + BATCH_SIZE);
-        const results = await Promise.all(batch.map(async (tripId) => {
-          try {
-            const detailRes = await fetch(`${settings.baseUrl}/bookings/index/${tripId}`, {
-              headers: { "Authorization": authHeader, "Accept": "application/json" }
-            });
-            if (detailRes.ok) {
-              const detail = await detailRes.json();
-              const fullTrip = detail.body || detail.booking || detail.data || detail;
-              // Attach vehicle ref from step 2
-              if (!fullTrip.vehicle_ref && !fullTrip.driver?.vehicle?.ref) {
-                fullTrip.vehicle_ref = tripToVehicle[tripId] || "";
-              }
-              return fullTrip;
-            }
-            console.warn(`Step 3 - trip ${tripId} failed:`, detailRes.status);
-            return null;
-          } catch(e) {
-            console.warn(`Step 3 - trip ${tripId} error:`, e);
-            return null;
-          }
-        }));
-        fullTrips.push(...results.filter(Boolean));
-        setStepState(3, "active", `${Math.min(i + BATCH_SIZE, allTripIds.length)}/${allTripIds.length}`);
-      }
-
-      const trips = fullTrips;
-      setStepState(3, "done", `${trips.length} loaded`);
-      console.log("Step 3 - full trips count:", trips.length);
-      if (trips[0]) {
-        console.log("Step 3 - first trip ALL KEYS:", Object.keys(trips[0]));
-        console.log("Step 3 - first trip FULL DATA:", JSON.stringify(trips[0], null, 2).slice(0, 2000));
-      }
-
-      // Map trips to vehicles
+      // Map bookings to vehicles, extracting the fields we need
       ttTrips = {};
-      console.log("Driver vehicles from spreadsheet:", ttDrivers.map(d => d.vehicle));
-      trips.forEach(trip => {
-        const vehRef = String(trip.driver?.vehicle?.ref || trip.vehicle_ref || trip.vehicleRef || trip.vehicle_id || "").trim();
-        console.log("Trip", trip.id, "vehRef:", vehRef);
-        if (!vehRef) return;
-        if (!ttTrips[vehRef]) ttTrips[vehRef] = [];
-        const rawTime = trip.release_date || trip.pickup_time || trip.pickupTime || trip.scheduled_time || trip.time || "";
-        // Extract date portion for multi-day grouping
-        let tripDay = "";
-        if (rawTime) {
-          try { tripDay = new Date(rawTime).toISOString().split("T")[0]; } catch(e) {}
-        }
-        // Extract pickup address - iCabbi uses address_formatted for full address
-        const pickupAddr = trip.address_formatted || trip.pickup_address || trip.pickupAddress || trip.pickup?.address || trip.pickup?.address_formatted || trip.from || "";
-        // Extract passenger name - iCabbi uses "name" at top level
-        const passengerName = trip.name || trip.passenger_name || trip.passengerName || trip.passenger?.name || trip.customer_name || "";
-        // Extract passenger phone
-        const passengerPhone = trip.phone || trip.passenger_phone || trip.passengerPhone || trip.passenger?.phone || "";
-        ttTrips[vehRef].push({
-          id: trip.id || trip.booking_id || "",
-          time: rawTime,
-          date: tripDay,
-          pickup: pickupAddr,
-          dropoff: trip.dropoff_address_formatted || trip.dropoff_address || trip.dropoffAddress || trip.dropoff?.address || trip.dropoff?.address_formatted || trip.to || "",
-          passenger: passengerName,
-          passengerPhone: passengerPhone,
-          notes: trip.notes || trip.driver_notes || "",
-          status: trip.status || ""
+      Object.entries(bookingsByVehicle).forEach(([vRef, bookings]) => {
+        if (!bookings.length) return;
+        ttTrips[vRef] = bookings.map(trip => {
+          const rawTime = trip.date || trip.release_date || trip.pickup_date || trip.pickup_time || trip.scheduled_time || trip.time || "";
+          let tripDay = "";
+          if (rawTime) {
+            try { tripDay = new Date(rawTime).toISOString().split("T")[0]; } catch(e) {}
+          }
+          // iCabbi uses address_formatted for pickup address
+          const pickupAddr = trip.address_formatted || trip.pickup_address || trip.from || "";
+          // iCabbi uses "name" for passenger/account name
+          const passengerName = trip.name || trip.passenger_name || trip.customer_name || "";
+          const passengerPhone = trip.phone || trip.passenger_phone || "";
+
+          return {
+            id: trip.id || trip.booking_id || trip.perma_id || "",
+            time: rawTime,
+            date: tripDay,
+            pickup: pickupAddr,
+            dropoff: trip.dropoff_address_formatted || trip.dropoff_address || trip.to || "",
+            passenger: passengerName,
+            passengerPhone: passengerPhone,
+            notes: trip.notes || trip.driver_notes || "",
+            status: trip.status || ""
+          };
         });
       });
 
