@@ -940,10 +940,32 @@ s.forEach(d => {
     return regions;
   }
 
+  // --- Persistent Manual Match Storage ---
+  function getSavedMatches() {
+    return JSON.parse(localStorage.getItem("tt_manual_matches") || "{}");
+  }
+  function saveManualMatch(driverName, threadId) {
+    const saved = getSavedMatches();
+    saved[driverName.toLowerCase().trim()] = threadId;
+    localStorage.setItem("tt_manual_matches", JSON.stringify(saved));
+  }
+  function removeSavedMatch(driverName) {
+    const saved = getSavedMatches();
+    delete saved[driverName.toLowerCase().trim()];
+    localStorage.setItem("tt_manual_matches", JSON.stringify(saved));
+  }
+
   function matchDriversToContacts() {
     const normalize = (s) => s.toLowerCase().replace(/[^a-z]/g, "");
+    const savedMatches = getSavedMatches();
     ttDrivers.forEach(d => {
       d.matched = null;
+      // Check saved manual matches first
+      const savedThreadId = savedMatches[d.name.toLowerCase().trim()];
+      if (savedThreadId) {
+        const savedThread = store.threads.find(t => t.id === savedThreadId);
+        if (savedThread) { d.matched = savedThread; return; }
+      }
       const dNorm = normalize(d.name);
       // Try exact match first
       let match = store.threads.find(t => normalize(t.name || "") === dNorm);
@@ -1015,11 +1037,13 @@ s.forEach(d => {
     if (manualMatchDriverIdx === null) return;
     const thread = store.threads.find(t => t.id === threadId);
     if (!thread) return;
-    ttDrivers[manualMatchDriverIdx].matched = thread;
+    const driver = ttDrivers[manualMatchDriverIdx];
+    driver.matched = thread;
+    saveManualMatch(driver.name, threadId);
     document.getElementById("manualMatchModal").classList.add("hidden");
     manualMatchDriverIdx = null;
     renderTripTextsView();
-    window.showToast("Contact matched");
+    window.showToast("Contact matched & saved");
   };
 
   function renderTripTextsView() {
@@ -1111,9 +1135,21 @@ s.forEach(d => {
     // Build vehicle_refs from uploaded spreadsheet
     const vehicleRefs = ttDrivers.map(d => d.vehicle).filter(Boolean).join(",");
 
-    // Convert tripDate (YYYY-MM-DD) to full-day range in PST (UTC-8) with ISO 8601 milliseconds
+    // Determine date range: on Fridays, cover Fri-Mon (weekend + Monday)
+    const tripDateObj = new Date(tripDate + "T12:00:00");
+    const dayOfWeek = tripDateObj.getDay(); // 0=Sun, 5=Fri
+    let endDate = tripDate;
+    if (dayOfWeek === 5) {
+      // Friday: extend through Monday (3 extra days)
+      const mon = new Date(tripDateObj);
+      mon.setDate(mon.getDate() + 3);
+      endDate = mon.toISOString().split("T")[0];
+    }
+
+    // Convert to full-day range in PST (UTC-8) with ISO 8601 milliseconds
     const fromDate = new Date(tripDate + "T00:00:00.000-08:00").toISOString();
-    const toDate = new Date(tripDate + "T23:59:59.999-08:00").toISOString();
+    const toDate = new Date(endDate + "T23:59:59.999-08:00").toISOString();
+    const isMultiDay = tripDate !== endDate;
 
     try {
       const url = `${settings.baseUrl}/bookings/upcoming_slim?limit=500&order=pickup_date&direction=ASC&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&vehicle_refs=${encodeURIComponent(vehicleRefs)}`;
@@ -1140,9 +1176,16 @@ s.forEach(d => {
         console.log("Trip", trip.id, "vehRef:", vehRef);
         if (!vehRef) return;
         if (!ttTrips[vehRef]) ttTrips[vehRef] = [];
+        const rawTime = trip.release_date || trip.pickup_time || trip.pickupTime || trip.scheduled_time || trip.time || "";
+        // Extract date portion for multi-day grouping
+        let tripDay = "";
+        if (rawTime) {
+          try { tripDay = new Date(rawTime).toISOString().split("T")[0]; } catch(e) {}
+        }
         ttTrips[vehRef].push({
           id: trip.id || trip.booking_id || "",
-          time: trip.release_date || trip.pickup_time || trip.pickupTime || trip.scheduled_time || trip.time || "",
+          time: rawTime,
+          date: tripDay,
           pickup: trip.pickup_address || trip.pickupAddress || trip.pickup?.address || trip.from || "",
           dropoff: trip.dropoff_address || trip.dropoffAddress || trip.dropoff?.address || trip.to || "",
           passenger: trip.passenger_name || trip.passengerName || trip.passenger?.name || trip.customer_name || "",
@@ -1160,8 +1203,13 @@ s.forEach(d => {
         d.trips = ttTrips[d.vehicle] || [];
       });
 
+      // Store multi-day flag for message generation
+      window.ttIsMultiDay = isMultiDay;
+      window.ttTripDateRange = isMultiDay ? `${tripDate} to ${endDate}` : tripDate;
+
       const totalTrips = Object.values(ttTrips).reduce((s, arr) => s + arr.length, 0);
-      window.showToast(`Fetched ${totalTrips} trips for ${Object.keys(ttTrips).length} vehicles`);
+      const dayLabel = isMultiDay ? ` (Fri-Mon)` : "";
+      window.showToast(`Fetched ${totalTrips} trips for ${Object.keys(ttTrips).length} vehicles${dayLabel}`);
 
       // Show review button
       document.getElementById("ttReviewBtn").classList.remove("hidden");
@@ -1177,9 +1225,25 @@ s.forEach(d => {
   };
 
   // --- Message Generation & Review ---
+  function formatDayLabel(dateStr) {
+    if (!dateStr) return "Unknown Date";
+    try {
+      const d = new Date(dateStr + "T12:00:00");
+      const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
+    } catch(e) { return dateStr; }
+  }
+
   function generateTripMessage(driver) {
     const lines = [];
-    lines.push(`Hi ${driver.name.split(" ")[0]}, here are your trip assignments for tomorrow:`);
+    const isMultiDay = window.ttIsMultiDay;
+
+    if (isMultiDay) {
+      lines.push(`Hi ${driver.name.split(" ")[0]}, here are your trip assignments for the weekend & Monday:`);
+    } else {
+      lines.push(`Hi ${driver.name.split(" ")[0]}, here are your trip assignments for tomorrow:`);
+    }
     lines.push("");
     lines.push(`Vehicle: ${driver.vehicle}`);
     if (driver.origin) lines.push(`Origin: ${driver.origin}`);
@@ -1188,6 +1252,27 @@ s.forEach(d => {
 
     if (driver.trips.length === 0) {
       lines.push("No trips currently assigned. Please check your tablet for updates.");
+    } else if (isMultiDay) {
+      // Group trips by date
+      const byDate = {};
+      driver.trips.forEach(trip => {
+        const key = trip.date || "unknown";
+        if (!byDate[key]) byDate[key] = [];
+        byDate[key].push(trip);
+      });
+      const sortedDates = Object.keys(byDate).sort();
+      sortedDates.forEach(date => {
+        lines.push(`--- ${formatDayLabel(date)} ---`);
+        byDate[date].forEach((trip, i) => {
+          lines.push(`Trip ${i + 1}:`);
+          if (trip.time) lines.push(`  Time: ${trip.time}`);
+          if (trip.passenger) lines.push(`  Passenger: ${trip.passenger}`);
+          if (trip.pickup) lines.push(`  Pickup: ${trip.pickup}`);
+          if (trip.dropoff) lines.push(`  Dropoff: ${trip.dropoff}`);
+          if (trip.notes) lines.push(`  Notes: ${trip.notes}`);
+          lines.push("");
+        });
+      });
     } else {
       driver.trips.forEach((trip, i) => {
         lines.push(`Trip ${i + 1}:`);
