@@ -1196,7 +1196,7 @@ s.forEach(d => {
         const batch = vehicleRefArr.slice(i, i + BATCH_SIZE);
         await Promise.all(batch.map(async (vRef) => {
           try {
-            const vRes = await fetch(`${settings.baseUrl}/vehicle/bookings?ref=${encodeURIComponent(vRef)}`, {
+            const vRes = await fetch(`${settings.baseUrl}/vehicle/bookings?ref=${encodeURIComponent(vRef)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`, {
               headers: { "Authorization": authHeader, "Accept": "application/json" }
             });
             if (vRes.ok) {
