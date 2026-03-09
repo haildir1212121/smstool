@@ -1162,7 +1162,7 @@ s.forEach(d => {
     const isMultiDay = tripDate !== endDate;
 
     try {
-      // Step 1: Fetch slim trip list to get trip IDs matched to vehicles
+      // Step 1: Fetch slim trip list to find vehicle refs
       const slimUrl = `${settings.baseUrl}/bookings/upcoming_slim?limit=500&order=pickup_date&direction=ASC&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&vehicle_refs=${encodeURIComponent(vehicleRefs)}`;
       const slimRes = await fetch(slimUrl, {
         headers: { "Authorization": authHeader, "Accept": "application/json" }
@@ -1174,52 +1174,90 @@ s.forEach(d => {
       }
 
       const slimData = await slimRes.json();
-      console.log("iCabbi slim response:", JSON.stringify(slimData).slice(0, 500));
+      console.log("Step 1 - slim response:", JSON.stringify(slimData).slice(0, 500));
       const slimTrips = Array.isArray(slimData) ? slimData : (slimData.body?.bookings || slimData.bookings || slimData.trips || slimData.data || []);
-      console.log("Slim trips count:", slimTrips.length);
 
-      // Step 2: Fetch full details for each trip via bookings/{id}
-      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Loading trip details...';
+      // Collect unique vehicle refs from slim results that match our drivers
       const vehicleRefSet = new Set(ttDrivers.map(d => d.vehicle));
-      const relevantTrips = slimTrips.filter(t => {
+      const matchedVehicleRefs = new Set();
+      slimTrips.forEach(t => {
         const vRef = String(t.driver?.vehicle?.ref || t.vehicle_ref || t.vehicleRef || t.vehicle_id || "").trim();
-        return vehicleRefSet.has(vRef);
+        if (vehicleRefSet.has(vRef)) matchedVehicleRefs.add(vRef);
       });
+      console.log("Step 1 - matched vehicle refs:", [...matchedVehicleRefs]);
 
-      const fullTrips = [];
+      // Step 2: For each vehicle ref, fetch bookings via vehicle/bookings?ref={ref}
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Fetching vehicle bookings...';
+      const tripIdsByVehicle = {};
       const BATCH_SIZE = 10;
-      for (let i = 0; i < relevantTrips.length; i += BATCH_SIZE) {
-        const batch = relevantTrips.slice(i, i + BATCH_SIZE);
-        const results = await Promise.all(batch.map(async (slim) => {
-          const tripId = slim.id || slim.booking_id || "";
-          if (!tripId) return slim;
+      const vehicleRefArr = [...matchedVehicleRefs];
+
+      for (let i = 0; i < vehicleRefArr.length; i += BATCH_SIZE) {
+        const batch = vehicleRefArr.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(async (vRef) => {
+          try {
+            const vRes = await fetch(`${settings.baseUrl}/vehicle/bookings?ref=${encodeURIComponent(vRef)}`, {
+              headers: { "Authorization": authHeader, "Accept": "application/json" }
+            });
+            if (vRes.ok) {
+              const vData = await vRes.json();
+              console.log(`Step 2 - vehicle ${vRef} bookings:`, JSON.stringify(vData).slice(0, 500));
+              const vTrips = Array.isArray(vData) ? vData : (vData.body?.bookings || vData.bookings || vData.trips || vData.data || []);
+              tripIdsByVehicle[vRef] = vTrips.map(t => t.id || t.booking_id || "").filter(Boolean);
+            } else {
+              console.warn(`Step 2 - vehicle ${vRef} failed:`, vRes.status);
+              tripIdsByVehicle[vRef] = [];
+            }
+          } catch(e) {
+            console.warn(`Step 2 - vehicle ${vRef} error:`, e);
+            tripIdsByVehicle[vRef] = [];
+          }
+        }));
+      }
+
+      // Collect all unique trip IDs
+      const allTripIds = [...new Set(Object.values(tripIdsByVehicle).flat())];
+      console.log("Step 2 - total trip IDs to fetch:", allTripIds.length);
+
+      // Build reverse lookup: tripId -> vehicleRef
+      const tripToVehicle = {};
+      for (const [vRef, ids] of Object.entries(tripIdsByVehicle)) {
+        ids.forEach(id => { tripToVehicle[id] = vRef; });
+      }
+
+      // Step 3: Fetch full details for each trip via bookings/index/{tripId}
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Loading trip details...';
+      const fullTrips = [];
+
+      for (let i = 0; i < allTripIds.length; i += BATCH_SIZE) {
+        const batch = allTripIds.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(batch.map(async (tripId) => {
           try {
             const detailRes = await fetch(`${settings.baseUrl}/bookings/index/${tripId}`, {
               headers: { "Authorization": authHeader, "Accept": "application/json" }
             });
             if (detailRes.ok) {
               const detail = await detailRes.json();
-              // Merge slim vehicle info with full detail (detail may be nested)
               const fullTrip = detail.body || detail.booking || detail.data || detail;
-              // Preserve vehicle ref from slim if not in detail
-              if (!fullTrip.driver?.vehicle?.ref && !fullTrip.vehicle_ref) {
-                fullTrip.vehicle_ref = String(slim.driver?.vehicle?.ref || slim.vehicle_ref || slim.vehicleRef || slim.vehicle_id || "").trim();
+              // Attach vehicle ref from step 2
+              if (!fullTrip.vehicle_ref && !fullTrip.driver?.vehicle?.ref) {
+                fullTrip.vehicle_ref = tripToVehicle[tripId] || "";
               }
               return fullTrip;
             }
-            console.warn(`Failed to fetch detail for trip ${tripId}:`, detailRes.status);
-            return slim;
+            console.warn(`Step 3 - trip ${tripId} failed:`, detailRes.status);
+            return null;
           } catch(e) {
-            console.warn(`Error fetching trip ${tripId}:`, e);
-            return slim;
+            console.warn(`Step 3 - trip ${tripId} error:`, e);
+            return null;
           }
         }));
-        fullTrips.push(...results);
-        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>Loading trips ${Math.min(i + BATCH_SIZE, relevantTrips.length)}/${relevantTrips.length}...`;
+        fullTrips.push(...results.filter(Boolean));
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>Loading trips ${Math.min(i + BATCH_SIZE, allTripIds.length)}/${allTripIds.length}...`;
       }
 
       const trips = fullTrips;
-      console.log("Full trips count:", trips.length, "first trip:", JSON.stringify(trips[0] || {}).slice(0, 500));
+      console.log("Step 3 - full trips count:", trips.length, "first trip:", JSON.stringify(trips[0] || {}).slice(0, 500));
 
       // Map trips to vehicles
       ttTrips = {};
