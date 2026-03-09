@@ -1194,7 +1194,7 @@ s.forEach(d => {
           const tripId = slim.id || slim.booking_id || "";
           if (!tripId) return slim;
           try {
-            const detailRes = await fetch(`${settings.baseUrl}/bookings/${tripId}`, {
+            const detailRes = await fetch(`${settings.baseUrl}/bookings/index/${tripId}`, {
               headers: { "Authorization": authHeader, "Accept": "application/json" }
             });
             if (detailRes.ok) {
