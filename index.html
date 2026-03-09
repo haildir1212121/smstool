@@ -1226,13 +1226,40 @@ s.forEach(d => {
 
   // --- Message Generation & Review ---
   function formatDayLabel(dateStr) {
-    if (!dateStr) return "Unknown Date";
+    if (!dateStr) return "UNKNOWN";
     try {
       const d = new Date(dateStr + "T12:00:00");
-      const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
+      const days = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+      return days[d.getDay()];
     } catch(e) { return dateStr; }
+  }
+
+  function extractCity(address) {
+    if (!address) return "Unknown";
+    // Try to pull city from typical address formats: "123 Main St, Springfield, OR 97401"
+    const parts = address.split(",").map(s => s.trim());
+    if (parts.length >= 2) {
+      // City is usually the second-to-last or second part
+      // Remove zip/state from the last part
+      let candidate = parts.length >= 3 ? parts[parts.length - 2] : parts[1];
+      // Strip state + zip if it's in this part (e.g. "Springfield OR 97401")
+      candidate = candidate.replace(/\s+[A-Z]{2}\s+\d{5}(-\d{4})?$/, "").trim();
+      if (candidate) return candidate;
+    }
+    return address.split(",")[0].trim();
+  }
+
+  function formatBookingTime(timeStr) {
+    if (!timeStr) return "";
+    try {
+      const d = new Date(timeStr);
+      if (isNaN(d.getTime())) return timeStr;
+      let h = d.getHours();
+      const m = d.getMinutes();
+      const ampm = h >= 12 ? "PM" : "AM";
+      h = h % 12 || 12;
+      return `${h}:${String(m).padStart(2, "0")} ${ampm}`;
+    } catch(e) { return timeStr; }
   }
 
   function generateTripMessage(driver) {
@@ -1247,7 +1274,7 @@ s.forEach(d => {
     lines.push("");
     lines.push(`Vehicle: ${driver.vehicle}`);
     if (driver.origin) lines.push(`Origin: ${driver.origin}`);
-    if (driver.tablet && driver.tablet !== "APP") lines.push(`Tablet: ${driver.tablet}`);
+    if (driver.tablet) lines.push(`BE SIGNED INTO YOUR TABLET @ ${driver.tablet}`);
     lines.push("");
 
     if (driver.trips.length === 0) {
@@ -1262,27 +1289,24 @@ s.forEach(d => {
       });
       const sortedDates = Object.keys(byDate).sort();
       sortedDates.forEach(date => {
-        lines.push(`--- ${formatDayLabel(date)} ---`);
-        byDate[date].forEach((trip, i) => {
-          lines.push(`Trip ${i + 1}:`);
-          if (trip.time) lines.push(`  Time: ${trip.time}`);
-          if (trip.passenger) lines.push(`  Passenger: ${trip.passenger}`);
-          if (trip.pickup) lines.push(`  Pickup: ${trip.pickup}`);
-          if (trip.dropoff) lines.push(`  Dropoff: ${trip.dropoff}`);
-          if (trip.notes) lines.push(`  Notes: ${trip.notes}`);
-          lines.push("");
+        lines.push(`${formatDayLabel(date)}:`);
+        byDate[date].forEach(trip => {
+          const time = formatBookingTime(trip.time);
+          const city = extractCity(trip.pickup);
+          lines.push(`${time} pickup in ${city}`);
         });
-      });
-    } else {
-      driver.trips.forEach((trip, i) => {
-        lines.push(`Trip ${i + 1}:`);
-        if (trip.time) lines.push(`  Time: ${trip.time}`);
-        if (trip.passenger) lines.push(`  Passenger: ${trip.passenger}`);
-        if (trip.pickup) lines.push(`  Pickup: ${trip.pickup}`);
-        if (trip.dropoff) lines.push(`  Dropoff: ${trip.dropoff}`);
-        if (trip.notes) lines.push(`  Notes: ${trip.notes}`);
         lines.push("");
       });
+    } else {
+      // Single day - still use the day header format
+      const dayLabel = driver.trips[0]?.date ? formatDayLabel(driver.trips[0].date) : "";
+      if (dayLabel) lines.push(`${dayLabel}:`);
+      driver.trips.forEach(trip => {
+        const time = formatBookingTime(trip.time);
+        const city = extractCity(trip.pickup);
+        lines.push(`${time} pickup in ${city}`);
+      });
+      lines.push("");
     }
 
     lines.push("Reply CONFIRM to acknowledge. Thank you!");
