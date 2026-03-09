@@ -836,11 +836,11 @@ s.forEach(d => {
     const data = await file.arrayBuffer();
     const wb = XLSX.read(data, { type: "array" });
     const ws = wb.Sheets[wb.SheetNames[0]];
-    parseDriverSheet(ws);
+    await parseDriverSheet(ws);
     input.value = "";
   };
 
-  function parseDriverSheet(ws) {
+  async function parseDriverSheet(ws) {
     ttDrivers = [];
     ttTrips = {};
     ttMessages = [];
@@ -891,8 +891,8 @@ s.forEach(d => {
       }
     });
 
-    // Match against contacts
-    matchDriversToContacts();
+    // Match against contacts (loads saved matches from Firestore)
+    await matchDriversToContacts();
     renderTripTextsView();
   }
 
@@ -940,28 +940,38 @@ s.forEach(d => {
     return regions;
   }
 
-  // --- Persistent Manual Match Storage ---
-  function getSavedMatches() {
-    return JSON.parse(localStorage.getItem("tt_manual_matches") || "{}");
-  }
-  function saveManualMatch(driverName, threadId) {
-    const saved = getSavedMatches();
-    saved[driverName.toLowerCase().trim()] = threadId;
-    localStorage.setItem("tt_manual_matches", JSON.stringify(saved));
-  }
-  function removeSavedMatch(driverName) {
-    const saved = getSavedMatches();
-    delete saved[driverName.toLowerCase().trim()];
-    localStorage.setItem("tt_manual_matches", JSON.stringify(saved));
+  // --- Persistent Manual Match Storage (Firestore) ---
+  const getDriverMatchesDoc = () => doc(db, "organizations", SHARED_ORG_ID, "settings", "driver_matches");
+  let cachedDriverMatches = {};
+
+  async function loadSavedMatches() {
+    try {
+      const snap = await getDoc(getDriverMatchesDoc());
+      cachedDriverMatches = snap.exists() ? (snap.data().matches || {}) : {};
+    } catch(e) {
+      console.error("Failed to load driver matches from Firestore:", e);
+      cachedDriverMatches = {};
+    }
+    return cachedDriverMatches;
   }
 
-  function matchDriversToContacts() {
+  async function saveManualMatch(driverName, threadId) {
+    const key = driverName.toLowerCase().trim();
+    cachedDriverMatches[key] = threadId;
+    try {
+      await setDoc(getDriverMatchesDoc(), { matches: cachedDriverMatches }, { merge: true });
+    } catch(e) {
+      console.error("Failed to save driver match to Firestore:", e);
+    }
+  }
+
+  async function matchDriversToContacts() {
     const normalize = (s) => s.toLowerCase().replace(/[^a-z]/g, "");
-    const savedMatches = getSavedMatches();
+    await loadSavedMatches();
     ttDrivers.forEach(d => {
       d.matched = null;
-      // Check saved manual matches first
-      const savedThreadId = savedMatches[d.name.toLowerCase().trim()];
+      // Check saved manual matches from Firestore first
+      const savedThreadId = cachedDriverMatches[d.name.toLowerCase().trim()];
       if (savedThreadId) {
         const savedThread = store.threads.find(t => t.id === savedThreadId);
         if (savedThread) { d.matched = savedThread; return; }
@@ -1033,13 +1043,13 @@ s.forEach(d => {
     `).join("");
   };
 
-  window.selectManualMatch = (threadId) => {
+  window.selectManualMatch = async (threadId) => {
     if (manualMatchDriverIdx === null) return;
     const thread = store.threads.find(t => t.id === threadId);
     if (!thread) return;
     const driver = ttDrivers[manualMatchDriverIdx];
     driver.matched = thread;
-    saveManualMatch(driver.name, threadId);
+    await saveManualMatch(driver.name, threadId);
     document.getElementById("manualMatchModal").classList.add("hidden");
     manualMatchDriverIdx = null;
     renderTripTextsView();
@@ -1152,7 +1162,7 @@ s.forEach(d => {
     const isMultiDay = tripDate !== endDate;
 
     try {
-      const url = `${settings.baseUrl}/bookings/upcoming_slim?limit=500&order=pickup_date&direction=ASC&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&vehicle_refs=${encodeURIComponent(vehicleRefs)}`;
+      const url = `${settings.baseUrl}/bookings/upcoming?limit=500&order=pickup_date&direction=ASC&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&vehicle_refs=${encodeURIComponent(vehicleRefs)}`;
       const res = await fetch(url, {
         headers: { "Authorization": authHeader, "Accept": "application/json" }
       });
