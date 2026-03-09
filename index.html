@@ -252,9 +252,27 @@
             <div><div class="text-xs text-slate-400">Unmatched</div><div id="ttUnmatchedCount" class="text-lg font-bold text-rose-500">0</div></div>
           </div>
           <div class="flex-1"></div>
-          <button onclick="window.fetchTripsForAllDrivers()" id="ttFetchTripsBtn" class="px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition shadow-sm self-center disabled:opacity-50 disabled:cursor-not-allowed">
-            <i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch Trips from iCabbi
-          </button>
+          <div class="flex items-center gap-2 self-center">
+            <button onclick="window.fetchTripsForAllDrivers()" id="ttFetchTripsBtn" class="px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+              <i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch Trips
+            </button>
+            <div id="ttStepIndicators" class="hidden flex items-center gap-1.5">
+              <div id="ttStep1" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all bg-slate-50 text-slate-400 border-slate-200">
+                <i id="ttStep1Icon" class="fa-solid fa-magnifying-glass text-[10px]"></i>
+                <span>Slim</span>
+              </div>
+              <i class="fa-solid fa-chevron-right text-[8px] text-slate-300"></i>
+              <div id="ttStep2" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all bg-slate-50 text-slate-400 border-slate-200">
+                <i id="ttStep2Icon" class="fa-solid fa-car text-[10px]"></i>
+                <span>Vehicles</span>
+              </div>
+              <i class="fa-solid fa-chevron-right text-[8px] text-slate-300"></i>
+              <div id="ttStep3" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all bg-slate-50 text-slate-400 border-slate-200">
+                <i id="ttStep3Icon" class="fa-solid fa-list-check text-[10px]"></i>
+                <span>Details</span>
+              </div>
+            </div>
+          </div>
           <button onclick="window.openTripReviewModal()" id="ttReviewBtn" class="px-5 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition shadow-sm self-center hidden">
             <i class="fa-solid fa-paper-plane mr-1"></i>Review &amp; Send
           </button>
@@ -1127,6 +1145,41 @@ s.forEach(d => {
   }
 
   // --- iCabbi Trip Fetching ---
+  function setStepState(stepNum, state, detail) {
+    const el = document.getElementById(`ttStep${stepNum}`);
+    const icon = document.getElementById(`ttStep${stepNum}Icon`);
+    const icons = { 1: "fa-magnifying-glass", 2: "fa-car", 3: "fa-list-check" };
+    // Reset classes
+    el.className = "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all";
+    if (state === "pending") {
+      el.classList.add("bg-slate-50", "text-slate-400", "border-slate-200");
+      icon.className = `fa-solid ${icons[stepNum]} text-[10px]`;
+    } else if (state === "active") {
+      el.classList.add("bg-indigo-50", "text-indigo-600", "border-indigo-300", "ring-2", "ring-indigo-200");
+      icon.className = "fa-solid fa-spinner fa-spin text-[10px]";
+    } else if (state === "done") {
+      el.classList.add("bg-emerald-50", "text-emerald-600", "border-emerald-300");
+      icon.className = "fa-solid fa-circle-check text-[10px]";
+    } else if (state === "error") {
+      el.classList.add("bg-rose-50", "text-rose-500", "border-rose-300");
+      icon.className = "fa-solid fa-circle-xmark text-[10px]";
+    }
+    // Update detail text if provided
+    if (detail !== undefined) {
+      const span = el.querySelector("span");
+      span.textContent = detail;
+    }
+  }
+
+  function resetStepIndicators() {
+    const ind = document.getElementById("ttStepIndicators");
+    ind.classList.remove("hidden");
+    ind.classList.add("flex");
+    setStepState(1, "pending", "Slim");
+    setStepState(2, "pending", "Vehicles");
+    setStepState(3, "pending", "Details");
+  }
+
   window.fetchTripsForAllDrivers = async () => {
     const settings = getIcabbiSettings();
     if (!settings.baseUrl || !settings.appKey || !settings.secret) {
@@ -1138,6 +1191,7 @@ s.forEach(d => {
     const btn = document.getElementById("ttFetchTripsBtn");
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Fetching...';
+    resetStepIndicators();
 
     const tripDate = settings.tripDate || new Date(Date.now() + 86400000).toISOString().split("T")[0];
     const authHeader = "Basic " + btoa(settings.appKey + ":" + settings.secret);
@@ -1163,6 +1217,7 @@ s.forEach(d => {
 
     try {
       // Step 1: Fetch slim trip list to find vehicle refs
+      setStepState(1, "active", "Fetching...");
       const slimUrl = `${settings.baseUrl}/bookings/upcoming_slim?limit=500&order=pickup_date&direction=ASC&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&vehicle_refs=${encodeURIComponent(vehicleRefs)}`;
       const slimRes = await fetch(slimUrl, {
         headers: { "Authorization": authHeader, "Accept": "application/json" }
@@ -1185,9 +1240,10 @@ s.forEach(d => {
         if (vehicleRefSet.has(vRef)) matchedVehicleRefs.add(vRef);
       });
       console.log("Step 1 - matched vehicle refs:", [...matchedVehicleRefs]);
+      setStepState(1, "done", `${matchedVehicleRefs.size} vehicles`);
 
       // Step 2: For each vehicle ref, fetch bookings via vehicle/bookings?ref={ref}
-      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Fetching vehicle bookings...';
+      setStepState(2, "active", "0/" + matchedVehicleRefs.size);
       const tripIdsByVehicle = {};
       const BATCH_SIZE = 10;
       const vehicleRefArr = [...matchedVehicleRefs];
@@ -1213,11 +1269,13 @@ s.forEach(d => {
             tripIdsByVehicle[vRef] = [];
           }
         }));
+        setStepState(2, "active", `${Math.min(i + BATCH_SIZE, vehicleRefArr.length)}/${vehicleRefArr.length}`);
       }
 
       // Collect all unique trip IDs
       const allTripIds = [...new Set(Object.values(tripIdsByVehicle).flat())];
       console.log("Step 2 - total trip IDs to fetch:", allTripIds.length);
+      setStepState(2, "done", `${allTripIds.length} trips`);
 
       // Build reverse lookup: tripId -> vehicleRef
       const tripToVehicle = {};
@@ -1226,7 +1284,7 @@ s.forEach(d => {
       }
 
       // Step 3: Fetch full details for each trip via bookings/index/{tripId}
-      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Loading trip details...';
+      setStepState(3, "active", `0/${allTripIds.length}`);
       const fullTrips = [];
 
       for (let i = 0; i < allTripIds.length; i += BATCH_SIZE) {
@@ -1253,10 +1311,11 @@ s.forEach(d => {
           }
         }));
         fullTrips.push(...results.filter(Boolean));
-        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>Loading trips ${Math.min(i + BATCH_SIZE, allTripIds.length)}/${allTripIds.length}...`;
+        setStepState(3, "active", `${Math.min(i + BATCH_SIZE, allTripIds.length)}/${allTripIds.length}`);
       }
 
       const trips = fullTrips;
+      setStepState(3, "done", `${trips.length} loaded`);
       console.log("Step 3 - full trips count:", trips.length, "first trip:", JSON.stringify(trips[0] || {}).slice(0, 500));
 
       // Map trips to vehicles
@@ -1309,9 +1368,14 @@ s.forEach(d => {
     } catch (e) {
       console.error("iCabbi fetch error:", e);
       window.showToast("Trip fetch failed: " + e.message, "error");
+      // Mark whichever step was active as errored
+      for (let s = 1; s <= 3; s++) {
+        const el = document.getElementById(`ttStep${s}`);
+        if (el.classList.contains("ring-2")) setStepState(s, "error");
+      }
     } finally {
       btn.disabled = false;
-      btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch Trips from iCabbi';
+      btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch Trips';
     }
   };
 
