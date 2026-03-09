@@ -1162,21 +1162,64 @@ s.forEach(d => {
     const isMultiDay = tripDate !== endDate;
 
     try {
-      const url = `${settings.baseUrl}/bookings/upcoming?limit=500&order=pickup_date&direction=ASC&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&vehicle_refs=${encodeURIComponent(vehicleRefs)}`;
-      const res = await fetch(url, {
+      // Step 1: Fetch slim trip list to get trip IDs matched to vehicles
+      const slimUrl = `${settings.baseUrl}/bookings/upcoming_slim?limit=500&order=pickup_date&direction=ASC&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&vehicle_refs=${encodeURIComponent(vehicleRefs)}`;
+      const slimRes = await fetch(slimUrl, {
         headers: { "Authorization": authHeader, "Accept": "application/json" }
       });
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`API returned ${res.status}: ${errText.slice(0, 200)}`);
+      if (!slimRes.ok) {
+        const errText = await slimRes.text();
+        throw new Error(`API returned ${slimRes.status}: ${errText.slice(0, 200)}`);
       }
 
-      const data = await res.json();
-      console.log("iCabbi API response:", JSON.stringify(data).slice(0, 500));
-      console.log("iCabbi API keys:", Object.keys(data));
-      const trips = Array.isArray(data) ? data : (data.body?.bookings || data.bookings || data.trips || data.data || []);
-      console.log("Parsed trips count:", trips.length, "first trip:", JSON.stringify(trips[0] || {}).slice(0, 300));
+      const slimData = await slimRes.json();
+      console.log("iCabbi slim response:", JSON.stringify(slimData).slice(0, 500));
+      const slimTrips = Array.isArray(slimData) ? slimData : (slimData.body?.bookings || slimData.bookings || slimData.trips || slimData.data || []);
+      console.log("Slim trips count:", slimTrips.length);
+
+      // Step 2: Fetch full details for each trip via bookings/{id}
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Loading trip details...';
+      const vehicleRefSet = new Set(ttDrivers.map(d => d.vehicle));
+      const relevantTrips = slimTrips.filter(t => {
+        const vRef = String(t.driver?.vehicle?.ref || t.vehicle_ref || t.vehicleRef || t.vehicle_id || "").trim();
+        return vehicleRefSet.has(vRef);
+      });
+
+      const fullTrips = [];
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < relevantTrips.length; i += BATCH_SIZE) {
+        const batch = relevantTrips.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(batch.map(async (slim) => {
+          const tripId = slim.id || slim.booking_id || "";
+          if (!tripId) return slim;
+          try {
+            const detailRes = await fetch(`${settings.baseUrl}/bookings/${tripId}`, {
+              headers: { "Authorization": authHeader, "Accept": "application/json" }
+            });
+            if (detailRes.ok) {
+              const detail = await detailRes.json();
+              // Merge slim vehicle info with full detail (detail may be nested)
+              const fullTrip = detail.body || detail.booking || detail.data || detail;
+              // Preserve vehicle ref from slim if not in detail
+              if (!fullTrip.driver?.vehicle?.ref && !fullTrip.vehicle_ref) {
+                fullTrip.vehicle_ref = String(slim.driver?.vehicle?.ref || slim.vehicle_ref || slim.vehicleRef || slim.vehicle_id || "").trim();
+              }
+              return fullTrip;
+            }
+            console.warn(`Failed to fetch detail for trip ${tripId}:`, detailRes.status);
+            return slim;
+          } catch(e) {
+            console.warn(`Error fetching trip ${tripId}:`, e);
+            return slim;
+          }
+        }));
+        fullTrips.push(...results);
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>Loading trips ${Math.min(i + BATCH_SIZE, relevantTrips.length)}/${relevantTrips.length}...`;
+      }
+
+      const trips = fullTrips;
+      console.log("Full trips count:", trips.length, "first trip:", JSON.stringify(trips[0] || {}).slice(0, 500));
 
       // Map trips to vehicles
       ttTrips = {};
