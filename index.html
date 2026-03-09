@@ -269,7 +269,7 @@
               <i class="fa-solid fa-chevron-right text-[8px] text-slate-300"></i>
               <div id="ttStep3" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all bg-slate-50 text-slate-400 border-slate-200">
                 <i id="ttStep3Icon" class="fa-solid fa-list-check text-[10px]"></i>
-                <span>Details</span>
+                <span>Format</span>
               </div>
             </div>
           </div>
@@ -1131,7 +1131,9 @@ s.forEach(d => {
                     }</td>
                     <td class="px-6 py-3 text-xs">${d.trips.length
                       ? `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">${d.trips.length} trips</span>`
-                      : `<span class="text-slate-300">--</span>`
+                      : (d.origin || "").toLowerCase().includes("eugene")
+                        ? `<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">0 trips (Eugene)</span>`
+                        : `<span class="text-slate-300 line-through">skipped</span>`
                     }</td>
                   </tr>
                 `).join("")}
@@ -1177,7 +1179,7 @@ s.forEach(d => {
     ind.classList.add("flex");
     setStepState(1, "pending", "Slim");
     setStepState(2, "pending", "Vehicles");
-    setStepState(3, "pending", "Details");
+    setStepState(3, "pending", "Format");
   }
 
   window.fetchTripsForAllDrivers = async () => {
@@ -1349,6 +1351,7 @@ s.forEach(d => {
       Object.values(ttTrips).forEach(arr => arr.sort((a, b) => (a.time || "").localeCompare(b.time || "")));
 
       // Assign trips to drivers
+      setStepState(3, "active", "Formatting...");
       ttDrivers.forEach(d => {
         d.trips = ttTrips[d.vehicle] || [];
       });
@@ -1357,9 +1360,15 @@ s.forEach(d => {
       window.ttIsMultiDay = isMultiDay;
       window.ttTripDateRange = isMultiDay ? `${tripDate} to ${endDate}` : tripDate;
 
+      // Count drivers who will receive texts vs skipped
+      const isEugene = (origin) => (origin || "").toLowerCase().includes("eugene");
+      const sendCount = ttDrivers.filter(d => d.matched && (d.trips.length > 0 || isEugene(d.origin))).length;
+      const skippedCount = ttDrivers.filter(d => d.matched && d.trips.length === 0 && !isEugene(d.origin)).length;
+
       const totalTrips = Object.values(ttTrips).reduce((s, arr) => s + arr.length, 0);
       const dayLabel = isMultiDay ? ` (Fri-Mon)` : "";
-      window.showToast(`Fetched ${totalTrips} trips for ${Object.keys(ttTrips).length} vehicles${dayLabel}`);
+      setStepState(3, "done", `${sendCount} texts` + (skippedCount ? ` (${skippedCount} skipped)` : ""));
+      window.showToast(`Fetched ${totalTrips} trips for ${Object.keys(ttTrips).length} vehicles${dayLabel}` + (skippedCount ? ` · ${skippedCount} drivers skipped (no trips)` : ""));
 
       // Show review button
       document.getElementById("ttReviewBtn").classList.remove("hidden");
@@ -1421,20 +1430,27 @@ s.forEach(d => {
     const lines = [];
     const isMultiDay = window.ttIsMultiDay;
 
+    if (driver.trips.length === 0) {
+      lines.push(`Hi ${driver.name.split(" ")[0]},`);
+      lines.push("");
+      lines.push("No trips currently assigned. Please check your tablet for updates.");
+      if (driver.tablet) {
+        lines.push("");
+        lines.push(`BE SIGNED INTO YOUR TABLET @ ${driver.tablet}`);
+      }
+      lines.push("");
+      lines.push("Reply CONFIRM to acknowledge. Thank you!");
+      return lines.join("\n");
+    }
+
     if (isMultiDay) {
-      lines.push(`Hi ${driver.name.split(" ")[0]}, here are your trip assignments for the weekend & Monday:`);
+      lines.push(`Hi ${driver.name.split(" ")[0]}, here are your trips for the weekend & Monday:`);
     } else {
-      lines.push(`Hi ${driver.name.split(" ")[0]}, here are your trip assignments for tomorrow:`);
+      lines.push(`Hi ${driver.name.split(" ")[0]}, here are your trips for tomorrow:`);
     }
     lines.push("");
-    lines.push(`Vehicle: ${driver.vehicle}`);
-    if (driver.origin) lines.push(`Origin: ${driver.origin}`);
-    if (driver.tablet) lines.push(`BE SIGNED INTO YOUR TABLET @ ${driver.tablet}`);
-    lines.push("");
 
-    if (driver.trips.length === 0) {
-      lines.push("No trips currently assigned. Please check your tablet for updates.");
-    } else if (isMultiDay) {
+    if (isMultiDay) {
       // Group trips by date
       const byDate = {};
       driver.trips.forEach(trip => {
@@ -1453,7 +1469,6 @@ s.forEach(d => {
         lines.push("");
       });
     } else {
-      // Single day - still use the day header format
       const dayLabel = driver.trips[0]?.date ? formatDayLabel(driver.trips[0].date) : "";
       if (dayLabel) lines.push(`${dayLabel}:`);
       driver.trips.forEach(trip => {
@@ -1464,13 +1479,20 @@ s.forEach(d => {
       lines.push("");
     }
 
+    if (driver.tablet) {
+      lines.push(`BE SIGNED INTO YOUR TABLET @ ${driver.tablet}`);
+      lines.push("");
+    }
+
     lines.push("Reply CONFIRM to acknowledge. Thank you!");
     return lines.join("\n");
   }
 
   window.openTripReviewModal = () => {
     ttMessages = [];
-    const matchedWithTrips = ttDrivers.filter(d => d.matched);
+    // Include matched drivers that have trips, OR whose origin city is Eugene (even with no trips)
+    const isEugene = (origin) => (origin || "").toLowerCase().includes("eugene");
+    const matchedWithTrips = ttDrivers.filter(d => d.matched && (d.trips.length > 0 || isEugene(d.origin)));
 
     matchedWithTrips.forEach(d => {
       ttMessages.push({
