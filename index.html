@@ -1318,7 +1318,11 @@ s.forEach(d => {
 
       const trips = fullTrips;
       setStepState(3, "done", `${trips.length} loaded`);
-      console.log("Step 3 - full trips count:", trips.length, "first trip:", JSON.stringify(trips[0] || {}).slice(0, 500));
+      console.log("Step 3 - full trips count:", trips.length);
+      if (trips[0]) {
+        console.log("Step 3 - first trip ALL KEYS:", Object.keys(trips[0]));
+        console.log("Step 3 - first trip FULL DATA:", JSON.stringify(trips[0], null, 2).slice(0, 2000));
+      }
 
       // Map trips to vehicles
       ttTrips = {};
@@ -1334,14 +1338,20 @@ s.forEach(d => {
         if (rawTime) {
           try { tripDay = new Date(rawTime).toISOString().split("T")[0]; } catch(e) {}
         }
+        // Extract pickup address - iCabbi uses address_formatted for full address
+        const pickupAddr = trip.address_formatted || trip.pickup_address || trip.pickupAddress || trip.pickup?.address || trip.pickup?.address_formatted || trip.from || "";
+        // Extract passenger name - iCabbi uses "name" at top level
+        const passengerName = trip.name || trip.passenger_name || trip.passengerName || trip.passenger?.name || trip.customer_name || "";
+        // Extract passenger phone
+        const passengerPhone = trip.phone || trip.passenger_phone || trip.passengerPhone || trip.passenger?.phone || "";
         ttTrips[vehRef].push({
           id: trip.id || trip.booking_id || "",
           time: rawTime,
           date: tripDay,
-          pickup: trip.pickup_address || trip.pickupAddress || trip.pickup?.address || trip.from || "",
-          dropoff: trip.dropoff_address || trip.dropoffAddress || trip.dropoff?.address || trip.to || "",
-          passenger: trip.passenger_name || trip.passengerName || trip.passenger?.name || trip.customer_name || "",
-          passengerPhone: trip.passenger_phone || trip.passengerPhone || trip.passenger?.phone || "",
+          pickup: pickupAddr,
+          dropoff: trip.dropoff_address_formatted || trip.dropoff_address || trip.dropoffAddress || trip.dropoff?.address || trip.dropoff?.address_formatted || trip.to || "",
+          passenger: passengerName,
+          passengerPhone: passengerPhone,
           notes: trip.notes || trip.driver_notes || "",
           status: trip.status || ""
         });
