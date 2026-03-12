@@ -5,13 +5,13 @@
  *
  * SETUP:
  *   1. Go to Twilio Console → Functions & Assets → Services
- *   2. Create a new service (or use your existing "sms-backend-3488" service)
+ *   2. Open your existing "sms-backend-3488" service (or create a new one)
  *   3. Add this as a new function at path: /incoming-sms
  *   4. Add dependency: firebase-admin (latest)
- *   5. Add environment variables:
- *        FIREBASE_PROJECT_ID    = sms-dlx
- *        FIREBASE_CLIENT_EMAIL  = <your service account email>
- *        FIREBASE_PRIVATE_KEY   = <your service account private key>
+ *   5. Add a PRIVATE Asset at path: /firebase-service-account.json
+ *      - Go to Firebase Console → Project Settings → Service Accounts
+ *      - Click "Generate new private key" → download the JSON file
+ *      - In Twilio Assets, upload it as PRIVATE (not public/protected)
  *   6. Deploy the service
  *   7. In Twilio Console → Phone Numbers → your number → Messaging Configuration:
  *        Set "A message comes in" webhook to:
@@ -26,14 +26,12 @@ const admin = require("firebase-admin");
 
 let firestore;
 
-function getFirestore(context) {
+function getFirestore() {
   if (!firestore) {
+    // Load service account from private Twilio Asset (no 255-char env var limit)
+    const serviceAccount = require(Runtime.getAssets()["/firebase-service-account.json"].path);
     admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: context.FIREBASE_PROJECT_ID,
-        clientEmail: context.FIREBASE_CLIENT_EMAIL,
-        privateKey: (context.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
-      }),
+      credential: admin.credential.cert(serviceAccount),
     });
     firestore = admin.firestore();
   }
@@ -60,7 +58,7 @@ exports.handler = async function (context, event, callback) {
   const twiml = new Twilio.twiml.MessagingResponse();
 
   try {
-    const db = getFirestore(context);
+    const db = getFirestore();
 
     const from = normalizePhone(event.From);
     const body = event.Body || "";
