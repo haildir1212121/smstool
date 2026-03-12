@@ -213,7 +213,7 @@
   const SMS_BACKEND_BASE = "https://sms-backend-3488.twil.io";
   const SHARED_ORG_ID = "dispatch_team_main";
   const TWILIO_SEND_URL = `${SMS_BACKEND_BASE}/send-sms`;
-  const TWILIO_GET_URL  = `${SMS_BACKEND_BASE}/get-messages`;
+  const TWILIO_WEBHOOK_URL = `${SMS_BACKEND_BASE}/incoming-sms`; // Webhook replaces polling
   
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
@@ -223,7 +223,7 @@
   const app = initializeApp({ apiKey: "AIzaSyCaypEoug2f7OTJjKOdkkJPaZDypcr3NF8", authDomain: "sms-dlx.firebaseapp.com", projectId: "sms-dlx", storageBucket: "sms-dlx.firebasestorage.app", messagingSenderId: "522453095698", appId: "1:522453095698:web:ea217285e6e5160ee4cfcb" });
   const auth = getAuth(app); const db = getFirestore(app); const storage = getStorage(app);
   // ADDED PAGINATION STATE
-  let store = { threads: [], logs: [], activeThreadId: null, activeThread: null, pinned: new Set(), drafts: {}, cannedReplies: [], deletedSids: new Set(), lastInboundSidSeen: new Set(), isPolling: false, pendingMedia: [], isFirstLoad: true, onlyUnread: false, onlyUrgent: false, tagFilter: new Set(), notifQueue: {}, notifTimer: null, cmPage: 1, logPage: 1, itemsPerPage: 15 };
+  let store = { threads: [], logs: [], activeThreadId: null, activeThread: null, pinned: new Set(), drafts: {}, cannedReplies: [], deletedSids: new Set(), pendingMedia: [], isFirstLoad: true, onlyUnread: false, onlyUrgent: false, tagFilter: new Set(), notifQueue: {}, notifTimer: null, cmPage: 1, logPage: 1, itemsPerPage: 15 };
   
   // Make store global so pagination buttons can access it
   window.store = store;
@@ -265,49 +265,9 @@ const ymd = (ms) => {
 
   const vehicleKeywords = ["oil change", "repair", "red triangle", "check engine", "engine light", "won't start", "wont start", "not starting", "flat tire", "break down", "breakdown", "tow", "not turning on"];
 
-  async function poll() {
-      if(store.isPolling) return; store.isPolling = true;
-      try {
-          const res = await fetch(`${TWILIO_GET_URL}?after=${Date.now()-15000}`); const data = await res.json();
-          if(data.success) {
-            data.messages.filter(m=>m.direction==="inbound" && !store.lastInboundSidSeen.has(m.sid)).forEach(async m => {
-                store.lastInboundSidSeen.add(m.sid);
-                const phone = normalizePhone(m.from);
-                const msgTime = new Date(m.dateCreated).getTime(); 
-                
-                await setDoc(doc(getMsgsCol(phone), m.sid), { body:m.body, direction:"received", createdAt: new Date(msgTime), sid:m.sid, mediaUrls: m.mediaUrls||[] });
-                
-                const t = store.threads.find(x => x.id === phone);
-                const isViewing = (store.activeThreadId === phone && document.visibilityState === 'visible');
-                if (!isViewing) queueNotification(phone, t ? (t.name || phone) : phone, m.body);
-
-                const lowerBody = m.body.toLowerCase();
-                const isMaintenance = vehicleKeywords.some(k => lowerBody.includes(k));
-                
-                if (isMaintenance) {
-                    await addDoc(collection(db, "organizations", SHARED_ORG_ID, "logs"), {
-                        type: "vehicle_alert",
-                        threadName: t ? (t.name || phone) : phone,
-                        phone: phone,
-                        message: m.body,
-                        threadId: phone,
-                        createdAt: serverTimestamp()
-                    });
-                    window.showToast("Vehicle Issue Detected!", "error");
-                }
-
-                const updateData = { lastMessageText: m.body, lastMessageAtMs: msgTime, unread: isViewing ? 0 : increment(1), id: phone, phone: phone };
-                if (isMaintenance) updateData.isUrgent = true; 
-                if (!t) updateData.name = phone; 
-
-                const currentLastMs = t ? (t.lastMessageAtMs || 0) : 0;
-                if (msgTime > currentLastMs) {
-                    await setDoc(getThreadDoc(phone), updateData, { merge: true });
-                }
-            });
-          }
-      } catch(e){} finally { store.isPolling=false; }
-  }
+  // Inbound SMS is now handled by the Twilio webhook (functions/twilio-webhook.js)
+  // which writes directly to Firestore. The onSnapshot listeners below pick up
+  // changes in real time — no polling needed.
 
   window.switchView = (v) => {
       ['inbox', 'contacts', 'broadcast', 'logs'].forEach(x => document.getElementById(`view-${x}`).classList.add('hidden'));
@@ -680,12 +640,33 @@ s.forEach(d => {
       onAuthStateChanged(auth, u => {
           if(!u) return;
           onSnapshot(query(getThreadsCol()), s => {
+              const prev = new Map(store.threads.map(t => [t.id, t]));
               store.threads = s.docs.map(d => { const data = d.data(); if (!data.id) data.id = d.id; return data; });
               if(store.activeThreadId) store.activeThread = store.threads.find(t=>t.id===store.activeThreadId);
+
+              // Real-time notifications for inbound messages (replaces polling)
+              if (!store.isFirstLoad) {
+                  s.docChanges().forEach(change => {
+                      if (change.type === "modified" || change.type === "added") {
+                          const t = change.doc.data();
+                          if (!t.id) t.id = change.doc.id;
+                          const old = prev.get(t.id);
+                          const newUnread = (t.unread || 0) > (old?.unread || 0);
+                          if (newUnread) {
+                              queueNotification(t.id, t.name || t.phone || t.id, t.lastMessageText || "New message");
+                              const lowerBody = (t.lastMessageText || "").toLowerCase();
+                              if (t.isUrgent && vehicleKeywords.some(k => lowerBody.includes(k))) {
+                                  window.showToast("Vehicle Issue Detected!", "error");
+                              }
+                          }
+                      }
+                  });
+              }
+              store.isFirstLoad = false;
+
               window.renderThreadList();
-              if(store.activeThreadId && store.activeThread) document.getElementById("activeContactName").innerText = store.activeThread.name; 
+              if(store.activeThreadId && store.activeThread) document.getElementById("activeContactName").innerText = store.activeThread.name;
           });
-          setInterval(poll, 8000);
       });
       store.cannedReplies = JSON.parse(localStorage.getItem("canned")||"[]"); window.renderQuickReplies();
       document.addEventListener("visibilitychange", async () => {
