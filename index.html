@@ -210,10 +210,10 @@
   </div>
 
 <script type="module">
-  const SMS_BACKEND_BASE = "https://sms-backend2-2077.twil.io";
+  const SMS_BACKEND_BASE = "";  // Use local server (same origin — no CORS issues)
   const SHARED_ORG_ID = "dispatch_team_main";
   const TWILIO_SEND_URL = `${SMS_BACKEND_BASE}/send-sms`;
-  const TWILIO_WEBHOOK_URL = `${SMS_BACKEND_BASE}/incoming-sms`; // Webhook replaces polling
+  const TWILIO_WEBHOOK_URL = "https://sms-backend2-2077.twil.io/incoming-sms"; // Webhook on Twilio for inbound
   
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
