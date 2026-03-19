@@ -46,7 +46,7 @@
       <div class="h-16 px-4 flex items-center border-b border-gray-100 gap-2 shrink-0">
         <div class="relative flex-1">
             <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-xs"></i>
-            <input id="searchContacts" oninput="window.renderThreadList()" placeholder="Search messages..." class="w-full bg-slate-50 border border-slate-100 rounded-lg pl-8 pr-3 py-2 text-sm focus:bg-white focus:border-blue-300 outline-none transition">
+            <input id="searchContacts" placeholder="Search messages..." class="w-full bg-slate-50 border border-slate-100 rounded-lg pl-8 pr-3 py-2 text-sm focus:bg-white focus:border-blue-300 outline-none transition">
         </div>
         <button onclick="window.openNewMsgModal()" class="w-8 h-8 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center shadow-sm transition"><i class="fa-solid fa-plus"></i></button>
       </div>
@@ -222,26 +222,34 @@
 
   const app = initializeApp({ apiKey: "AIzaSyCaypEoug2f7OTJjKOdkkJPaZDypcr3NF8", authDomain: "sms-dlx.firebaseapp.com", projectId: "sms-dlx", storageBucket: "sms-dlx.firebasestorage.app", messagingSenderId: "522453095698", appId: "1:522453095698:web:ea217285e6e5160ee4cfcb" });
   const auth = getAuth(app); const db = getFirestore(app); const storage = getStorage(app);
-  // ADDED PAGINATION STATE
   let store = { threads: [], logs: [], activeThreadId: null, activeThread: null, pinned: new Set(), drafts: {}, cannedReplies: [], deletedSids: new Set(), lastInboundSidSeen: new Set(), isPolling: false, pendingMedia: [], isFirstLoad: true, onlyUnread: false, onlyUrgent: false, tagFilter: new Set(), notifQueue: {}, notifTimer: null, cmPage: 1, logPage: 1, itemsPerPage: 15 };
   
-  // Make store global so pagination buttons can access it
   window.store = store;
 
-  const escapeHtml = (t) => { const d = document.createElement("div"); d.textContent = t ?? ""; return d.innerHTML; };
+  // FIX: Regex replacement instead of costly DOM operations
+  const escapeHtml = (t) => { 
+      if (!t) return ""; 
+      return String(t)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;"); 
+  };
+  
   const initials = (s) => (s || "?").trim().slice(0, 2).toUpperCase() || "?";
   const formatTime = (ms) => (!ms) ? "" : new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-const formatDate = (ms) => (!ms) ? "" : new Date(ms).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
-const formatDateLong = (ms) => (!ms) ? "" : new Date(ms).toLocaleDateString([], { weekday: "short", year: "numeric", month: "long", day: "numeric" });
+  const formatDate = (ms) => (!ms) ? "" : new Date(ms).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+  const formatDateLong = (ms) => (!ms) ? "" : new Date(ms).toLocaleDateString([], { weekday: "short", year: "numeric", month: "long", day: "numeric" });
 
-const ymd = (ms) => {
-  if (!ms) return "";
-  const d = new Date(ms);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const da = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${da}`;
-};
+  const ymd = (ms) => {
+    if (!ms) return "";
+    const d = new Date(ms);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const da = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${da}`;
+  };
   function relativeTime(ms) { if (!ms) return ""; const diff = Date.now() - ms; const min = 60000; if (diff < min) return "now"; if (diff < 60*min) return Math.floor(diff/min) + "m"; if (diff < 24*60*min) return Math.floor(diff/(60*min)) + "h"; return Math.floor(diff/(24*60*min)) + "d"; }
   window.showToast = (msg, type) => { const t = document.getElementById("toast"); document.getElementById("toastMsg").innerText=msg; document.getElementById("toastIcon").className = type==="error"?"fa-solid fa-circle-exclamation text-rose-400":"fa-solid fa-check-circle text-emerald-400"; t.classList.remove("translate-y-20","opacity-0"); setTimeout(()=>t.classList.add("translate-y-20","opacity-0"), 2500); };
   
@@ -421,55 +429,67 @@ const ymd = (ms) => {
       document.getElementById("headerUrgentBtn").className = store.activeThread.isUrgent ? "w-8 h-8 flex items-center justify-center rounded bg-rose-100 text-rose-500" : "w-8 h-8 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-500 text-slate-400";
       try { await updateDoc(getThreadDoc(id), { unread: 0, lastReadAtMs: Date.now() }); } catch {}
       
-      const q = query(getMsgsCol(id), orderBy("createdAt", "asc"));
+      // FIX: Added limit to message query and ordering by DESC
+      const q = query(getMsgsCol(id), orderBy("createdAt", "desc"), limit(100));
       unsubMessages = onSnapshot(q, s => {
-          const div = document.getElementById("messageList"); div.innerHTML = ""; const atts = [];
+          const div = document.getElementById("messageList"); 
+          
+          // FIX: Buffer HTML in memory instead of mutating DOM in loop
+          let htmlBuffer = "";
+          const atts = [];
           let lastDay = null;
+          
+          // Extract and reverse to maintain chronological order bottom-to-top
+          const messages = [];
+          s.forEach(d => messages.push(d.data()));
+          messages.reverse();
 
-s.forEach(d => {
-  const m = d.data();
-  const isMe = m.direction === "sent";
+          messages.forEach(m => {
+              const isMe = m.direction === "sent";
 
-  if (m.mediaUrls) m.mediaUrls.forEach(u => atts.push(u));
+              if (m.mediaUrls) m.mediaUrls.forEach(u => atts.push(u));
 
-  const ts = m.createdAt?.toMillis?.() || null;
-  const dayKey = ymd(ts);
+              const ts = m.createdAt?.toMillis?.() || null;
+              const dayKey = ymd(ts);
 
-  // Date divider when day changes
-  if (dayKey && dayKey !== lastDay) {
-    lastDay = dayKey;
-    div.innerHTML += `
-      <div class="flex justify-center my-3">
-        <div class="px-3 py-1 rounded-full text-[11px] font-bold text-slate-500 bg-white border border-slate-200 shadow-sm">
-          ${escapeHtml(formatDateLong(ts))}
-        </div>
-      </div>
-    `;
-  }
+              // Date divider when day changes
+              if (dayKey && dayKey !== lastDay) {
+                  lastDay = dayKey;
+                  htmlBuffer += `
+                  <div class="flex justify-center my-3">
+                      <div class="px-3 py-1 rounded-full text-[11px] font-bold text-slate-500 bg-white border border-slate-200 shadow-sm">
+                      ${escapeHtml(formatDateLong(ts))}
+                      </div>
+                  </div>
+                  `;
+              }
 
-  let mediaHtml = "";
-  if (m.mediaUrls && m.mediaUrls.length) {
-    mediaHtml =
-      `<div class="flex flex-col gap-2 mt-2">` +
-      m.mediaUrls
-        .map(u => `<a href="${u}" target="_blank"><img src="${u}" class="rounded-lg max-h-48 border bg-white object-cover"></a>`)
-        .join("") +
-      `</div>`;
-  }
+              let mediaHtml = "";
+              if (m.mediaUrls && m.mediaUrls.length) {
+                  mediaHtml =
+                  `<div class="flex flex-col gap-2 mt-2">` +
+                  m.mediaUrls
+                      .map(u => `<a href="${u}" target="_blank"><img src="${u}" class="rounded-lg max-h-48 border bg-white object-cover"></a>`)
+                      .join("") +
+                  `</div>`;
+              }
 
-  div.innerHTML += `
-    <div class="flex w-full ${isMe ? "justify-end" : "justify-start"} fade-in">
-      <div class="max-w-[85%] lg:max-w-[70%]">
-        <div class="px-4 py-2.5 text-sm shadow-sm ${isMe ? "msg-sent" : "msg-received"}">
-          ${escapeHtml(m.body)}${mediaHtml}
-        </div>
-        <div class="text-[10px] text-gray-400 mt-1 ${isMe ? "text-right" : ""} opacity-75">
-          ${ts ? `${escapeHtml(formatDate(ts))} • ${escapeHtml(formatTime(ts))}` : ""}
-        </div>
-      </div>
-    </div>
-  `;
-});
+              htmlBuffer += `
+                  <div class="flex w-full ${isMe ? "justify-end" : "justify-start"} fade-in">
+                  <div class="max-w-[85%] lg:max-w-[70%]">
+                      <div class="px-4 py-2.5 text-sm shadow-sm ${isMe ? "msg-sent" : "msg-received"}">
+                      ${escapeHtml(m.body)}${mediaHtml}
+                      </div>
+                      <div class="text-[10px] text-gray-400 mt-1 ${isMe ? "text-right" : ""} opacity-75">
+                      ${ts ? `${escapeHtml(formatDate(ts))} • ${escapeHtml(formatTime(ts))}` : ""}
+                      </div>
+                  </div>
+                  </div>
+              `;
+          });
+          
+          // Apply changes once
+          div.innerHTML = htmlBuffer;
           div.scrollTop = div.scrollHeight; document.getElementById("chatContainer").scrollTop = document.getElementById("chatContainer").scrollHeight;
           document.getElementById("detailsAttachments").innerHTML = atts.slice(0,9).map(u => `<a href="${u}" target="_blank" class="block h-20 rounded-lg bg-slate-50 border bg-cover bg-center" style="background-image:url('${u}')"></a>`).join("");
       });
@@ -489,14 +509,14 @@ s.forEach(d => {
         }
         let mediaUrls = [];
         if (store.pendingMedia.length) {
-  mediaUrls = await Promise.all(
-    store.pendingMedia.map(async (file, i) => {
-      const ref = storageRef(storage, `mms/${SHARED_ORG_ID}/${store.activeThreadId}/${Date.now()}_${i}`);
-      const snap = await uploadBytes(ref, file);
-      return await getDownloadURL(snap.ref);
-    })
-  );
-}
+            mediaUrls = await Promise.all(
+                store.pendingMedia.map(async (file, i) => {
+                const ref = storageRef(storage, `mms/${SHARED_ORG_ID}/${store.activeThreadId}/${Date.now()}_${i}`);
+                const snap = await uploadBytes(ref, file);
+                return await getDownloadURL(snap.ref);
+                })
+            );
+        }
         const res = await fetch(TWILIO_SEND_URL, { method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: store.activeThread.phone, body: txt, mediaUrls }) });
         if(!res.ok) throw new Error("API Fail");
         const sid = `loc-${Date.now()}`;
@@ -528,7 +548,6 @@ s.forEach(d => {
   };
   window.cancelBroadcast = () => { broadcastActive = false; window.showToast("Stopping..."); };
 
-  // --- PAGINATED RENDER FUNCTIONS ---
   window.renderContactsManagerTable = () => {
       const tagRow = document.getElementById("contactsTagRow");
       if(tagRow) {
@@ -559,7 +578,6 @@ s.forEach(d => {
           return true;
       });
 
-      // Pagination Logic
       const totalPages = Math.ceil(filtered.length / store.itemsPerPage) || 1;
       store.cmPage = Math.max(1, Math.min(store.cmPage, totalPages));
       document.getElementById("cmPageInfo").innerText = `Page ${store.cmPage} of ${totalPages}`;
@@ -599,7 +617,6 @@ s.forEach(d => {
           tagRow.innerHTML = tagHtml;
       }
 
-      // LOAD ALL LOGS ONCE IF EMPTY (Client-side cache)
       if (store.logs.length === 0) {
           const snap = await getDocs(query(collection(db, "organizations", SHARED_ORG_ID, "logs"), orderBy("createdAt", "desc"), limit(200))); 
           store.logs = snap.docs.map(d => d.data());
@@ -621,7 +638,6 @@ s.forEach(d => {
           return true;
       });
 
-      // Pagination Logic
       const totalPages = Math.ceil(filtered.length / store.itemsPerPage) || 1;
       store.logPage = Math.max(1, Math.min(store.logPage, totalPages));
       document.getElementById("logPageInfo").innerText = `Page ${store.logPage} of ${totalPages}`;
@@ -679,7 +695,8 @@ s.forEach(d => {
       await signInAnonymously(auth);
       onAuthStateChanged(auth, u => {
           if(!u) return;
-          onSnapshot(query(getThreadsCol()), s => {
+          // FIX: Added limit(200) and proper ordering to the main threads query to avoid loading massive unpaginated datasets into memory
+          onSnapshot(query(getThreadsCol(), orderBy("lastMessageAtMs", "desc"), limit(200)), s => {
               store.threads = s.docs.map(d => { const data = d.data(); if (!data.id) data.id = d.id; return data; });
               if(store.activeThreadId) store.activeThread = store.threads.find(t=>t.id===store.activeThreadId);
               window.renderThreadList();
@@ -699,6 +716,18 @@ s.forEach(d => {
       const msgInput = document.getElementById("msgInput");
       msgInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; });
       msgInput.addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.sendMessage(); } });
+
+      // FIX: Debounce function for the search bar to prevent lag when typing rapidly
+      let searchTimeout;
+      const searchInput = document.getElementById("searchContacts");
+      if (searchInput) {
+          searchInput.addEventListener('input', (e) => {
+              clearTimeout(searchTimeout);
+              searchTimeout = setTimeout(() => {
+                  window.renderThreadList();
+              }, 300);
+          });
+      }
 
       const tagRow = document.getElementById("tagFilterRow");
       const logTagRow = document.getElementById("logTagRow");
