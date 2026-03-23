@@ -308,19 +308,20 @@
   <!-- Trip Review & Send Modal -->
   <div id="tripReviewModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden">
-      <div class="flex justify-between items-center p-6 border-b border-gray-100 shrink-0">
-        <div>
-          <h3 class="text-lg font-bold"><i class="fa-solid fa-paper-plane mr-2 text-blue-600"></i>Review Trip Messages</h3>
-          <p class="text-xs text-slate-400 mt-1">Review and edit messages before sending to drivers</p>
+      <div class="flex justify-between items-center px-5 py-3 border-b border-gray-100 shrink-0">
+        <div class="flex items-center gap-3">
+          <h3 class="text-sm font-bold"><i class="fa-solid fa-paper-plane mr-1 text-blue-600"></i>Review &amp; Send</h3>
+          <button onclick="window.selectAllMsgs(true)" class="text-[10px] text-blue-600 hover:underline font-semibold">All</button>
+          <button onclick="window.selectAllMsgs(false)" class="text-[10px] text-slate-400 hover:underline font-semibold">None</button>
         </div>
         <button onclick="document.getElementById('tripReviewModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-lg"></i></button>
       </div>
-      <div id="tripReviewList" class="flex-1 overflow-y-auto p-6 space-y-4"></div>
-      <div class="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
-        <div class="text-sm text-slate-500"><span id="tripReviewCount" class="font-bold text-slate-800">0</span> messages ready to send</div>
-        <div class="flex gap-3">
-          <button onclick="document.getElementById('tripReviewModal').classList.add('hidden')" class="px-5 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-600">Cancel</button>
-          <button onclick="window.sendTripTexts()" id="ttSendBtn" class="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition">Send All</button>
+      <div id="tripReviewList" class="flex-1 overflow-y-auto px-5 py-3"></div>
+      <div class="px-4 py-2.5 border-t border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
+        <div class="text-xs text-slate-500"><span id="tripReviewCount" class="font-bold text-slate-800">0</span> ready</div>
+        <div class="flex gap-2">
+          <button onclick="document.getElementById('tripReviewModal').classList.add('hidden')" class="px-4 py-2 bg-gray-100 rounded-lg font-bold text-xs text-gray-600">Cancel</button>
+          <button onclick="window.sendTripTexts()" id="ttSendBtn" class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold text-xs hover:bg-blue-700 transition">Send <span id="tripReviewCount2">0</span></button>
         </div>
       </div>
       <!-- Send progress (hidden until sending) -->
@@ -1441,25 +1442,52 @@ s.forEach(d => {
     const container = document.getElementById("tripReviewList");
     const enabledCount = ttMessages.filter(m => m.enabled).length;
     document.getElementById("tripReviewCount").innerText = enabledCount;
+    const btn2 = document.getElementById("tripReviewCount2");
+    if (btn2) btn2.innerText = enabledCount;
 
-    container.innerHTML = ttMessages.map((m, i) => `
-      <div class="border ${m.enabled ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200 bg-gray-50 opacity-60'} rounded-xl p-4 transition">
-        <div class="flex items-center justify-between mb-3">
-          <div class="flex items-center gap-3">
-            <input type="checkbox" ${m.enabled ? "checked" : ""} onchange="window.toggleTripMsg(${i})" class="w-4 h-4 accent-blue-600">
-            <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">${initials(m.contactName)}</div>
-            <div>
-              <div class="font-bold text-sm text-slate-800">${escapeHtml(m.contactName)}</div>
-              <div class="text-xs text-slate-400 font-mono">${escapeHtml(m.phone)} &middot; Vehicle ${escapeHtml(m.driver.vehicle)} &middot; ${m.driver.region}</div>
-            </div>
+    // Group messages by region
+    const regionMap = {};
+    ttMessages.forEach((m, i) => {
+      const region = m.driver.region || "Other";
+      if (!regionMap[region]) regionMap[region] = [];
+      regionMap[region].push({ msg: m, idx: i });
+    });
+
+    let html = "";
+    for (const [region, items] of Object.entries(regionMap)) {
+      const allEnabled = items.every(it => it.msg.enabled);
+      const noneEnabled = items.every(it => !it.msg.enabled);
+      const regionEnabled = items.filter(it => it.msg.enabled).length;
+
+      html += `<div class="mb-4">`;
+      html += `<div class="flex items-center gap-2 mb-2 sticky top-0 bg-white/95 backdrop-blur-sm py-2 z-10 border-b border-gray-100">
+        <input type="checkbox" ${noneEnabled ? "" : "checked"} onchange="window.toggleRegion('${escapeHtml(region)}')" class="w-4 h-4 accent-blue-600" title="Select/deselect all in ${escapeHtml(region)}">
+        <span class="font-bold text-sm text-slate-700">${escapeHtml(region)}</span>
+        <span class="text-xs text-slate-400">${regionEnabled}/${items.length} selected</span>
+      </div>`;
+
+      html += `<div class="space-y-1">`;
+      items.forEach(({ msg: m, idx: i }) => {
+        const tripCount = m.driver.trips.length;
+        const isExpanded = m._expanded;
+        html += `<div class="border ${m.enabled ? 'border-blue-200 bg-blue-50/20' : 'border-gray-200 bg-gray-50 opacity-50'} rounded-lg transition">
+          <div class="flex items-center gap-2 px-3 py-2 cursor-pointer" onclick="window.toggleExpandMsg(${i})">
+            <input type="checkbox" ${m.enabled ? "checked" : ""} onchange="event.stopPropagation(); window.toggleTripMsg(${i})" class="w-3.5 h-3.5 accent-blue-600 shrink-0">
+            <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold shrink-0">${initials(m.contactName)}</div>
+            <span class="font-semibold text-xs text-slate-800 truncate">${escapeHtml(m.contactName)}</span>
+            <span class="text-[10px] text-slate-400 font-mono shrink-0">V${escapeHtml(m.driver.vehicle)}</span>
+            <span class="text-[10px] ${tripCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'} px-1.5 py-0.5 rounded-full font-bold shrink-0">${tripCount}</span>
+            <i class="fa-solid fa-chevron-${isExpanded ? 'up' : 'down'} text-[10px] text-slate-400 ml-auto shrink-0"></i>
           </div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">${m.driver.trips.length} trips</span>
-          </div>
-        </div>
-        <textarea id="ttMsg${i}" rows="6" class="w-full bg-white border border-gray-200 rounded-lg p-3 text-xs font-mono text-slate-700 resize-none outline-none focus:ring-2 focus:ring-blue-300" ${m.enabled ? "" : "disabled"}>${escapeHtml(m.message)}</textarea>
-      </div>
-    `).join("");
+          ${isExpanded ? `<div class="px-3 pb-2">
+            <textarea id="ttMsg${i}" rows="5" class="w-full bg-white border border-gray-200 rounded-lg p-2 text-[11px] font-mono text-slate-700 resize-none outline-none focus:ring-2 focus:ring-blue-300" ${m.enabled ? "" : "disabled"}>${escapeHtml(m.message)}</textarea>
+          </div>` : ""}
+        </div>`;
+      });
+      html += `</div></div>`;
+    }
+
+    container.innerHTML = html;
   }
 
   window.toggleTripMsg = (i) => {
@@ -1467,8 +1495,35 @@ s.forEach(d => {
     renderReviewModal();
   };
 
+  window.toggleExpandMsg = (i) => {
+    // Save any edits from the textarea before collapsing
+    if (ttMessages[i]._expanded) {
+      const ta = document.getElementById(`ttMsg${i}`);
+      if (ta) ttMessages[i].message = ta.value;
+    }
+    ttMessages[i]._expanded = !ttMessages[i]._expanded;
+    renderReviewModal();
+  };
+
+  window.selectAllMsgs = (val) => {
+    ttMessages.forEach(m => { m.enabled = val; });
+    renderReviewModal();
+  };
+
+  window.toggleRegion = (region) => {
+    const inRegion = ttMessages.filter(m => (m.driver.region || "Other") === region);
+    const allEnabled = inRegion.every(m => m.enabled);
+    inRegion.forEach(m => { m.enabled = !allEnabled; });
+    renderReviewModal();
+  };
+
   // --- Send Trip Texts ---
   window.sendTripTexts = async () => {
+    // Save any open textarea edits before sending
+    ttMessages.forEach((m, i) => {
+      const ta = document.getElementById(`ttMsg${i}`);
+      if (ta) m.message = ta.value;
+    });
     const toSend = ttMessages.filter(m => m.enabled);
     if (!toSend.length) { window.showToast("No messages selected", "error"); return; }
     if (!confirm(`Send ${toSend.length} trip text messages?`)) return;
@@ -1482,9 +1537,7 @@ s.forEach(d => {
 
     for (let i = 0; i < toSend.length; i++) {
       const m = toSend[i];
-      // Grab possibly-edited message from textarea
-      const textarea = document.getElementById(`ttMsg${ttMessages.indexOf(m)}`);
-      const finalMsg = textarea ? textarea.value.trim() : m.message;
+      const finalMsg = (m.message || "").trim();
 
       try {
         const res = await fetch(TWILIO_SEND_URL, {
