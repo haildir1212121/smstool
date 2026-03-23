@@ -1275,21 +1275,26 @@ s.forEach(d => {
   }
 
   function extractCity(address) {
-    if (!address) return "Unknown";
+    if (!address) return "";
+    // If it's already just a city name (no commas), return it directly
+    if (!address.includes(",")) {
+      // Strip leading street numbers if present (e.g. "35859 OR-58")
+      return address.trim();
+    }
     // Address formats: "35859 OR-58, PLEASANT HILL, OR, 97455" or "123 Main St, Springfield, OR 97401"
     const parts = address.split(",").map(s => s.trim());
     if (parts.length >= 3) {
-      // With 3+ comma-separated parts, city is typically the second part (index 1)
-      // e.g. "street, CITY, STATE, ZIP" or "street, CITY, STATE ZIP"
+      // With 3+ parts, city is typically index 1: "street, CITY, STATE, ZIP"
       const candidate = parts[1].replace(/\s+[A-Z]{2}\s+\d{5}(-\d{4})?$/, "").trim();
       if (candidate && !/^\d{5}/.test(candidate) && !/^[A-Z]{2}$/.test(candidate)) return candidate;
     }
     if (parts.length === 2) {
       // "Springfield, OR 97401" -> Springfield
-      let candidate = parts[0].replace(/^\d+\s+/, "").trim();
-      const city = parts[1].replace(/\s*[A-Z]{2}\s+\d{5}(-\d{4})?$/, "").trim();
-      if (city && !/^[A-Z]{2}$/.test(city)) return city;
-      if (candidate) return candidate;
+      const city = parts[0].replace(/^\d+\s+\S+\s+/, "").trim();
+      // Or the first part might be the city itself
+      const secondClean = parts[1].replace(/\s*[A-Z]{2}\s+\d{5}(-\d{4})?$/, "").trim();
+      if (secondClean && !/^[A-Z]{2}$/.test(secondClean) && !/^\d{5}/.test(secondClean)) return secondClean;
+      return parts[0].trim();
     }
     return parts[0].trim();
   }
@@ -1301,6 +1306,26 @@ s.forEach(d => {
     // Handle "First Last" format
     const words = passenger.trim().split(/\s+/);
     return words.length > 1 ? words[words.length - 1] : words[0];
+  }
+
+  function formatTripLine(trip, seenPassengers) {
+    const time = formatBookingTime(trip.time);
+    const lastName = extractPassengerLastName(trip.passenger);
+    const passengerKey = (trip.passenger || "").toLowerCase().trim();
+
+    // Check if this passenger already appeared (return trip)
+    const isReturn = passengerKey && seenPassengers.has(passengerKey);
+    if (passengerKey) seenPassengers.add(passengerKey);
+
+    if (isReturn) {
+      // Return trip — use dropoff city, fall back to pickup
+      const city = extractCity(trip.dropoff) || extractCity(trip.pickup) || "Unknown";
+      return `${time} return to ${city}${lastName ? ` (${lastName})` : ""}`;
+    } else {
+      // First trip for this passenger — use pickup city, fall back to dropoff
+      const city = extractCity(trip.pickup) || extractCity(trip.dropoff) || "Unknown";
+      return `${time} pickup in ${city}${lastName ? ` (${lastName})` : ""}`;
+    }
   }
 
   function formatBookingTime(timeStr) {
@@ -1340,6 +1365,9 @@ s.forEach(d => {
     }
     lines.push("");
 
+    // Track passengers we've seen to detect return trips
+    const seenPassengers = new Set();
+
     if (isMultiDay) {
       // Group trips by date
       const byDate = {};
@@ -1352,10 +1380,7 @@ s.forEach(d => {
       sortedDates.forEach(date => {
         lines.push(`${formatDayLabel(date)}:`);
         byDate[date].forEach(trip => {
-          const time = formatBookingTime(trip.time);
-          const city = extractCity(trip.pickup);
-          const lastName = extractPassengerLastName(trip.passenger);
-          lines.push(`${time} pickup in ${city}${lastName ? ` (${lastName})` : ""}`);
+          lines.push(formatTripLine(trip, seenPassengers));
         });
         lines.push("");
       });
@@ -1363,10 +1388,7 @@ s.forEach(d => {
       const dayLabel = driver.trips[0]?.date ? formatDayLabel(driver.trips[0].date) : "";
       if (dayLabel) lines.push(`${dayLabel}:`);
       driver.trips.forEach(trip => {
-        const time = formatBookingTime(trip.time);
-        const city = extractCity(trip.pickup);
-        const lastName = extractPassengerLastName(trip.passenger);
-        lines.push(`${time} pickup in ${city}${lastName ? ` (${lastName})` : ""}`);
+        lines.push(formatTripLine(trip, seenPassengers));
       });
       lines.push("");
     }
