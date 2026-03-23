@@ -219,6 +219,7 @@ function normalizeTrip(raw) {
       booking.from ||
       "",
     dropoff:
+      booking.address ||
       booking.dropoff_address_formatted ||
       booking.dropoff_address ||
       booking.to ||

@@ -1301,6 +1301,17 @@ s.forEach(d => {
 
   function extractPassengerLastName(passenger) {
     if (!passenger) return "";
+    // Handle shared rides: "Crepeau, Matthew / Robertson, Colbi"
+    if (passenger.includes("/")) {
+      const riders = passenger.split("/").map(r => r.trim());
+      const lastNames = riders.map(r => extractSinglePassengerLastName(r)).filter(Boolean);
+      return lastNames.join("/");
+    }
+    return extractSinglePassengerLastName(passenger);
+  }
+
+  function extractSinglePassengerLastName(passenger) {
+    if (!passenger) return "";
     // Handle "Last, First" format
     if (passenger.includes(",")) return passenger.split(",")[0].trim();
     // Handle "First Last" format
