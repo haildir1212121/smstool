@@ -1276,17 +1276,31 @@ s.forEach(d => {
 
   function extractCity(address) {
     if (!address) return "Unknown";
-    // Try to pull city from typical address formats: "123 Main St, Springfield, OR 97401"
+    // Address formats: "35859 OR-58, PLEASANT HILL, OR, 97455" or "123 Main St, Springfield, OR 97401"
     const parts = address.split(",").map(s => s.trim());
-    if (parts.length >= 2) {
-      // City is usually the second-to-last or second part
-      // Remove zip/state from the last part
-      let candidate = parts.length >= 3 ? parts[parts.length - 2] : parts[1];
-      // Strip state + zip if it's in this part (e.g. "Springfield OR 97401")
-      candidate = candidate.replace(/\s+[A-Z]{2}\s+\d{5}(-\d{4})?$/, "").trim();
+    if (parts.length >= 3) {
+      // With 3+ comma-separated parts, city is typically the second part (index 1)
+      // e.g. "street, CITY, STATE, ZIP" or "street, CITY, STATE ZIP"
+      const candidate = parts[1].replace(/\s+[A-Z]{2}\s+\d{5}(-\d{4})?$/, "").trim();
+      if (candidate && !/^\d{5}/.test(candidate) && !/^[A-Z]{2}$/.test(candidate)) return candidate;
+    }
+    if (parts.length === 2) {
+      // "Springfield, OR 97401" -> Springfield
+      let candidate = parts[0].replace(/^\d+\s+/, "").trim();
+      const city = parts[1].replace(/\s*[A-Z]{2}\s+\d{5}(-\d{4})?$/, "").trim();
+      if (city && !/^[A-Z]{2}$/.test(city)) return city;
       if (candidate) return candidate;
     }
-    return address.split(",")[0].trim();
+    return parts[0].trim();
+  }
+
+  function extractPassengerLastName(passenger) {
+    if (!passenger) return "";
+    // Handle "Last, First" format
+    if (passenger.includes(",")) return passenger.split(",")[0].trim();
+    // Handle "First Last" format
+    const words = passenger.trim().split(/\s+/);
+    return words.length > 1 ? words[words.length - 1] : words[0];
   }
 
   function formatBookingTime(timeStr) {
@@ -1340,7 +1354,8 @@ s.forEach(d => {
         byDate[date].forEach(trip => {
           const time = formatBookingTime(trip.time);
           const city = extractCity(trip.pickup);
-          lines.push(`${time} pickup in ${city}`);
+          const lastName = extractPassengerLastName(trip.passenger);
+          lines.push(`${time} pickup in ${city}${lastName ? ` (${lastName})` : ""}`);
         });
         lines.push("");
       });
@@ -1350,7 +1365,8 @@ s.forEach(d => {
       driver.trips.forEach(trip => {
         const time = formatBookingTime(trip.time);
         const city = extractCity(trip.pickup);
-        lines.push(`${time} pickup in ${city}`);
+        const lastName = extractPassengerLastName(trip.passenger);
+        lines.push(`${time} pickup in ${city}${lastName ? ` (${lastName})` : ""}`);
       });
       lines.push("");
     }
