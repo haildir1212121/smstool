@@ -219,7 +219,7 @@
         <span id="ttDateBadge" class="text-xs font-mono text-slate-400"></span>
       </div>
       <div class="flex gap-3 items-center">
-        <button onclick="window.openIcabbiSettings()" class="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition"><i class="fa-solid fa-gear mr-1"></i>iCabbi API</button>
+        <button onclick="window.openIcabbiSettings()" class="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition"><i class="fa-solid fa-gear mr-1"></i>Webhook Settings</button>
         <label class="px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold cursor-pointer hover:bg-blue-700 transition shadow-sm">
           <i class="fa-solid fa-file-excel mr-1"></i>Upload Sheet
           <input type="file" id="ttFileInput" accept=".xlsx,.xls" class="hidden" onchange="window.handleTripSheetUpload(this)">
@@ -258,18 +258,8 @@
             </button>
             <div id="ttStepIndicators" class="hidden flex items-center gap-1.5">
               <div id="ttStep1" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all bg-slate-50 text-slate-400 border-slate-200">
-                <i id="ttStep1Icon" class="fa-solid fa-magnifying-glass text-[10px]"></i>
-                <span>Slim</span>
-              </div>
-              <i class="fa-solid fa-chevron-right text-[8px] text-slate-300"></i>
-              <div id="ttStep2" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all bg-slate-50 text-slate-400 border-slate-200">
-                <i id="ttStep2Icon" class="fa-solid fa-car text-[10px]"></i>
-                <span>Trips</span>
-              </div>
-              <i class="fa-solid fa-chevron-right text-[8px] text-slate-300"></i>
-              <div id="ttStep3" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all bg-slate-50 text-slate-400 border-slate-200">
-                <i id="ttStep3Icon" class="fa-solid fa-address-card text-[10px]"></i>
-                <span>Details</span>
+                <i id="ttStep1Icon" class="fa-solid fa-satellite-dish text-[10px]"></i>
+                <span>Webhook</span>
               </div>
             </div>
           </div>
@@ -287,14 +277,12 @@
   <!-- iCabbi Settings Modal -->
   <div id="icabbiSettingsModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
-      <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold"><i class="fa-solid fa-taxi mr-2 text-amber-500"></i>iCabbi API Settings</h3><button onclick="document.getElementById('icabbiSettingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div>
-      <p class="text-xs text-slate-500 mb-4">Credentials are stored locally in your browser. They are used to fetch future trip data from the iCabbi dispatch system.</p>
-      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">API Base URL</label>
-      <input id="icabbiBaseUrl" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="https://api.icabbi.us/us4">
-      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">App Key (Username)</label>
-      <input id="icabbiAppKey" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="app_key">
-      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Secret Key (Password)</label>
-      <input id="icabbiSecret" type="password" class="w-full bg-gray-50 border border-gray-200 p-3 mb-4 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="secret_key">
+      <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold"><i class="fa-solid fa-satellite-dish mr-2 text-indigo-500"></i>Webhook Settings</h3><button onclick="document.getElementById('icabbiSettingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div>
+      <p class="text-xs text-slate-500 mb-4">Configure the Cloudflare Worker endpoint that receives trip data from iCabbi's "Pre-booking: Driver Designated" webhook. Settings are stored locally in your browser.</p>
+      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Worker URL</label>
+      <input id="icabbiWorkerUrl" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="https://icabbi-trip-webhook.your-subdomain.workers.dev">
+      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Webhook Secret</label>
+      <input id="icabbiWebhookSecret" type="password" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="shared secret key">
       <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Trip Date (for fetching)</label>
       <input id="icabbiTripDate" type="date" class="w-full bg-gray-50 border border-gray-200 p-3 mb-4 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm">
       <div class="flex gap-2">
@@ -823,9 +811,8 @@ s.forEach(d => {
   // --- iCabbi Settings ---
   window.openIcabbiSettings = () => {
     const saved = JSON.parse(localStorage.getItem("icabbi_settings") || "{}");
-    document.getElementById("icabbiBaseUrl").value = saved.baseUrl || "";
-    document.getElementById("icabbiAppKey").value = saved.appKey || "";
-    document.getElementById("icabbiSecret").value = saved.secret || "";
+    document.getElementById("icabbiWorkerUrl").value = saved.workerUrl || "";
+    document.getElementById("icabbiWebhookSecret").value = saved.webhookSecret || "";
     const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
     document.getElementById("icabbiTripDate").value = saved.tripDate || tomorrow.toISOString().split("T")[0];
     document.getElementById("icabbiSettingsModal").classList.remove("hidden");
@@ -833,14 +820,13 @@ s.forEach(d => {
 
   window.saveIcabbiSettings = () => {
     const settings = {
-      baseUrl: document.getElementById("icabbiBaseUrl").value.trim().replace(/\/+$/, ""),
-      appKey: document.getElementById("icabbiAppKey").value.trim(),
-      secret: document.getElementById("icabbiSecret").value.trim(),
+      workerUrl: document.getElementById("icabbiWorkerUrl").value.trim().replace(/\/+$/, ""),
+      webhookSecret: document.getElementById("icabbiWebhookSecret").value.trim(),
       tripDate: document.getElementById("icabbiTripDate").value
     };
     localStorage.setItem("icabbi_settings", JSON.stringify(settings));
     document.getElementById("icabbiSettingsModal").classList.add("hidden");
-    window.showToast("iCabbi Settings Saved");
+    window.showToast("Webhook Settings Saved");
   };
 
   function getIcabbiSettings() {
@@ -1150,7 +1136,7 @@ s.forEach(d => {
   function setStepState(stepNum, state, detail) {
     const el = document.getElementById(`ttStep${stepNum}`);
     const icon = document.getElementById(`ttStep${stepNum}Icon`);
-    const icons = { 1: "fa-magnifying-glass", 2: "fa-car", 3: "fa-address-card" };
+    const icons = { 1: "fa-satellite-dish", 2: "fa-car", 3: "fa-address-card" };
     // Reset classes
     el.className = "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all";
     if (state === "pending") {
@@ -1177,15 +1163,13 @@ s.forEach(d => {
     const ind = document.getElementById("ttStepIndicators");
     ind.classList.remove("hidden");
     ind.classList.add("flex");
-    setStepState(1, "pending", "Slim");
-    setStepState(2, "pending", "Trips");
-    setStepState(3, "pending", "Details");
+    setStepState(1, "pending", "Webhook");
   }
 
   window.fetchTripsForAllDrivers = async () => {
     const settings = getIcabbiSettings();
-    if (!settings.baseUrl || !settings.appKey || !settings.secret) {
-      window.showToast("Configure iCabbi API settings first", "error");
+    if (!settings.workerUrl || !settings.webhookSecret) {
+      window.showToast("Configure Webhook settings first", "error");
       window.openIcabbiSettings();
       return;
     }
@@ -1196,166 +1180,71 @@ s.forEach(d => {
     resetStepIndicators();
 
     const tripDate = settings.tripDate || new Date(Date.now() + 86400000).toISOString().split("T")[0];
-    const authHeader = "Basic " + btoa(settings.appKey + ":" + settings.secret);
 
-    // Build vehicle_refs from uploaded spreadsheet
-    const vehicleRefs = ttDrivers.map(d => d.vehicle).filter(Boolean).join(",");
-
-    // Determine date range: on Fridays, cover Fri-Mon (weekend + Monday)
+    // Determine date range: on Thursdays, cover Fri-Mon; on Fridays, cover Fri-Mon
     const tripDateObj = new Date(tripDate + "T12:00:00");
-    const dayOfWeek = tripDateObj.getDay(); // 0=Sun, 5=Fri
+    const dayOfWeek = tripDateObj.getDay(); // 0=Sun, 4=Thu, 5=Fri
+    let fromDate = tripDate;
     let endDate = tripDate;
-    if (dayOfWeek === 5) {
+
+    if (dayOfWeek === 4) {
+      // Thursday: fetch Friday through Monday (next 4 days)
+      const fri = new Date(tripDateObj);
+      fri.setDate(fri.getDate() + 1);
+      fromDate = fri.toISOString().split("T")[0];
+      const mon = new Date(fri);
+      mon.setDate(mon.getDate() + 3);
+      endDate = mon.toISOString().split("T")[0];
+    } else if (dayOfWeek === 5) {
       // Friday: extend through Monday (3 extra days)
       const mon = new Date(tripDateObj);
       mon.setDate(mon.getDate() + 3);
       endDate = mon.toISOString().split("T")[0];
     }
 
-    // Convert to full-day range in PST (UTC-8) with ISO 8601 milliseconds
-    const fromDate = new Date(tripDate + "T00:00:00.000-08:00").toISOString();
-    const toDate = new Date(endDate + "T23:59:59.999-08:00").toISOString();
-    const isMultiDay = tripDate !== endDate;
+    const isMultiDay = fromDate !== endDate;
 
     try {
-      // Step 1: Fetch slim trip list to find vehicle refs
+      // Single step: fetch from Cloudflare Worker
       setStepState(1, "active", "Fetching...");
-      const slimUrl = `${settings.baseUrl}/bookings/upcoming_slim?limit=500&order=pickup_date&direction=ASC&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}&vehicle_refs=${encodeURIComponent(vehicleRefs)}`;
-      const slimRes = await fetch(slimUrl, {
-        headers: { "Authorization": authHeader, "Accept": "application/json" }
-      });
 
-      if (!slimRes.ok) {
-        const errText = await slimRes.text();
-        throw new Error(`API returned ${slimRes.status}: ${errText.slice(0, 200)}`);
-      }
-
-      const slimData = await slimRes.json();
-      console.log("Step 1 - slim response:", JSON.stringify(slimData).slice(0, 500));
-      const slimTrips = Array.isArray(slimData) ? slimData : (slimData.body?.bookings || slimData.bookings || slimData.trips || slimData.data || []);
-
-      // Collect unique vehicle refs AND trip IDs from slim results
-      const vehicleRefSet = new Set(ttDrivers.map(d => d.vehicle));
-      const matchedVehicleRefs = new Set();
-      const slimTripMap = {}; // tripId -> vehicleRef
-      slimTrips.forEach(t => {
-        const vRef = String(t.driver?.vehicle?.ref || t.vehicle_ref || t.vehicleRef || t.vehicle_id || "").trim();
-        const tripId = String(t.id || t.booking_id || "").trim();
-        if (vehicleRefSet.has(vRef)) {
-          matchedVehicleRefs.add(vRef);
-          if (tripId) slimTripMap[tripId] = vRef;
+      const res = await fetch(`${settings.workerUrl}/trips?from=${fromDate}&to=${endDate}`, {
+        headers: {
+          "Authorization": `Bearer ${settings.webhookSecret}`,
+          "Accept": "application/json"
         }
       });
-      console.log("Step 1 - matched vehicle refs:", [...matchedVehicleRefs]);
-      console.log("Step 1 - trip IDs from slim:", Object.keys(slimTripMap));
-      setStepState(1, "done", `${Object.keys(slimTripMap).length} trips`);
 
-      // Step 2: For each vehicle ref, fetch bookings to find additional trip IDs
-      setStepState(2, "active", "0/" + matchedVehicleRefs.size);
-      const BATCH_SIZE = 10;
-      const vehicleRefArr = [...matchedVehicleRefs];
-
-      for (let i = 0; i < vehicleRefArr.length; i += BATCH_SIZE) {
-        const batch = vehicleRefArr.slice(i, i + BATCH_SIZE);
-        await Promise.all(batch.map(async (vRef) => {
-          try {
-            const vRes = await fetch(`${settings.baseUrl}/vehicle/bookings?ref=${encodeURIComponent(vRef)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`, {
-              headers: { "Authorization": authHeader, "Accept": "application/json" }
-            });
-            if (vRes.ok) {
-              const vData = await vRes.json();
-              console.log(`Step 2 - vehicle ${vRef} response (truncated):`, JSON.stringify(vData).slice(0, 300));
-              const vTrips = Array.isArray(vData) ? vData : (vData.body?.bookings || vData.bookings || vData.trips || vData.data || []);
-              // Add any trip IDs not already found in slim
-              vTrips.forEach(t => {
-                const tid = String(t.perma_id || t.id || t.booking_id || "").trim();
-                if (tid && !slimTripMap[tid]) {
-                  slimTripMap[tid] = vRef;
-                  console.log(`Step 2 - found extra trip ${tid} for vehicle ${vRef}`);
-                }
-              });
-            } else {
-              console.warn(`Step 2 - vehicle ${vRef} failed:`, vRes.status);
-            }
-          } catch(e) {
-            console.warn(`Step 2 - vehicle ${vRef} error:`, e);
-          }
-        }));
-        setStepState(2, "active", `${Math.min(i + BATCH_SIZE, vehicleRefArr.length)}/${vehicleRefArr.length}`);
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Worker returned ${res.status}: ${errText.slice(0, 200)}`);
       }
 
-      const allTripIds = Object.keys(slimTripMap);
-      console.log("Step 2 - total unique trip IDs:", allTripIds.length);
-      setStepState(2, "done", `${allTripIds.length} trips`);
+      const data = await res.json();
+      console.log("Webhook trips response:", JSON.stringify(data).slice(0, 1000));
 
-      // Step 3: Fetch full details for each trip via bookings/index/{tripId}
-      setStepState(3, "active", `0/${allTripIds.length}`);
-      const fullTrips = [];
+      const allTrips = data.trips || [];
+      console.log(`Fetched ${allTrips.length} trips from webhook store for ${fromDate} to ${endDate}`);
 
-      for (let i = 0; i < allTripIds.length; i += BATCH_SIZE) {
-        const batch = allTripIds.slice(i, i + BATCH_SIZE);
-        const results = await Promise.all(batch.map(async (tripId) => {
-          try {
-            const detailRes = await fetch(`${settings.baseUrl}/bookings/index/${tripId}`, {
-              headers: { "Authorization": authHeader, "Accept": "application/json" }
-            });
-            if (detailRes.ok) {
-              const detail = await detailRes.json();
-              console.log(`Step 3 - trip ${tripId} response keys:`, Object.keys(detail));
-              // Try various response wrappers
-              let fullTrip = detail;
-              if (detail.body && typeof detail.body === "object" && !Array.isArray(detail.body)) {
-                fullTrip = detail.body;
-              } else if (detail.booking) {
-                fullTrip = detail.booking;
-              } else if (detail.data && typeof detail.data === "object") {
-                fullTrip = detail.data;
-              }
-              // Log the first one fully for debugging
-              if (fullTrips.length === 0) {
-                console.log("Step 3 - FIRST FULL TRIP KEYS:", Object.keys(fullTrip));
-                console.log("Step 3 - FIRST FULL TRIP DATA:", JSON.stringify(fullTrip, null, 2).slice(0, 3000));
-              }
-              fullTrip._vehicleRef = slimTripMap[tripId] || "";
-              return fullTrip;
-            }
-            console.warn(`Step 3 - trip ${tripId} failed:`, detailRes.status, await detailRes.text().catch(() => ""));
-            return null;
-          } catch(e) {
-            console.warn(`Step 3 - trip ${tripId} error:`, e);
-            return null;
-          }
-        }));
-        fullTrips.push(...results.filter(Boolean));
-        setStepState(3, "active", `${Math.min(i + BATCH_SIZE, allTripIds.length)}/${allTripIds.length}`);
-      }
+      // Build vehicle ref set from uploaded spreadsheet
+      const vehicleRefSet = new Set(ttDrivers.map(d => d.vehicle).filter(Boolean));
 
-      console.log("Step 3 - fetched", fullTrips.length, "of", allTripIds.length, "trips");
-
-      // Map trips to vehicles, extracting the fields we need
+      // Map trips to vehicles, filtering to only our drivers' vehicles
       ttTrips = {};
-      fullTrips.forEach(trip => {
-        const vRef = trip._vehicleRef || String(trip.driver?.vehicle?.ref || trip.vehicle_ref || "").trim();
-        if (!vRef) return;
+      allTrips.forEach(trip => {
+        const vRef = String(trip.vehicle_ref || "").trim();
+        if (!vRef || !vehicleRefSet.has(vRef)) return;
         if (!ttTrips[vRef]) ttTrips[vRef] = [];
-        const rawTime = trip.date || trip.release_date || trip.pickup_date || trip.pickup_time || trip.scheduled_time || trip.time || "";
-        let tripDay = "";
-        if (rawTime) {
-          try { tripDay = new Date(rawTime).toISOString().split("T")[0]; } catch(e) {}
-        }
-        // iCabbi fields: address_formatted for pickup, name for passenger
-        const pickupAddr = trip.address_formatted || trip.pickup_address || trip.from || "";
-        const passengerName = trip.name || trip.passenger_name || trip.customer_name || "";
-        const passengerPhone = trip.phone || trip.passenger_phone || "";
+
         ttTrips[vRef].push({
-          id: trip.id || trip.booking_id || trip.perma_id || "",
-          time: rawTime,
-          date: tripDay,
-          pickup: pickupAddr,
-          dropoff: trip.dropoff_address_formatted || trip.dropoff_address || trip.to || "",
-          passenger: passengerName,
-          passengerPhone: passengerPhone,
-          notes: trip.notes || trip.driver_notes || "",
+          id: trip.id || "",
+          time: trip.time || "",
+          date: trip.date || "",
+          pickup: trip.pickup || "",
+          dropoff: trip.dropoff || "",
+          passenger: trip.passenger || "",
+          passengerPhone: trip.passenger_phone || "",
+          notes: trip.notes || "",
           status: trip.status || ""
         });
       });
@@ -1370,7 +1259,7 @@ s.forEach(d => {
 
       // Store multi-day flag for message generation
       window.ttIsMultiDay = isMultiDay;
-      window.ttTripDateRange = isMultiDay ? `${tripDate} to ${endDate}` : tripDate;
+      window.ttTripDateRange = isMultiDay ? `${fromDate} to ${endDate}` : fromDate;
 
       // Count drivers who will receive texts vs skipped
       const isEugene = (origin) => (origin || "").toLowerCase().includes("eugene");
@@ -1378,8 +1267,8 @@ s.forEach(d => {
       const skippedCount = ttDrivers.filter(d => d.matched && d.trips.length === 0 && !isEugene(d.origin)).length;
 
       const totalTrips = Object.values(ttTrips).reduce((s, arr) => s + arr.length, 0);
-      const dayLabel = isMultiDay ? ` (Fri-Mon)` : "";
-      setStepState(3, "done", `${sendCount} texts` + (skippedCount ? ` (${skippedCount} skipped)` : ""));
+      const dayLabel = isMultiDay ? ` (${fromDate} to ${endDate})` : "";
+      setStepState(1, "done", `${totalTrips} trips · ${sendCount} texts`);
       window.showToast(`Fetched ${totalTrips} trips for ${Object.keys(ttTrips).length} vehicles${dayLabel}` + (skippedCount ? ` · ${skippedCount} drivers skipped (no trips)` : ""));
 
       // Show review button
@@ -1387,13 +1276,9 @@ s.forEach(d => {
       renderTripTextsView();
 
     } catch (e) {
-      console.error("iCabbi fetch error:", e);
+      console.error("Webhook fetch error:", e);
       window.showToast("Trip fetch failed: " + e.message, "error");
-      // Mark whichever step was active as errored
-      for (let s = 1; s <= 3; s++) {
-        const el = document.getElementById(`ttStep${s}`);
-        if (el.classList.contains("ring-2")) setStepState(s, "error");
-      }
+      setStepState(1, "error");
     } finally {
       btn.disabled = false;
       btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch Trips';

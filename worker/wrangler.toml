@@ -1,0 +1,13 @@
+name = "icabbi-trip-webhook"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[vars]
+# Set this via `wrangler secret put WEBHOOK_SECRET`
+# WEBHOOK_SECRET = "change-me"
+
+[[kv_namespaces]]
+binding = "TRIPS"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+# To create: wrangler kv namespace create TRIPS
+# Then paste the id here
