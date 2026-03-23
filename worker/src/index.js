@@ -74,11 +74,14 @@ async function handleWebhook(request, env) {
     const existing = await getTripsFromKV(env, key);
 
     // Upsert: replace if same trip ID exists, otherwise append
-    const idx = existing.findIndex((t) => t.id && t.id === trip.id);
+    // Skip dedup if trip has no ID (can't match)
+    const idx = trip.id ? existing.findIndex((t) => t.id === trip.id) : -1;
     if (idx >= 0) {
       existing[idx] = trip;
+      console.log(`Updated trip ${trip.id} for vehicle ${trip.vehicleRef} on ${trip.date}`);
     } else {
       existing.push(trip);
+      console.log(`Added trip ${trip.id || "(no id)"} for vehicle ${trip.vehicleRef} on ${trip.date} — now ${existing.length} trips this date`);
     }
 
     // Write back with 7-day TTL
@@ -231,9 +234,9 @@ function normalizeTrip(raw) {
   // Handle various iCabbi payload shapes
   const booking = raw.booking || raw.data || raw;
 
+  // Use booking-specific IDs only — never driver_id (which is shared across trips for the same driver)
   const id = String(
-    booking.perma_id || booking.id || booking.booking_id ||
-    booking.driver_id || ""
+    booking.perma_id || booking.id || booking.booking_id || ""
   ).trim();
 
   // Extract date from various fields (including iCabbi's job_date)
