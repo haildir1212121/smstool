@@ -1200,7 +1200,7 @@ s.forEach(d => {
       }
 
       const data = await res.json();
-      console.log("Worker response:", JSON.stringify(data).slice(0, 500));
+      console.log("Worker response:", JSON.stringify(data).slice(0, 2000));
 
       // data.trips is { "2026-03-24": [...], "2026-03-25": [...] }
       const tripsByDate = data.trips || {};
@@ -1227,6 +1227,10 @@ s.forEach(d => {
           });
         }
       }
+
+      // Debug: log first few trips to verify dropoff data
+      const sampleTrips = Object.values(ttTrips).flat().slice(0, 3);
+      console.log("Sample trips (pickup/dropoff):", sampleTrips.map(t => ({ passenger: t.passenger, pickup: t.pickup, dropoff: t.dropoff })));
 
       // Sort each vehicle's trips by time
       Object.values(ttTrips).forEach(arr => arr.sort((a, b) => (a.time || "").localeCompare(b.time || "")));
