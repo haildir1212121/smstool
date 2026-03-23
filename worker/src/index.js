@@ -142,11 +142,13 @@ function normalizeTrip(raw) {
   const booking = raw.booking || raw.data || raw;
 
   const id = String(
-    booking.perma_id || booking.id || booking.booking_id || ""
+    booking.perma_id || booking.id || booking.booking_id ||
+    booking.driver_id || ""
   ).trim();
 
-  // Extract date from various fields
-  const rawDateTime =
+  // Extract date from various fields (including iCabbi's job_date)
+  const rawDate =
+    booking.job_date ||
     booking.scheduled_pickup_date ||
     booking.pickup_date ||
     booking.date ||
@@ -154,35 +156,56 @@ function normalizeTrip(raw) {
     "";
 
   let date = "";
-  let time = "";
-  if (rawDateTime) {
+  if (rawDate) {
     try {
-      const dt = new Date(rawDateTime);
-      date = dt.toISOString().split("T")[0];
-      time = rawDateTime; // preserve full timestamp for sorting
+      const dt = new Date(rawDate);
+      if (!isNaN(dt.getTime())) {
+        date = dt.toISOString().split("T")[0];
+      }
     } catch (e) {
-      // Try to extract date directly
-      const match = rawDateTime.match(/(\d{4}-\d{2}-\d{2})/);
-      if (match) date = match[1];
+      // ignore
+    }
+    // Try to extract date directly (YYYY-MM-DD or DD/MM/YYYY etc.)
+    if (!date) {
+      const isoMatch = rawDate.match(/(\d{4}-\d{2}-\d{2})/);
+      if (isoMatch) {
+        date = isoMatch[1];
+      } else {
+        // Handle DD/MM/YYYY or DD-MM-YYYY
+        const dmyMatch = rawDate.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        if (dmyMatch) {
+          date = `${dmyMatch[3]}-${dmyMatch[2].padStart(2, "0")}-${dmyMatch[1].padStart(2, "0")}`;
+        }
+      }
     }
   }
 
-  // Also check for separate time field
-  if (!time) {
-    time =
-      booking.scheduled_pickup_time ||
-      booking.pickup_time ||
-      booking.time ||
-      "";
+  // If still no date, use today
+  if (!date) {
+    date = new Date().toISOString().split("T")[0];
   }
 
+  // Extract time (including iCabbi's job_time)
+  const time =
+    booking.job_time ||
+    booking.scheduled_pickup_time ||
+    booking.pickup_time ||
+    booking.time ||
+    "";
+
   const vehicleRef = String(
+    booking.vehicle_number ||
     booking.driver?.vehicle?.ref ||
-      booking.vehicle_ref ||
-      booking.vehicleRef ||
-      booking.vehicle_id ||
-      ""
+    booking.vehicle_ref ||
+    booking.vehicleRef ||
+    booking.vehicle_id ||
+    ""
   ).trim();
+
+  // Build driver name from first/last if available
+  const driverName = [booking.driver_first, booking.driver_last]
+    .filter(Boolean)
+    .join(" ");
 
   return {
     id,
@@ -190,6 +213,7 @@ function normalizeTrip(raw) {
     time,
     vehicleRef,
     pickup:
+      booking.city ||
       booking.address_formatted ||
       booking.pickup_address ||
       booking.from ||
@@ -200,11 +224,14 @@ function normalizeTrip(raw) {
       booking.to ||
       "",
     passenger:
+      booking.client_name ||
       booking.name ||
       booking.passenger_name ||
       booking.customer_name ||
       "",
     passengerPhone: booking.phone || booking.passenger_phone || "",
+    driverName,
+    driverPhone: booking.driver_phone || "",
     notes: booking.notes || booking.driver_notes || "",
     status: booking.status || "",
     receivedAt: new Date().toISOString(),
