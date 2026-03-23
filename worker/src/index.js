@@ -1,9 +1,10 @@
 /**
  * iCabbi Trips Webhook Worker
  *
- * POST /webhook        — receives iCabbi "Pre-booking: Driver Designated" events
- * GET  /trips          — returns stored trips for a date range (?from=YYYY-MM-DD&to=YYYY-MM-DD)
- * GET  /trips/stats    — quick count of stored trips for a date
+ * POST /webhook              — receives iCabbi "Pre-booking: Driver Designated" events
+ * POST /webhook/undesignate  — receives iCabbi "Driver Undesignate" events (deletes trip from KV)
+ * GET  /trips                — returns stored trips for a date range (?from=YYYY-MM-DD&to=YYYY-MM-DD)
+ * GET  /trips/stats          — quick count of stored trips for a date
  *
  * KV key format:  trips:YYYY-MM-DD  →  JSON array of trip objects
  * TTL: 7 days (604800 seconds)
@@ -13,7 +14,7 @@ const SEVEN_DAYS = 604800;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Webhook-Secret",
 };
 
@@ -29,6 +30,9 @@ export default {
     try {
       if (url.pathname === "/webhook" && request.method === "POST") {
         return await handleWebhook(request, env);
+      }
+      if (url.pathname === "/webhook/undesignate" && request.method === "POST") {
+        return await handleUndesignate(request, env);
       }
       if (url.pathname === "/trips" && request.method === "GET") {
         return await handleGetTrips(request, env);
@@ -85,6 +89,92 @@ async function handleWebhook(request, env) {
   }
 
   return jsonResponse({ ok: true, stored });
+}
+
+// ── Undesignate Handler ─────────────────────────────────────────────────────
+
+async function handleUndesignate(request, env) {
+  // Verify shared secret
+  const secret = request.headers.get("X-Webhook-Secret") || "";
+  if (!env.WEBHOOK_SECRET || secret !== env.WEBHOOK_SECRET) {
+    return jsonResponse({ error: "Unauthorized" }, 401);
+  }
+
+  const payload = await request.json();
+  const bookings = Array.isArray(payload) ? payload : [payload];
+
+  let removed = 0;
+  for (const raw of bookings) {
+    const booking = raw.booking || raw.data || raw;
+
+    // Extract the trip ID
+    const id = String(
+      booking.perma_id || booking.id || booking.booking_id || ""
+    ).trim();
+    if (!id) continue;
+
+    // Extract the date to find the right KV key
+    const rawDate =
+      booking.job_date ||
+      booking.scheduled_pickup_date ||
+      booking.pickup_date ||
+      booking.date ||
+      booking.release_date ||
+      "";
+
+    let date = extractDate(rawDate);
+
+    if (date) {
+      // We know the date — remove from that specific key
+      const deleted = await removeTripFromDate(env, date, id);
+      if (deleted) removed++;
+    } else {
+      // No date in payload — scan recent dates (today + next 7 days)
+      const today = new Date();
+      for (let i = 0; i < 8; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() + i);
+        const dateStr = d.toISOString().split("T")[0];
+        const deleted = await removeTripFromDate(env, dateStr, id);
+        if (deleted) { removed++; break; }
+      }
+    }
+  }
+
+  console.log(`Undesignate: removed ${removed} trip(s)`);
+  return jsonResponse({ ok: true, removed });
+}
+
+async function removeTripFromDate(env, date, tripId) {
+  const key = `trips:${date}`;
+  const existing = await getTripsFromKV(env, key);
+  const before = existing.length;
+  const filtered = existing.filter((t) => t.id !== tripId);
+
+  if (filtered.length < before) {
+    if (filtered.length === 0) {
+      await env.TRIPS.delete(key);
+    } else {
+      await env.TRIPS.put(key, JSON.stringify(filtered), {
+        expirationTtl: SEVEN_DAYS,
+      });
+    }
+    return true;
+  }
+  return false;
+}
+
+function extractDate(rawDate) {
+  if (!rawDate) return "";
+  try {
+    const dt = new Date(rawDate);
+    if (!isNaN(dt.getTime())) return dt.toISOString().split("T")[0];
+  } catch (e) { /* ignore */ }
+  const isoMatch = String(rawDate).match(/(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) return isoMatch[1];
+  const dmyMatch = String(rawDate).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (dmyMatch) return `${dmyMatch[3]}-${dmyMatch[2].padStart(2, "0")}-${dmyMatch[1].padStart(2, "0")}`;
+  return "";
 }
 
 // ── Trips API ────────────────────────────────────────────────────────────────
@@ -155,32 +245,7 @@ function normalizeTrip(raw) {
     booking.release_date ||
     "";
 
-  let date = "";
-  if (rawDate) {
-    try {
-      const dt = new Date(rawDate);
-      if (!isNaN(dt.getTime())) {
-        date = dt.toISOString().split("T")[0];
-      }
-    } catch (e) {
-      // ignore
-    }
-    // Try to extract date directly (YYYY-MM-DD or DD/MM/YYYY etc.)
-    if (!date) {
-      const isoMatch = rawDate.match(/(\d{4}-\d{2}-\d{2})/);
-      if (isoMatch) {
-        date = isoMatch[1];
-      } else {
-        // Handle DD/MM/YYYY or DD-MM-YYYY
-        const dmyMatch = rawDate.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-        if (dmyMatch) {
-          date = `${dmyMatch[3]}-${dmyMatch[2].padStart(2, "0")}-${dmyMatch[1].padStart(2, "0")}`;
-        }
-      }
-    }
-  }
-
-  // If still no date, use today
+  let date = extractDate(rawDate);
   if (!date) {
     date = new Date().toISOString().split("T")[0];
   }
