@@ -59,6 +59,7 @@ async function handleWebhook(request, env) {
   }
 
   const payload = await request.json();
+  console.log("Webhook payload:", JSON.stringify(payload).slice(0, 2000));
 
   // iCabbi may send a single booking or an array
   const bookings = Array.isArray(payload) ? payload : [payload];
@@ -68,14 +69,28 @@ async function handleWebhook(request, env) {
     const trip = normalizeTrip(booking);
     if (!trip || !trip.date) continue;
 
+    console.log(`Designate: id=${trip.id} vehicle=${trip.vehicleRef} passenger=${trip.passenger} date=${trip.date}`);
+
     const key = `trips:${trip.date}`;
 
     // Read existing trips for this date
     const existing = await getTripsFromKV(env, key);
 
     // Upsert: replace if same trip ID exists, otherwise append
-    // Skip dedup if trip has no ID (can't match)
-    const idx = trip.id ? existing.findIndex((t) => t.id === trip.id) : -1;
+    // When a trip is reassigned to a different vehicle, the ID stays the same —
+    // so findIndex by ID correctly replaces the old vehicle's entry.
+    let idx = trip.id ? existing.findIndex((t) => t.id === trip.id) : -1;
+
+    // Fallback: if no ID match, look for same passenger + same time (reassignment without stable ID)
+    if (idx < 0 && trip.passenger && trip.time) {
+      idx = existing.findIndex((t) =>
+        t.passenger === trip.passenger && t.time === trip.time && t.id !== trip.id
+      );
+      if (idx >= 0) {
+        console.log(`Reassignment detected: ${trip.passenger} moved from vehicle ${existing[idx].vehicleRef} to ${trip.vehicleRef}`);
+      }
+    }
+
     if (idx >= 0) {
       existing[idx] = trip;
       console.log(`Updated trip ${trip.id} for vehicle ${trip.vehicleRef} on ${trip.date}`);
@@ -104,6 +119,7 @@ async function handleUndesignate(request, env) {
   }
 
   const payload = await request.json();
+  console.log("Undesignate payload:", JSON.stringify(payload).slice(0, 2000));
   const bookings = Array.isArray(payload) ? payload : [payload];
 
   let removed = 0;
@@ -114,7 +130,23 @@ async function handleUndesignate(request, env) {
     const id = String(
       booking.perma_id || booking.id || booking.booking_id || ""
     ).trim();
-    if (!id) continue;
+
+    // Extract vehicle ref for fallback matching
+    const vehicleRef = String(
+      booking.vehicle_number || booking.driver?.vehicle?.ref ||
+      booking.vehicle_ref || booking.vehicleRef || booking.vehicle_id || ""
+    ).trim();
+
+    // Extract passenger for fallback matching
+    const passenger = booking.client_name || booking.name ||
+      booking.passenger_name || booking.customer_name || "";
+
+    if (!id && !passenger) {
+      console.log("Undesignate: no id or passenger to match, skipping");
+      continue;
+    }
+
+    console.log(`Undesignate: id=${id} vehicle=${vehicleRef} passenger=${passenger}`);
 
     // Extract the date to find the right KV key
     const rawDate =
@@ -129,7 +161,7 @@ async function handleUndesignate(request, env) {
 
     if (date) {
       // We know the date — remove from that specific key
-      const deleted = await removeTripFromDate(env, date, id);
+      const deleted = await removeTripFromDate(env, date, id, vehicleRef, passenger);
       if (deleted) removed++;
     } else {
       // No date in payload — scan recent dates (today + next 7 days)
@@ -138,7 +170,7 @@ async function handleUndesignate(request, env) {
         const d = new Date(today);
         d.setDate(d.getDate() + i);
         const dateStr = d.toISOString().split("T")[0];
-        const deleted = await removeTripFromDate(env, dateStr, id);
+        const deleted = await removeTripFromDate(env, dateStr, id, vehicleRef, passenger);
         if (deleted) { removed++; break; }
       }
     }
@@ -148,13 +180,20 @@ async function handleUndesignate(request, env) {
   return jsonResponse({ ok: true, removed });
 }
 
-async function removeTripFromDate(env, date, tripId) {
+async function removeTripFromDate(env, date, tripId, vehicleRef, passenger) {
   const key = `trips:${date}`;
   const existing = await getTripsFromKV(env, key);
   const before = existing.length;
-  const filtered = existing.filter((t) => t.id !== tripId);
+  const filtered = existing.filter((t) => {
+    // Match by trip ID if available
+    if (tripId && t.id === tripId) return false;
+    // Fallback: match by passenger + vehicle when no ID match
+    if (!tripId && passenger && vehicleRef && t.passenger === passenger && t.vehicleRef === vehicleRef) return false;
+    return true;
+  });
 
   if (filtered.length < before) {
+    console.log(`Removed ${before - filtered.length} trip(s) from ${key} (${before} → ${filtered.length})`);
     if (filtered.length === 0) {
       await env.TRIPS.delete(key);
     } else {
@@ -164,6 +203,7 @@ async function removeTripFromDate(env, date, tripId) {
     }
     return true;
   }
+  console.log(`No matching trip found in ${key} (id=${tripId}, vehicle=${vehicleRef}, passenger=${passenger})`);
   return false;
 }
 
