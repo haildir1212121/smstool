@@ -548,8 +548,10 @@ const ymd = (ms) => {
       
       const q = query(getMsgsCol(id), orderBy("createdAt", "asc"));
       unsubMessages = onSnapshot(q, s => {
-          const div = document.getElementById("messageList"); div.innerHTML = ""; const atts = [];
+          const div = document.getElementById("messageList");
+          const atts = [];
           let lastDay = null;
+          let html = "";
 
 s.forEach(d => {
   const m = d.data();
@@ -563,7 +565,7 @@ s.forEach(d => {
   // Date divider when day changes
   if (dayKey && dayKey !== lastDay) {
     lastDay = dayKey;
-    div.innerHTML += `
+    html += `
       <div class="flex justify-center my-3">
         <div class="px-3 py-1 rounded-full text-[11px] font-bold text-slate-500 bg-white border border-slate-200 shadow-sm">
           ${escapeHtml(formatDateLong(ts))}
@@ -582,7 +584,7 @@ s.forEach(d => {
       `</div>`;
   }
 
-  div.innerHTML += `
+  html += `
     <div class="flex w-full ${isMe ? "justify-end" : "justify-start"} fade-in">
       <div class="max-w-[85%] lg:max-w-[70%]">
         <div class="px-4 py-2.5 text-sm shadow-sm ${isMe ? "msg-sent" : "msg-received"}">
@@ -595,6 +597,7 @@ s.forEach(d => {
     </div>
   `;
 });
+          div.innerHTML = html;
           div.scrollTop = div.scrollHeight; document.getElementById("chatContainer").scrollTop = document.getElementById("chatContainer").scrollHeight;
           document.getElementById("detailsAttachments").innerHTML = atts.slice(0,9).map(u => `<a href="${u}" target="_blank" class="block h-20 rounded-lg bg-slate-50 border bg-cover bg-center" style="background-image:url('${u}')"></a>`).join("");
       });
@@ -642,14 +645,14 @@ s.forEach(d => {
       document.getElementById("massTotalCount").innerText = contacts.length; let sent = 0;
       await addDoc(collection(db, "organizations", SHARED_ORG_ID, "logs"), { type:"broadcast_start", count: contacts.length, message:txt, createdAt: serverTimestamp() });
       for(let i=0; i<contacts.length; i++) {
-          if(!broadcastActive) break; const t = contacts[i]; log.innerHTML += `<div>Sending to ${t.name}...</div>`;
+          if(!broadcastActive) break; const t = contacts[i]; log.insertAdjacentHTML("beforeend", `<div>Sending to ${escapeHtml(t.name)}...</div>`);
           try {
              const res = await fetch(TWILIO_SEND_URL, { method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: t.phone, body: txt, mediaUrls: [] }) });
-             if(res.ok) { const sid = `mass-${Date.now()}-${Math.random()}`; await setDoc(doc(getMsgsCol(t.id), sid), { body: txt, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls: [] }); await updateDoc(getThreadDoc(t.id), { lastMessageText: txt, lastMessageAtMs: Date.now() }); sent++; document.getElementById("massSentCount").innerText = sent; pBar.style.width = `${(sent/contacts.length)*100}%`; } else { log.innerHTML += `<div class="text-rose-400">Failed: ${t.phone}</div>`; }
-          } catch(e) { log.innerHTML += `<div class="text-rose-400">Error: ${e.message}</div>`; }
-          log.scrollTop = log.scrollHeight; await new Promise(r => setTimeout(r, 400)); 
+             if(res.ok) { const sid = `mass-${Date.now()}-${Math.random()}`; await setDoc(doc(getMsgsCol(t.id), sid), { body: txt, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls: [] }); await updateDoc(getThreadDoc(t.id), { lastMessageText: txt, lastMessageAtMs: Date.now() }); sent++; document.getElementById("massSentCount").innerText = sent; pBar.style.width = `${(sent/contacts.length)*100}%`; } else { log.insertAdjacentHTML("beforeend", `<div class="text-rose-400">Failed: ${t.phone}</div>`); }
+          } catch(e) { log.insertAdjacentHTML("beforeend", `<div class="text-rose-400">Error: ${escapeHtml(e.message)}</div>`); }
+          log.scrollTop = log.scrollHeight; await new Promise(r => setTimeout(r, 400));
       }
-      broadcastActive = false; log.innerHTML += `<div class="text-white mt-2">>> FINISHED. Sent ${sent}.</div>`; window.showToast("Broadcast Complete");
+      broadcastActive = false; log.insertAdjacentHTML("beforeend", `<div class="text-white mt-2">>> FINISHED. Sent ${sent}.</div>`); window.showToast("Broadcast Complete");
   };
   window.cancelBroadcast = () => { broadcastActive = false; window.showToast("Stopping..."); };
 
@@ -668,10 +671,8 @@ s.forEach(d => {
           tagRow.innerHTML = tagHtml;
       }
 
-      const s = (document.getElementById("cmSearch").value||"").toLowerCase(); 
-      const tbody = document.getElementById("cmList"); 
-      tbody.innerHTML = "";
-      
+      const s = (document.getElementById("cmSearch").value||"").toLowerCase();
+      const tbody = document.getElementById("cmList");
       const filtered = store.threads.filter(t => {
           if (!((t.name||"").toLowerCase().includes(s) || (t.phone||"").includes(s))) return false;
           if (store.tagFilter.size > 0) {
@@ -692,9 +693,7 @@ s.forEach(d => {
       const start = (store.cmPage - 1) * store.itemsPerPage;
       const paginated = filtered.slice(start, start + store.itemsPerPage);
 
-      paginated.forEach(t => {
-          tbody.innerHTML += `<tr><td class="p-4 pl-6"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">${initials(t.name)}</div><input class="cm-name bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-sm font-bold w-full text-slate-700" data-id="${t.id}" value="${escapeHtml(t.name)}"></div></td><td class="p-4 text-xs font-mono text-slate-500">${t.phone}</td><td class="p-4"><input class="cm-tags bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-xs w-full text-slate-600" data-id="${t.id}" value="${(t.tags||[]).join(",")}" placeholder="Tags"></td><td class="p-4 pr-6 text-right text-xs text-slate-400">${relativeTime(t.lastMessageAtMs)}</td><td class="p-4 text-right"><button onclick="window.deleteContact('${t.id}')" class="text-slate-400 hover:text-rose-600 transition"><i class="fa-solid fa-trash"></i></button></td></tr>`;
-      });
+      tbody.innerHTML = paginated.map(t => `<tr><td class="p-4 pl-6"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">${initials(t.name)}</div><input class="cm-name bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-sm font-bold w-full text-slate-700" data-id="${t.id}" value="${escapeHtml(t.name)}"></div></td><td class="p-4 text-xs font-mono text-slate-500">${t.phone}</td><td class="p-4"><input class="cm-tags bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-xs w-full text-slate-600" data-id="${t.id}" value="${(t.tags||[]).join(",")}" placeholder="Tags"></td><td class="p-4 pr-6 text-right text-xs text-slate-400">${relativeTime(t.lastMessageAtMs)}</td><td class="p-4 text-right"><button onclick="window.deleteContact('${t.id}')" class="text-slate-400 hover:text-rose-600 transition"><i class="fa-solid fa-trash"></i></button></td></tr>`).join("");
   };
 
   window.changeCmPage = (dir) => { store.cmPage += dir; window.renderContactsManagerTable(); };
@@ -730,9 +729,7 @@ s.forEach(d => {
           store.logs = snap.docs.map(d => d.data());
       }
 
-      const tbody = document.getElementById("logbookList"); 
-      tbody.innerHTML = "";
-      
+      const tbody = document.getElementById("logbookList");
       const filtered = store.logs.filter(l => {
           const thread = store.threads.find(t => t.id === l.threadId || t.phone === l.phone);
           const threadTags = thread ? (thread.tags || []) : [];
@@ -754,24 +751,23 @@ s.forEach(d => {
       const start = (store.logPage - 1) * store.itemsPerPage;
       const paginated = filtered.slice(start, start + store.itemsPerPage);
 
-      paginated.forEach(l => { 
+      tbody.innerHTML = paginated.map(l => {
           const thread = store.threads.find(t => t.id === l.threadId || t.phone === l.phone);
           const threadTags = thread ? (thread.tags || []) : [];
           const tagBadges = threadTags.slice(0,2).map(tag => `<span class="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px] border border-slate-200 font-bold mr-1">${tag}</span>`).join("");
-
-          tbody.innerHTML += `<tr>
+          return `<tr>
             <td class="p-4 pl-6 text-xs font-mono text-slate-500">${new Date(l.createdAt?.toMillis()).toLocaleString()}</td>
             <td class="p-4 text-sm font-bold text-slate-800">
                 ${escapeHtml(l.threadName || l.phone || "System")}
                 <div class="mt-1">${tagBadges}</div>
             </td>
             <td class="p-4 text-xs">
-                <span class="font-bold uppercase text-slate-400 mr-2 text-[10px] tracking-wider border border-slate-200 px-1.5 py-0.5 rounded">${l.type}</span> 
+                <span class="font-bold uppercase text-slate-400 mr-2 text-[10px] tracking-wider border border-slate-200 px-1.5 py-0.5 rounded">${l.type}</span>
                 ${escapeHtml(l.message||"")}
             </td>
             <td class="p-4 pr-6 text-right"><button onclick="window.switchView('inbox'); window.loadThread('${l.threadId}')" class="text-blue-600 font-bold text-xs hover:underline">View</button></td>
-          </tr>`; 
-      });
+          </tr>`;
+      }).join("");
   };
 
   window.changeLogPage = (dir) => { store.logPage += dir; window.renderLogbook(); };
@@ -791,7 +787,7 @@ s.forEach(d => {
   window.toggleUrgentOnly = () => { store.onlyUrgent = !store.onlyUrgent; window.renderThreadList(); };
   window.openSettingsModal = () => { document.getElementById("settingsModal").classList.remove("hidden"); document.getElementById("cannedRepliesInput").value = store.cannedReplies.join("\n"); };
   window.saveSettings = () => { store.cannedReplies = document.getElementById("cannedRepliesInput").value.split("\n").filter(Boolean); localStorage.setItem("canned", JSON.stringify(store.cannedReplies)); document.getElementById("settingsModal").classList.add("hidden"); window.renderQuickReplies(); };
-  window.renderQuickReplies = () => { const r = document.getElementById("quickRepliesRow"); r.innerHTML=""; (JSON.parse(localStorage.getItem("canned")||"[]")).forEach(t => { const b=document.createElement("button"); b.className="shrink-0 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs text-gray-600 whitespace-nowrap hover:border-blue-400 transition shadow-sm"; b.innerText=t; b.onclick=()=>{document.getElementById("msgInput").value+=t;}; r.appendChild(b); }); };
+  window.renderQuickReplies = () => { const r = document.getElementById("quickRepliesRow"); r.innerHTML = (JSON.parse(localStorage.getItem("canned")||"[]")).map(t => `<button class="shrink-0 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs text-gray-600 whitespace-nowrap hover:border-blue-400 transition shadow-sm" onclick="document.getElementById('msgInput').value+='${escapeHtml(t).replace(/'/g,"\\&#39;")}';">${escapeHtml(t)}</button>`).join(""); };
   window.insertTemplate = () => { const v = document.getElementById("templateSelect").value; if(v) document.getElementById("msgInput").value += v; document.getElementById("templateSelect").value = ""; };
   window.saveDetailsTags = () => updateDoc(getThreadDoc(store.activeThreadId), { tags: document.getElementById("detailsTagsInput").value.split(",") });
   window.saveDetailsNotes = () => updateDoc(getThreadDoc(store.activeThreadId), { notes: document.getElementById("detailsNotes").value });
@@ -1075,11 +1071,9 @@ s.forEach(d => {
     });
 
     const container = document.getElementById("ttRegionList");
-    container.innerHTML = "";
-
-    Object.entries(byRegion).forEach(([region, drivers]) => {
+    container.innerHTML = Object.entries(byRegion).map(([region, drivers]) => {
       const matchedInRegion = drivers.filter(d => d.matched).length;
-      const html = `
+      return `
         <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
           <div class="px-6 py-4 bg-slate-50 border-b border-gray-100 flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -1125,8 +1119,7 @@ s.forEach(d => {
           </div>
         </div>
       `;
-      container.innerHTML += html;
-    });
+    }).join("");
   }
 
   // --- Trip Fetching (via Cloudflare Worker) ---
