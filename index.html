@@ -1306,13 +1306,15 @@ s.forEach(d => {
 
   function extractPassengerLastName(passenger) {
     if (!passenger) return "";
+    // Strip parenthetical annotations like "(W/C Van)", "(Ambu)", etc. before parsing
+    let cleaned = passenger.replace(/\s*\([^)]*\)\s*/g, " ").trim();
     // Handle shared rides: "Crepeau, Matthew / Robertson, Colbi"
-    if (passenger.includes("/")) {
-      const riders = passenger.split("/").map(r => r.trim());
+    if (cleaned.includes("/")) {
+      const riders = cleaned.split("/").map(r => r.trim());
       const lastNames = riders.map(r => extractSinglePassengerLastName(r)).filter(Boolean);
       return lastNames.join("/");
     }
-    return extractSinglePassengerLastName(passenger);
+    return extractSinglePassengerLastName(cleaned);
   }
 
   function extractSinglePassengerLastName(passenger) {
