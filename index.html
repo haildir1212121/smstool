@@ -870,7 +870,7 @@ s.forEach(d => {
 
   window.saveIcabbiSettings = () => {
     const settings = {
-      workerUrl: document.getElementById("icabbiWorkerUrl").value.trim().replace(/\/+$/, ""),
+      workerUrl: document.getElementById("icabbiWorkerUrl").value.trim().replace(/\/+$/, "").replace(/\/trips$/, ""),
       tripDate: document.getElementById("icabbiTripDate").value
     };
     localStorage.setItem("icabbi_settings", JSON.stringify(settings));
