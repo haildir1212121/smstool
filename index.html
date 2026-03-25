@@ -48,7 +48,7 @@
       <div class="h-16 px-4 flex items-center border-b border-gray-100 gap-2 shrink-0">
         <div class="relative flex-1">
             <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-xs"></i>
-            <input id="searchContacts" oninput="window.renderThreadList()" placeholder="Search messages..." class="w-full bg-slate-50 border border-slate-100 rounded-lg pl-8 pr-3 py-2 text-sm focus:bg-white focus:border-blue-300 outline-none transition">
+            <input id="searchContacts" oninput="window.handleSearchInput()" placeholder="Search names, numbers, or messages..." class="w-full bg-slate-50 border border-slate-100 rounded-lg pl-8 pr-3 py-2 text-sm focus:bg-white focus:border-blue-300 outline-none transition">
         </div>
         <button onclick="window.openNewMsgModal()" class="w-8 h-8 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center shadow-sm transition"><i class="fa-solid fa-plus"></i></button>
       </div>
@@ -497,7 +497,11 @@ const ymd = (ms) => {
 
       let list = store.threads.slice().sort((a,b) => (b.lastMessageAtMs||0)-(a.lastMessageAtMs||0));
       list = list.filter(t => {
-          if (s && !`${t.name} ${t.phone}`.toLowerCase().includes(s)) return false;
+          if (s) {
+              const quick = `${t.name} ${t.phone} ${t.lastMessageText || ""}`.toLowerCase().includes(s);
+              const deep = _deepSearchCache.term === s && _deepSearchCache.matchedIds.has(t.id);
+              if (!quick && !deep) return false;
+          }
           if (store.onlyUnread && !t.unread) return false;
           if (store.onlyUrgent && !t.isUrgent) return false;
           if (store.tagFilter.size > 0) {
@@ -530,6 +534,58 @@ const ymd = (ms) => {
           </div>`;
       }).join("");
   };
+
+  // Deep message search — debounced Firestore query across all threads
+  let _searchTimer = null;
+  let _deepSearchCache = { term: "", matchedIds: new Set() };
+  let _deepSearchPending = false;
+
+  window.handleSearchInput = () => {
+    // Instant render for name/phone/lastMessage filtering
+    window.renderThreadList();
+    // Debounce deep search for 3+ char queries
+    clearTimeout(_searchTimer);
+    const s = (document.getElementById("searchContacts").value || "").trim().toLowerCase();
+    if (s.length >= 3 && s !== _deepSearchCache.term) {
+      _searchTimer = setTimeout(() => deepMessageSearch(s), 500);
+    } else if (s.length < 3 && _deepSearchCache.term) {
+      _deepSearchCache = { term: "", matchedIds: new Set() };
+      window.renderThreadList();
+    }
+  };
+
+  async function deepMessageSearch(term) {
+    if (_deepSearchPending) return;
+    _deepSearchPending = true;
+    const searchIndicator = document.getElementById("searchContacts");
+    searchIndicator.style.borderColor = "#3b82f6";
+    try {
+      const matchedIds = new Set();
+      const promises = store.threads.map(async (t) => {
+        // Skip threads already matching by name/phone/lastMessage
+        const quick = `${t.name} ${t.phone} ${t.lastMessageText || ""}`.toLowerCase();
+        if (quick.includes(term)) { matchedIds.add(t.id); return; }
+        // Query this thread's messages
+        const snap = await getDocs(getMsgsCol(t.id));
+        for (const d of snap.docs) {
+          if ((d.data().body || "").toLowerCase().includes(term)) {
+            matchedIds.add(t.id);
+            break;
+          }
+        }
+      });
+      await Promise.all(promises);
+      _deepSearchCache = { term, matchedIds };
+      // Re-render only if search term hasn't changed
+      const current = (document.getElementById("searchContacts").value || "").trim().toLowerCase();
+      if (current === term) window.renderThreadList();
+    } catch (e) {
+      console.error("Deep search error:", e);
+    } finally {
+      _deepSearchPending = false;
+      searchIndicator.style.borderColor = "";
+    }
+  }
 
   window.toggleTagFilter = (tag) => { if (store.tagFilter.has(tag)) store.tagFilter.delete(tag); else store.tagFilter.add(tag); window.renderThreadList(); window.renderLogbook(); window.renderContactsManagerTable(); };
   window.clearTagFilter = () => { store.tagFilter.clear(); window.renderThreadList(); window.renderLogbook(); window.renderContactsManagerTable(); };
