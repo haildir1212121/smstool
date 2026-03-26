@@ -870,6 +870,8 @@ s.forEach(d => {
         const vehicle = typeof rawVeh === "number" ? String(Math.floor(rawVeh)).trim() : String(rawVeh).trim();
         if (!vehicle) continue;
         const driverName = (nameCell && nameCell.v) ? String(nameCell.v).trim() : "";
+        // Skip rows without a driver name (unassigned vehicle slots)
+        if (!driverName) continue;
         // Skip header rows
         if (driverName.toLowerCase() === "name" || vehicle.toLowerCase() === "vehicle") continue;
 
@@ -885,9 +887,7 @@ s.forEach(d => {
           if (tCell && tCell.v) tablet = String(tCell.v).trim();
         }
 
-        // Use vehicle as fallback display name for unnamed rows (e.g. LTD vehicles without a driver name)
-        const displayName = driverName || `${vehicle} (${origin || region.name})`;
-        ttDrivers.push({ name: displayName, vehicle, region: region.name, origin, tablet, matched: null, trips: [] });
+        ttDrivers.push({ name: driverName, vehicle, region: region.name, origin, tablet, matched: null, trips: [] });
       }
     });
 
@@ -1366,10 +1366,12 @@ s.forEach(d => {
     if (driver.trips.length === 0) {
       lines.push(`Hi ${driver.name.split(" ")[0]},`);
       lines.push("");
-      lines.push("No trips currently assigned. Please check your tablet for updates.");
       if (driver.tablet) {
+        lines.push(`You are assigned to vehicle ${driver.vehicle}. Sign in @ ${driver.tablet}.`);
         lines.push("");
-        lines.push(`BE SIGNED INTO YOUR TABLET @ ${driver.tablet}`);
+        lines.push("Please check your tablet for trip details.");
+      } else {
+        lines.push("No trips currently assigned. Please check your tablet for updates.");
       }
       lines.push("");
       lines.push("Reply CONFIRM to acknowledge. Thank you!");
