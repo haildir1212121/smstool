@@ -1115,8 +1115,8 @@ s.forEach(d => {
                     }</td>
                     <td class="px-6 py-3 text-xs">${d.trips.length
                       ? `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">${d.trips.length} trips</span>`
-                      : (d.origin || "").toLowerCase().includes("eugene")
-                        ? `<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">0 trips (Eugene)</span>`
+                      : d.tablet
+                        ? `<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">Scheduled @ ${escapeHtml(d.tablet)}</span>`
                         : `<span class="text-slate-300 line-through">skipped</span>`
                     }</td>
                   </tr>
@@ -1246,9 +1246,10 @@ s.forEach(d => {
       window.ttTripDateRange = isMultiDay ? `${tripDate} to ${endDate}` : tripDate;
 
       // Count drivers who will receive texts vs skipped
-      const isEugene = (origin) => (origin || "").toLowerCase().includes("eugene");
-      const sendCount = ttDrivers.filter(d => d.matched && (d.trips.length > 0 || isEugene(d.origin))).length;
-      const skippedCount = ttDrivers.filter(d => d.matched && d.trips.length === 0 && !isEugene(d.origin)).length;
+      // Include any driver with trips OR a sign-in time from the Excel (they're scheduled)
+      const isScheduled = (d) => d.trips.length > 0 || !!d.tablet;
+      const sendCount = ttDrivers.filter(d => d.matched && isScheduled(d)).length;
+      const skippedCount = ttDrivers.filter(d => d.matched && !isScheduled(d)).length;
 
       const totalTrips = Object.values(ttTrips).reduce((s, arr) => s + arr.length, 0);
       const dayLabel = isMultiDay ? ` (Fri-Mon)` : "";
@@ -1424,9 +1425,8 @@ s.forEach(d => {
 
   window.openTripReviewModal = () => {
     ttMessages = [];
-    // Include matched drivers that have trips, OR whose origin city is Eugene (even with no trips)
-    const isEugene = (origin) => (origin || "").toLowerCase().includes("eugene");
-    const matchedWithTrips = ttDrivers.filter(d => d.matched && (d.trips.length > 0 || isEugene(d.origin)));
+    // Include matched drivers that have trips OR a sign-in time (they're scheduled)
+    const matchedWithTrips = ttDrivers.filter(d => d.matched && (d.trips.length > 0 || !!d.tablet));
 
     matchedWithTrips.forEach(d => {
       ttMessages.push({
