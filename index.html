@@ -865,13 +865,13 @@ s.forEach(d => {
       for (let r = region.startRow; r <= region.endRow; r++) {
         const nameCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.nameCol })];
         const vehCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.vehicleCol })];
-        if (!nameCell || !nameCell.v || !vehCell || !vehCell.v) continue;
-        const driverName = String(nameCell.v).trim();
+        if (!vehCell || !vehCell.v) continue;
         const rawVeh = vehCell.v;
         const vehicle = typeof rawVeh === "number" ? String(Math.floor(rawVeh)).trim() : String(rawVeh).trim();
-        if (!driverName || !vehicle) continue;
+        if (!vehicle) continue;
+        const driverName = (nameCell && nameCell.v) ? String(nameCell.v).trim() : "";
         // Skip header rows
-        if (driverName.toLowerCase() === "name") continue;
+        if (driverName.toLowerCase() === "name" || vehicle.toLowerCase() === "vehicle") continue;
 
         let origin = "";
         if (region.originCol !== null) {
@@ -885,7 +885,9 @@ s.forEach(d => {
           if (tCell && tCell.v) tablet = String(tCell.v).trim();
         }
 
-        ttDrivers.push({ name: driverName, vehicle, region: region.name, origin, tablet, matched: null, trips: [] });
+        // Use vehicle as fallback display name for unnamed rows (e.g. LTD vehicles without a driver name)
+        const displayName = driverName || `${vehicle} (${origin || region.name})`;
+        ttDrivers.push({ name: displayName, vehicle, region: region.name, origin, tablet, matched: null, trips: [] });
       }
     });
 
@@ -917,8 +919,8 @@ s.forEach(d => {
       { name: "Roseburg", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 27, startRow: 28, endRow: 36 },
       // Portland/I-84 Corridor: A columns starting at row 41
       { name: "Portland/I-84 Corridor", nameCol: 0, vehicleCol: 2, originCol: 1, tabletCol: 3, headerRow: 41, startRow: 42, endRow: 55 },
-      // LTD block: G39=title, G40=headers (Name,Origin,Vehicle,Start), data rows 42-48, col K=Stop
-      { name: "LTD", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 40, startRow: 42, endRow: 48 },
+      // LTD block: G39=title, G40=headers (Name,Origin,Vehicle,Start), data rows 41-48
+      { name: "LTD", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 40, startRow: 41, endRow: 48 },
       // Direct Medical Transport: M columns starting at row 34
       { name: "Direct Medical Transport", nameCol: 12, vehicleCol: 14, originCol: 13, tabletCol: 15, headerRow: 34, startRow: 35, endRow: maxRow },
     ];
