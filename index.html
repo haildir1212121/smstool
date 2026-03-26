@@ -916,8 +916,8 @@ s.forEach(d => {
       { name: "Roseburg", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 27, startRow: 28, endRow: 36 },
       // Portland/I-84 Corridor: A columns starting at row 41
       { name: "Portland/I-84 Corridor", nameCol: 0, vehicleCol: 2, originCol: 1, tabletCol: 3, headerRow: 41, startRow: 42, endRow: 55 },
-      // LTD block: G columns — G39 is section title, G40 is column headers, data starts row 41
-      { name: "LTD", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 40, startRow: 41, endRow: 48 },
+      // LTD block: G39=title, G40=headers (Name,Origin,Vehicle,Start), data rows 42-48, col K=Stop
+      { name: "LTD", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 40, startRow: 42, endRow: 48 },
       // Direct Medical Transport: M columns starting at row 34
       { name: "Direct Medical Transport", nameCol: 12, vehicleCol: 14, originCol: 13, tabletCol: 15, headerRow: 34, startRow: 35, endRow: maxRow },
     ];
@@ -927,9 +927,13 @@ s.forEach(d => {
       // Check if the header row has "Name" in the nameCol
       const headerCell = ws[XLSX.utils.encode_cell({ r: rd.headerRow - 1, c: rd.nameCol })];
       const hasHeader = headerCell && String(headerCell.v).toLowerCase().startsWith("name");
-      // Even without header, check if first data row has data
-      const firstDataCell = ws[XLSX.utils.encode_cell({ r: rd.startRow - 1, c: rd.nameCol })];
-      if (hasHeader || (firstDataCell && firstDataCell.v)) {
+      // Even without header, check if any of the first 3 data rows have data
+      let hasData = false;
+      for (let dr = rd.startRow; dr < Math.min(rd.startRow + 3, rd.endRow + 1); dr++) {
+        const cell = ws[XLSX.utils.encode_cell({ r: dr - 1, c: rd.nameCol })];
+        if (cell && cell.v) { hasData = true; break; }
+      }
+      if (hasHeader || hasData) {
         regions.push(rd);
       }
     });
