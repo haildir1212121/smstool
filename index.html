@@ -220,9 +220,10 @@
       </div>
       <div class="flex gap-3 items-center">
         <button onclick="window.openIcabbiSettings()" class="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition"><i class="fa-solid fa-gear mr-1"></i>Trip Settings</button>
+        <button onclick="window.handleTripSheetPaste()" class="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition" title="Copy cells from Google Sheets, then click here"><i class="fa-solid fa-paste mr-1"></i>Paste Sheet</button>
         <label class="px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold cursor-pointer hover:bg-blue-700 transition shadow-sm">
           <i class="fa-solid fa-file-excel mr-1"></i>Upload Sheet
-          <input type="file" id="ttFileInput" accept=".xlsx,.xls" class="hidden" onchange="window.handleTripSheetUpload(this)">
+          <input type="file" id="ttFileInput" accept=".xlsx,.xls,.csv,.tsv" class="hidden" onchange="window.handleTripSheetUpload(this)">
         </label>
       </div>
     </div>
@@ -232,7 +233,7 @@
       <div id="ttEmptyState" class="flex flex-col items-center justify-center h-full text-slate-300">
         <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-slate-100"><i class="fa-solid fa-file-excel text-3xl opacity-50"></i></div>
         <p class="font-medium text-sm mb-1">Upload a Driver Messaging Template</p>
-        <p class="text-xs text-slate-400">The sheet will be parsed to find drivers, vehicles, and regions</p>
+        <p class="text-xs text-slate-400">Upload .xlsx or .csv, or copy cells from Google Sheets and click Paste Sheet</p>
       </div>
 
       <!-- Results area (hidden until sheet uploaded) -->
@@ -830,11 +831,30 @@ s.forEach(d => {
   window.handleTripSheetUpload = async (input) => {
     const file = input.files[0];
     if (!file) return;
-    const data = await file.arrayBuffer();
-    const wb = XLSX.read(data, { type: "array" });
+    let wb;
+    if (file.name.endsWith(".csv") || file.name.endsWith(".tsv")) {
+      const text = await file.text();
+      wb = XLSX.read(text, { type: "string" });
+    } else {
+      const data = await file.arrayBuffer();
+      wb = XLSX.read(data, { type: "array" });
+    }
     const ws = wb.Sheets[wb.SheetNames[0]];
     await parseDriverSheet(ws);
     input.value = "";
+  };
+
+  window.handleTripSheetPaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text || !text.trim()) { alert("Clipboard is empty. Copy cells from your spreadsheet first."); return; }
+      const wb = XLSX.read(text, { type: "string", FS: "\t" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      await parseDriverSheet(ws);
+    } catch (e) {
+      alert("Could not read clipboard. Please allow clipboard access or use the CSV upload instead.");
+      console.error("Clipboard paste error:", e);
+    }
   };
 
   async function parseDriverSheet(ws) {
@@ -862,17 +882,6 @@ s.forEach(d => {
     const regions = detectRegions(ws);
 
     regions.forEach(region => {
-      console.warn(`--- Parsing region: ${region.name} (rows ${region.startRow}-${region.endRow}, nameCol=${region.nameCol}, vehCol=${region.vehicleCol}) ---`);
-      // Debug: dump first 5 rows of this region to show what's actually in the cells
-      for (let dr = region.startRow; dr < Math.min(region.startRow + 5, region.endRow + 1); dr++) {
-        const dbgCells = [];
-        for (let dc = region.nameCol; dc <= Math.min(region.nameCol + 5, 17); dc++) {
-          const addr = XLSX.utils.encode_cell({ r: dr - 1, c: dc });
-          const c = ws[addr];
-          dbgCells.push(String.fromCharCode(65 + dc) + dr + "=" + (c && c.v !== undefined ? JSON.stringify(c.v) : "EMPTY"));
-        }
-        console.warn(`  Row ${dr}: ${dbgCells.join(" | ")}`);
-      }
       for (let r = region.startRow; r <= region.endRow; r++) {
         const nameCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.nameCol })];
         const vehCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.vehicleCol })];
@@ -906,7 +915,6 @@ s.forEach(d => {
           if (sCell && sCell.v) stop = String(sCell.v).trim();
         }
 
-        console.log(`Parsed driver: ${driverName} | vehicle: ${vehicle} | region: ${region.name} | origin: ${origin} | tablet: ${tablet || "(none)"}${stop ? " | stop: " + stop : ""}`);
         ttDrivers.push({ name: driverName, vehicle, region: region.name, origin, tablet, stop, matched: null, trips: [] });
       }
     });
