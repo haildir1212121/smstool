@@ -891,8 +891,14 @@ s.forEach(d => {
           }
         }
 
-        console.log(`Parsed driver: ${driverName} | vehicle: ${vehicle} | region: ${region.name} | origin: ${origin} | tablet: ${tablet || "(none)"}`);
-        ttDrivers.push({ name: driverName, vehicle, region: region.name, origin, tablet, matched: null, trips: [] });
+        let stop = "";
+        if (region.stopCol != null) {
+          const sCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.stopCol })];
+          if (sCell && sCell.v) stop = String(sCell.v).trim();
+        }
+
+        console.log(`Parsed driver: ${driverName} | vehicle: ${vehicle} | region: ${region.name} | origin: ${origin} | tablet: ${tablet || "(none)"}${stop ? " | stop: " + stop : ""}`);
+        ttDrivers.push({ name: driverName, vehicle, region: region.name, origin, tablet, stop, matched: null, trips: [] });
       }
     });
 
@@ -918,7 +924,7 @@ s.forEach(d => {
       // Portland/I-84 Corridor: A40 title, A41=Name, B41=Origin, C41=Vehicle, D41=Start, E41=End
       { name: "Portland/I-84 Corridor", nameCol: 0, originCol: 1, vehicleCol: 2, tabletCol: 3, headerRow: 41, startRow: 42, endRow: 57 },
       // LTD: G39 title, G40=Name, H40=Origin, I40=Vehicle, J40=Start, K40=Stop
-      { name: "LTD", nameCol: 6, originCol: 7, vehicleCol: 8, tabletCol: 9, headerRow: 40, startRow: 41, endRow: 57 },
+      { name: "LTD", nameCol: 6, originCol: 7, vehicleCol: 8, tabletCol: 9, stopCol: 10, headerRow: 40, startRow: 41, endRow: 57 },
       // Direct Medical Transport: M33 title, M34=Name, N34=Origin, O34=Vehicle, P34=Tablet, Q34=End — rows end at 57
       { name: "Direct Medical Transport", nameCol: 12, originCol: 13, vehicleCol: 14, tabletCol: 15, headerRow: 34, startRow: 35, endRow: 57 },
     ];
@@ -1362,7 +1368,8 @@ s.forEach(d => {
       lines.push(`Hi ${driver.name.split(" ")[0]},`);
       lines.push("");
       if (driver.tablet) {
-        lines.push(`You are assigned to vehicle ${driver.vehicle}. Sign in @ ${driver.tablet}.`);
+        const stopPart = driver.stop ? `, sign out @ ${driver.stop}` : "";
+        lines.push(`You are assigned to vehicle ${driver.vehicle}. Sign in @ ${driver.tablet}${stopPart}.`);
         lines.push("");
         lines.push("Please check your tablet for trip details.");
       } else {
