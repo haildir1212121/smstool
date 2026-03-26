@@ -220,9 +220,10 @@
       </div>
       <div class="flex gap-3 items-center">
         <button onclick="window.openIcabbiSettings()" class="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition"><i class="fa-solid fa-gear mr-1"></i>Trip Settings</button>
+        <button onclick="window.handleTripSheetPaste()" class="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition" title="Copy cells from Google Sheets, then click here"><i class="fa-solid fa-paste mr-1"></i>Paste Sheet</button>
         <label class="px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold cursor-pointer hover:bg-blue-700 transition shadow-sm">
           <i class="fa-solid fa-file-excel mr-1"></i>Upload Sheet
-          <input type="file" id="ttFileInput" accept=".xlsx,.xls" class="hidden" onchange="window.handleTripSheetUpload(this)">
+          <input type="file" id="ttFileInput" accept=".xlsx,.xls,.csv,.tsv" class="hidden" onchange="window.handleTripSheetUpload(this)">
         </label>
       </div>
     </div>
@@ -232,7 +233,7 @@
       <div id="ttEmptyState" class="flex flex-col items-center justify-center h-full text-slate-300">
         <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-slate-100"><i class="fa-solid fa-file-excel text-3xl opacity-50"></i></div>
         <p class="font-medium text-sm mb-1">Upload a Driver Messaging Template</p>
-        <p class="text-xs text-slate-400">The sheet will be parsed to find drivers, vehicles, and regions</p>
+        <p class="text-xs text-slate-400">Upload .xlsx or .csv, or copy cells from Google Sheets and click Paste Sheet</p>
       </div>
 
       <!-- Results area (hidden until sheet uploaded) -->
@@ -814,7 +815,7 @@ s.forEach(d => {
 
   window.saveIcabbiSettings = () => {
     const settings = {
-      workerUrl: document.getElementById("icabbiWorkerUrl").value.trim().replace(/\/+$/, ""),
+      workerUrl: document.getElementById("icabbiWorkerUrl").value.trim().replace(/\/+$/, "").replace(/\/trips$/, ""),
       tripDate: document.getElementById("icabbiTripDate").value
     };
     localStorage.setItem("icabbi_settings", JSON.stringify(settings));
@@ -830,11 +831,30 @@ s.forEach(d => {
   window.handleTripSheetUpload = async (input) => {
     const file = input.files[0];
     if (!file) return;
-    const data = await file.arrayBuffer();
-    const wb = XLSX.read(data, { type: "array" });
+    let wb;
+    if (file.name.endsWith(".csv") || file.name.endsWith(".tsv")) {
+      const text = await file.text();
+      wb = XLSX.read(text, { type: "string" });
+    } else {
+      const data = await file.arrayBuffer();
+      wb = XLSX.read(data, { type: "array" });
+    }
     const ws = wb.Sheets[wb.SheetNames[0]];
     await parseDriverSheet(ws);
     input.value = "";
+  };
+
+  window.handleTripSheetPaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text || !text.trim()) { alert("Clipboard is empty. Copy cells from your spreadsheet first."); return; }
+      const wb = XLSX.read(text, { type: "string", FS: "\t" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      await parseDriverSheet(ws);
+    } catch (e) {
+      alert("Could not read clipboard. Please allow clipboard access or use the CSV upload instead.");
+      console.error("Clipboard paste error:", e);
+    }
   };
 
   async function parseDriverSheet(ws) {
@@ -865,12 +885,13 @@ s.forEach(d => {
       for (let r = region.startRow; r <= region.endRow; r++) {
         const nameCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.nameCol })];
         const vehCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.vehicleCol })];
-        if (!nameCell || !nameCell.v || !vehCell || !vehCell.v) continue;
-        const driverName = String(nameCell.v).trim();
-        const vehicle = String(Math.floor(Number(vehCell.v))).trim();
-        if (!driverName || !vehicle || vehicle === "NaN") continue;
+        const driverName = (nameCell && nameCell.v) ? String(nameCell.v).trim() : "";
+        // Skip rows without a driver name
+        if (!driverName) continue;
         // Skip header rows
         if (driverName.toLowerCase() === "name") continue;
+        const rawVeh = vehCell && vehCell.v ? vehCell.v : "";
+        const vehicle = rawVeh ? (typeof rawVeh === "number" ? String(Math.floor(rawVeh)).trim() : String(rawVeh).trim()) : "";
 
         let origin = "";
         if (region.originCol !== null) {
@@ -881,10 +902,20 @@ s.forEach(d => {
         let tablet = "";
         if (region.tabletCol !== null) {
           const tCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.tabletCol })];
-          if (tCell && tCell.v) tablet = String(tCell.v).trim();
+          if (tCell && tCell.v) {
+            const val = String(tCell.v).trim();
+            // Treat "off" as no tablet time — driver is not scheduled
+            if (val.toLowerCase() !== "off") tablet = val;
+          }
         }
 
-        ttDrivers.push({ name: driverName, vehicle, region: region.name, origin, tablet, matched: null, trips: [] });
+        let stop = "";
+        if (region.stopCol != null) {
+          const sCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.stopCol })];
+          if (sCell && sCell.v) stop = String(sCell.v).trim();
+        }
+
+        ttDrivers.push({ name: driverName, vehicle, region: region.name, origin, tablet, stop, matched: null, trips: [] });
       }
     });
 
@@ -897,39 +928,34 @@ s.forEach(d => {
     // Based on the known Excel structure, define regions with their column mappings
     // Column indices: A=0, B=1, C=2, D=3, E=4, F=5, G=6, H=7, I=8, J=9, K=10, L=11, M=12, N=13, O=14, P=15, Q=16, R=17
     const regions = [];
-    const range = XLSX.utils.decode_range(ws["!ref"]);
-    const maxRow = range.e.r + 1;
 
-    // Scan for region headers by looking for known patterns
-    // Region header cells: A4="Eugene", G4="Albany/Corvallis/Salem", M4="Coast"
-    // Then sub-headers at row 5: Name, Vehicle, Tablet, End columns
-
-    // Strategy: find cells that match known region names or find "Name" header rows
     const regionDefs = [
-      // Eugene block: A columns
-      { name: "Eugene", nameCol: 0, vehicleCol: 1, originCol: null, tabletCol: 2, headerRow: 5, startRow: 6, endRow: 22 },
-      // Albany/Corvallis/Salem block: G columns
-      { name: "Albany/Corvallis/Salem", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 5, startRow: 6, endRow: 24 },
-      // Coast block: M columns
-      { name: "Coast", nameCol: 12, vehicleCol: 14, originCol: 13, tabletCol: 15, headerRow: 5, startRow: 6, endRow: 32 },
-      // Roseburg block: G columns starting at row 27
-      { name: "Roseburg", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 27, startRow: 28, endRow: 36 },
-      // Portland/I-84 Corridor: A columns starting at row 41
-      { name: "Portland/I-84 Corridor", nameCol: 0, vehicleCol: 2, originCol: 1, tabletCol: 3, headerRow: 41, startRow: 42, endRow: 55 },
-      // LTD block: G columns starting at row 40
-      { name: "LTD", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 40, startRow: 41, endRow: 48 },
-      // Direct Medical Transport: M columns starting at row 34
-      { name: "Direct Medical Transport", nameCol: 12, vehicleCol: 14, originCol: 13, tabletCol: 15, headerRow: 34, startRow: 35, endRow: maxRow },
+      // Eugene: A4 title, A5=Name, B5=Vehicle, C5=Tablet, D5=End — rows end at 37
+      { name: "Eugene", nameCol: 0, vehicleCol: 1, originCol: null, tabletCol: 2, headerRow: 5, startRow: 6, endRow: 37 },
+      // Albany/Corvallis/Salem: G4 title, G5=Name, H5=Origin, I5=Vehicle, J5=Tablet, K5=End — rows end at 25
+      { name: "Albany/Corvallis/Salem", nameCol: 6, originCol: 7, vehicleCol: 8, tabletCol: 9, headerRow: 5, startRow: 6, endRow: 25 },
+      // Coast: M4 title, M5=Name, N5=Origin, O5=Vehicle, P5=Tablet, Q5=End — rows end at 32
+      { name: "Coast", nameCol: 12, originCol: 13, vehicleCol: 14, tabletCol: 15, headerRow: 5, startRow: 6, endRow: 32 },
+      // Roseburg: G26 title, G27=Name, H27=Origin, I27=Vehicle, J27=Tablet, K27=End — rows end at 37
+      { name: "Roseburg", nameCol: 6, originCol: 7, vehicleCol: 8, tabletCol: 9, headerRow: 27, startRow: 28, endRow: 37 },
+      // Portland/I-84 Corridor: A40 title, A41=Name, B41=Origin, C41=Vehicle, D41=Start, E41=End
+      { name: "Portland/I-84 Corridor", nameCol: 0, originCol: 1, vehicleCol: 2, tabletCol: 3, headerRow: 41, startRow: 42, endRow: 57 },
+      // LTD: G39 title, G40=Name, H40=Origin, I40=Vehicle, J40=Start, K40=Stop
+      { name: "LTD", nameCol: 6, originCol: 7, vehicleCol: 8, tabletCol: 9, stopCol: 10, headerRow: 40, startRow: 41, endRow: 57 },
+      // Direct Medical Transport: M33 title, M34=Name, N34=Origin, O34=Vehicle, P34=Tablet, Q34=End — rows end at 57
+      { name: "Direct Medical Transport", nameCol: 12, originCol: 13, vehicleCol: 14, tabletCol: 15, headerRow: 34, startRow: 35, endRow: 57 },
     ];
 
-    // Dynamically validate: only include regions that actually have a "Name" header or data
+    // Validate: only include regions that have a "Name" header or data in first few rows
     regionDefs.forEach(rd => {
-      // Check if the header row has "Name" in the nameCol
       const headerCell = ws[XLSX.utils.encode_cell({ r: rd.headerRow - 1, c: rd.nameCol })];
-      const hasHeader = headerCell && String(headerCell.v).toLowerCase() === "name";
-      // Even without header, check if first data row has data
-      const firstDataCell = ws[XLSX.utils.encode_cell({ r: rd.startRow - 1, c: rd.nameCol })];
-      if (hasHeader || (firstDataCell && firstDataCell.v)) {
+      const hasHeader = headerCell && String(headerCell.v).toLowerCase().startsWith("name");
+      let hasData = false;
+      for (let dr = rd.startRow; dr < Math.min(rd.startRow + 3, rd.endRow + 1); dr++) {
+        const cell = ws[XLSX.utils.encode_cell({ r: dr - 1, c: rd.nameCol })];
+        if (cell && cell.v) { hasData = true; break; }
+      }
+      if (hasHeader || hasData) {
         regions.push(rd);
       }
     });
@@ -1108,9 +1134,9 @@ s.forEach(d => {
                     }</td>
                     <td class="px-6 py-3 text-xs">${d.trips.length
                       ? `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">${d.trips.length} trips</span>`
-                      : (d.origin || "").toLowerCase().includes("eugene")
-                        ? `<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">0 trips (Eugene)</span>`
-                        : `<span class="text-slate-300 line-through">skipped</span>`
+                      : d.tablet
+                        ? `<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">Scheduled @ ${escapeHtml(d.tablet)}</span>`
+                        : `<span class="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">No trips</span>`
                     }</td>
                   </tr>
                 `).join("")}
@@ -1238,10 +1264,9 @@ s.forEach(d => {
       window.ttIsMultiDay = isMultiDay;
       window.ttTripDateRange = isMultiDay ? `${tripDate} to ${endDate}` : tripDate;
 
-      // Count drivers who will receive texts vs skipped
-      const isEugene = (origin) => (origin || "").toLowerCase().includes("eugene");
-      const sendCount = ttDrivers.filter(d => d.matched && (d.trips.length > 0 || isEugene(d.origin))).length;
-      const skippedCount = ttDrivers.filter(d => d.matched && d.trips.length === 0 && !isEugene(d.origin)).length;
+      // Count drivers who will receive texts vs skipped (unmatched only)
+      const sendCount = ttDrivers.filter(d => d.matched).length;
+      const skippedCount = 0;
 
       const totalTrips = Object.values(ttTrips).reduce((s, arr) => s + arr.length, 0);
       const dayLabel = isMultiDay ? ` (Fri-Mon)` : "";
@@ -1359,10 +1384,13 @@ s.forEach(d => {
     if (driver.trips.length === 0) {
       lines.push(`Hi ${driver.name.split(" ")[0]},`);
       lines.push("");
-      lines.push("No trips currently assigned. Please check your tablet for updates.");
       if (driver.tablet) {
+        const stopPart = driver.stop ? `, sign out @ ${driver.stop}` : "";
+        lines.push(`You are assigned to vehicle ${driver.vehicle}. Sign in @ ${driver.tablet}${stopPart}.`);
         lines.push("");
-        lines.push(`BE SIGNED INTO YOUR TABLET @ ${driver.tablet}`);
+        lines.push("Please check your tablet for trip details.");
+      } else {
+        lines.push("No trips currently assigned. Please check your tablet for updates.");
       }
       lines.push("");
       lines.push("Reply CONFIRM to acknowledge. Thank you!");
@@ -1415,9 +1443,8 @@ s.forEach(d => {
 
   window.openTripReviewModal = () => {
     ttMessages = [];
-    // Include matched drivers that have trips, OR whose origin city is Eugene (even with no trips)
-    const isEugene = (origin) => (origin || "").toLowerCase().includes("eugene");
-    const matchedWithTrips = ttDrivers.filter(d => d.matched && (d.trips.length > 0 || isEugene(d.origin)));
+    // Include all matched drivers — every named driver gets a message
+    const matchedWithTrips = ttDrivers.filter(d => d.matched);
 
     matchedWithTrips.forEach(d => {
       ttMessages.push({
