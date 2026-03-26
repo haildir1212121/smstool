@@ -866,15 +866,13 @@ s.forEach(d => {
       for (let r = region.startRow; r <= region.endRow; r++) {
         const nameCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.nameCol })];
         const vehCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.vehicleCol })];
-        if (!vehCell || !vehCell.v) continue;
-        const rawVeh = vehCell.v;
-        const vehicle = typeof rawVeh === "number" ? String(Math.floor(rawVeh)).trim() : String(rawVeh).trim();
-        if (!vehicle) continue;
         const driverName = (nameCell && nameCell.v) ? String(nameCell.v).trim() : "";
-        // Skip rows without a driver name (unassigned vehicle slots)
+        // Skip rows without a driver name
         if (!driverName) continue;
         // Skip header rows
-        if (driverName.toLowerCase() === "name" || vehicle.toLowerCase() === "vehicle") continue;
+        if (driverName.toLowerCase() === "name") continue;
+        const rawVeh = vehCell && vehCell.v ? vehCell.v : "";
+        const vehicle = rawVeh ? (typeof rawVeh === "number" ? String(Math.floor(rawVeh)).trim() : String(rawVeh).trim()) : "";
 
         let origin = "";
         if (region.originCol !== null) {
