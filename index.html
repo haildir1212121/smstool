@@ -884,9 +884,14 @@ s.forEach(d => {
         let tablet = "";
         if (region.tabletCol !== null) {
           const tCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.tabletCol })];
-          if (tCell && tCell.v) tablet = String(tCell.v).trim();
+          if (tCell && tCell.v) {
+            const val = String(tCell.v).trim();
+            // Treat "off" as no tablet time — driver is not scheduled
+            if (val.toLowerCase() !== "off") tablet = val;
+          }
         }
 
+        console.log(`Parsed driver: ${driverName} | vehicle: ${vehicle} | region: ${region.name} | origin: ${origin} | tablet: ${tablet || "(none)"}`);
         ttDrivers.push({ name: driverName, vehicle, region: region.name, origin, tablet, matched: null, trips: [] });
       }
     });
