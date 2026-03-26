@@ -908,22 +908,40 @@ s.forEach(d => {
     // Then sub-headers at row 5: Name, Vehicle, Tablet, End columns
 
     // Strategy: find cells that match known region names or find "Name" header rows
+    // Auto-detect endRow: scan from startRow until 3 consecutive empty rows in the name+vehicle columns
+    function findEndRow(startRow, nameCol, vehicleCol, hardMax) {
+      let emptyStreak = 0;
+      for (let r = startRow; r <= hardMax; r++) {
+        const nCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: nameCol })];
+        const vCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: vehicleCol })];
+        const hasData = (nCell && nCell.v && String(nCell.v).trim()) || (vCell && vCell.v && String(vCell.v).trim());
+        if (!hasData) { emptyStreak++; if (emptyStreak >= 3) return r - 3; }
+        else emptyStreak = 0;
+      }
+      return hardMax;
+    }
+
     const regionDefs = [
       // Eugene block: A columns
-      { name: "Eugene", nameCol: 0, vehicleCol: 1, originCol: null, tabletCol: 2, headerRow: 5, startRow: 6, endRow: 22 },
+      { name: "Eugene", nameCol: 0, vehicleCol: 1, originCol: null, tabletCol: 2, headerRow: 5, startRow: 6 },
       // Albany/Corvallis/Salem block: G columns
-      { name: "Albany/Corvallis/Salem", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 5, startRow: 6, endRow: 24 },
+      { name: "Albany/Corvallis/Salem", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 5, startRow: 6 },
       // Coast block: M columns
-      { name: "Coast", nameCol: 12, vehicleCol: 14, originCol: 13, tabletCol: 15, headerRow: 5, startRow: 6, endRow: 32 },
+      { name: "Coast", nameCol: 12, vehicleCol: 14, originCol: 13, tabletCol: 15, headerRow: 5, startRow: 6 },
       // Roseburg block: G columns starting at row 27
-      { name: "Roseburg", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 27, startRow: 28, endRow: 36 },
+      { name: "Roseburg", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 27, startRow: 28 },
       // Portland/I-84 Corridor: A columns starting at row 41
-      { name: "Portland/I-84 Corridor", nameCol: 0, vehicleCol: 2, originCol: 1, tabletCol: 3, headerRow: 41, startRow: 42, endRow: 55 },
-      // LTD block: G39=title, G40=headers (Name,Origin,Vehicle,Start), data rows 41-48
-      { name: "LTD", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 40, startRow: 41, endRow: 48 },
+      { name: "Portland/I-84 Corridor", nameCol: 0, vehicleCol: 2, originCol: 1, tabletCol: 3, headerRow: 41, startRow: 42 },
+      // LTD block: G39=title, G40=headers (Name,Origin,Vehicle,Start)
+      { name: "LTD", nameCol: 6, vehicleCol: 8, originCol: 7, tabletCol: 9, headerRow: 40, startRow: 41 },
       // Direct Medical Transport: M columns starting at row 34
-      { name: "Direct Medical Transport", nameCol: 12, vehicleCol: 14, originCol: 13, tabletCol: 15, headerRow: 34, startRow: 35, endRow: maxRow },
+      { name: "Direct Medical Transport", nameCol: 12, vehicleCol: 14, originCol: 13, tabletCol: 15, headerRow: 34, startRow: 35 },
     ];
+
+    // Auto-detect endRow for each region
+    regionDefs.forEach(rd => {
+      rd.endRow = findEndRow(rd.startRow, rd.nameCol, rd.vehicleCol, maxRow);
+    });
 
     // Dynamically validate: only include regions that actually have a "Name" header or data
     regionDefs.forEach(rd => {
