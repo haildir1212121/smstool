@@ -863,6 +863,15 @@ s.forEach(d => {
 
     regions.forEach(region => {
       console.log(`--- Parsing region: ${region.name} (rows ${region.startRow}-${region.endRow}, nameCol=${region.nameCol}, vehCol=${region.vehicleCol}) ---`);
+      // Debug: dump first 5 rows of this region to show what's actually in the cells
+      for (let dr = region.startRow; dr < Math.min(region.startRow + 5, region.endRow + 1); dr++) {
+        const dbgCells = [];
+        for (let dc = region.nameCol; dc <= region.nameCol + 4 && dc < 18; dc++) {
+          const c = ws[XLSX.utils.encode_cell({ r: dr - 1, c: dc })];
+          dbgCells.push(String.fromCharCode(65 + dc) + dr + "=" + (c ? JSON.stringify(c.v) : "EMPTY"));
+        }
+        console.log(`  Row ${dr}: ${dbgCells.join(" | ")}`);
+      }
       for (let r = region.startRow; r <= region.endRow; r++) {
         const nameCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.nameCol })];
         const vehCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.vehicleCol })];
