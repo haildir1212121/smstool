@@ -1402,6 +1402,12 @@ s.forEach(d => {
   function generateTripMessage(driver) {
     const dayLabel = driver.trips[0]?.date ? formatDayLabel(driver.trips[0].date) : formatDayLabel(window.ttTripDate);
 
+    // LTD drivers: include vehicle, start time, and stop time
+    if (driver.region === "LTD") {
+      const stopPart = driver.stop ? ` AND STOP TIME IS ${driver.stop}` : "";
+      return `${dayLabel}: ASSIGNED VEHICLE IS ${driver.vehicle}. START TIME IS ${driver.tablet}${stopPart}. Reply CONFIRM to acknowledge. Thank you!`;
+    }
+
     if (driver.trips.length === 0) {
       return `${dayLabel}: You are assigned to vehicle ${driver.vehicle}. Sign in @ ${driver.tablet}. Please check your tablet for trip details. Reply CONFIRM to acknowledge. Thank you!`;
     }
