@@ -1359,81 +1359,28 @@ s.forEach(d => {
 
   // Generate a single-day trip message for a specific day's trips
   function generateSingleDayMessage(driver, dayTrips, dayLabel) {
-    const lines = [];
     const seenPassengers = new Set();
 
     if (dayTrips.length === 0) {
-      lines.push(`Hi ${driver.name.split(" ")[0]},`);
-      lines.push("");
-      if (driver.tablet) {
-        const stopPart = driver.stop ? `, sign out @ ${driver.stop}` : "";
-        lines.push(`You are assigned to vehicle ${driver.vehicle}. Sign in @ ${driver.tablet}${stopPart}.`);
-        lines.push("");
-        lines.push("Please check your tablet for trip details.");
-      } else {
-        lines.push("No trips currently assigned. Please check your tablet for updates.");
-      }
-      lines.push("");
-      lines.push("Reply CONFIRM to acknowledge. Thank you!");
-      return lines.join("\n");
+      return `${dayLabel}: You are assigned to vehicle ${driver.vehicle}. Sign in @ ${driver.tablet}. Please check your tablet for trip details. Reply CONFIRM to acknowledge. Thank you!`;
     }
 
-    lines.push(`Hi ${driver.name.split(" ")[0]}, here are your trips for ${dayLabel}:`);
-    lines.push("");
-    lines.push(`${formatDayLabel(dayTrips[0].date)}:`);
-    dayTrips.forEach(trip => {
-      lines.push(formatTripLine(trip, seenPassengers));
-    });
-    lines.push("");
-
-    if (driver.tablet) {
-      lines.push(`BE SIGNED INTO YOUR TABLET @ ${driver.tablet}`);
-      lines.push("");
-    }
-
-    lines.push("Reply CONFIRM to acknowledge. Thank you!");
-    return lines.join("\n");
+    const tripLines = dayTrips.map(trip => formatTripLine(trip, seenPassengers)).join(" ");
+    const tabletPart = driver.tablet ? ` BE SIGNED INTO YOUR TABLET @ ${driver.tablet}` : "";
+    return `${dayLabel}: ${tripLines}${tabletPart} Reply CONFIRM to acknowledge. Thank you!`;
   }
 
   function generateTripMessage(driver) {
-    const lines = [];
+    const dayLabel = driver.trips[0]?.date ? formatDayLabel(driver.trips[0].date) : "TOMORROW";
 
     if (driver.trips.length === 0) {
-      lines.push(`Hi ${driver.name.split(" ")[0]},`);
-      lines.push("");
-      if (driver.tablet) {
-        const stopPart = driver.stop ? `, sign out @ ${driver.stop}` : "";
-        lines.push(`You are assigned to vehicle ${driver.vehicle}. Sign in @ ${driver.tablet}${stopPart}.`);
-        lines.push("");
-        lines.push("Please check your tablet for trip details.");
-      } else {
-        lines.push("No trips currently assigned. Please check your tablet for updates.");
-      }
-      lines.push("");
-      lines.push("Reply CONFIRM to acknowledge. Thank you!");
-      return lines.join("\n");
+      return `${dayLabel}: You are assigned to vehicle ${driver.vehicle}. Sign in @ ${driver.tablet}. Please check your tablet for trip details. Reply CONFIRM to acknowledge. Thank you!`;
     }
 
-    lines.push(`Hi ${driver.name.split(" ")[0]}, here are your trips for tomorrow:`);
-    lines.push("");
-
-    // Track passengers we've seen to detect return trips
     const seenPassengers = new Set();
-
-    const dayLabel = driver.trips[0]?.date ? formatDayLabel(driver.trips[0].date) : "";
-    if (dayLabel) lines.push(`${dayLabel}:`);
-    driver.trips.forEach(trip => {
-      lines.push(formatTripLine(trip, seenPassengers));
-    });
-    lines.push("");
-
-    if (driver.tablet) {
-      lines.push(`BE SIGNED INTO YOUR TABLET @ ${driver.tablet}`);
-      lines.push("");
-    }
-
-    lines.push("Reply CONFIRM to acknowledge. Thank you!");
-    return lines.join("\n");
+    const tripLines = driver.trips.map(trip => formatTripLine(trip, seenPassengers)).join(" ");
+    const tabletPart = driver.tablet ? ` BE SIGNED INTO YOUR TABLET @ ${driver.tablet}` : "";
+    return `${dayLabel}: ${tripLines}${tabletPart} Reply CONFIRM to acknowledge. Thank you!`;
   }
 
   window.openTripReviewModal = () => {
