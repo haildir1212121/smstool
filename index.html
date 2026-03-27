@@ -1407,10 +1407,11 @@ s.forEach(d => {
     const isMultiDay = window.ttIsMultiDay;
     // Include all matched drivers with a tablet/start time
     const matchedWithTrips = ttDrivers.filter(d => d.matched && d.tablet);
-    const skippedDrivers = ttDrivers.filter(d => d.tablet && !d.matched);
+    const skippedNoMatch = ttDrivers.filter(d => d.tablet && !d.matched);
+    const skippedNoTablet = ttDrivers.filter(d => d.matched && !d.tablet);
     const noTripDrivers = matchedWithTrips.filter(d => d.trips.length === 0);
-    console.log(`[Review] ${matchedWithTrips.length} drivers (${noTripDrivers.length} with no trips): ${noTripDrivers.map(d => d.name).join(", ")}`);
-    if (skippedDrivers.length) console.log(`[Review] SKIPPED (tablet but no contact match): ${skippedDrivers.map(d => `${d.name} [${d.region}]`).join(", ")}`);
+    console.log(`[Review] ${matchedWithTrips.length} included, ${noTripDrivers.length} with no trips, ${skippedNoMatch.length} skipped (no match), ${skippedNoTablet.length} skipped (no tablet)`);
+    console.log(`[Review] All drivers:`, ttDrivers.map(d => `${d.name} [${d.region}] veh=${d.vehicle} tab=${d.tablet||"NONE"} matched=${!!d.matched} trips=${d.trips.length}`));
 
     matchedWithTrips.forEach(d => {
       if (isMultiDay && d.trips.length > 0) {
