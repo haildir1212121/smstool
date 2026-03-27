@@ -1190,13 +1190,16 @@ s.forEach(d => {
 
     const tripDate = settings.tripDate || new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
-    // Determine date range: on Fridays, cover Fri-Mon (weekend + Monday)
+    // Determine date range based on TODAY's day of week
+    // Thursday: just fetch tomorrow (Friday), single-day "trips for tomorrow"
+    // Friday: fetch Saturday, Sunday, Monday as separate texts per day
     const tripDateObj = new Date(tripDate + "T12:00:00");
-    const dayOfWeek = tripDateObj.getDay(); // 0=Sun, 5=Fri
+    const todayDow = new Date().getDay(); // 0=Sun, 5=Fri, 4=Thu
     let endDate = tripDate;
-    if (dayOfWeek === 5) {
+    if (todayDow === 5) {
+      // Today is Friday — cover Sat, Sun, Mon
       const mon = new Date(tripDateObj);
-      mon.setDate(mon.getDate() + 3);
+      mon.setDate(mon.getDate() + 2);
       endDate = mon.toISOString().split("T")[0];
     }
     const isMultiDay = tripDate !== endDate;
@@ -1251,7 +1254,7 @@ s.forEach(d => {
 
       const sendCount = ttDrivers.filter(d => d.matched).length;
       const totalTrips = Object.values(ttTrips).reduce((s, arr) => s + arr.length, 0);
-      const dayLabel = isMultiDay ? ` (Fri-Mon)` : "";
+      const dayLabel = isMultiDay ? ` (Sat-Mon)` : "";
       setStepState(1, "done", `${totalTrips} trips`);
       window.showToast(`Fetched ${totalTrips} trips for ${Object.keys(ttTrips).length} vehicles${dayLabel}`);
 
@@ -1416,9 +1419,46 @@ s.forEach(d => {
     } catch(e) { return timeStr; }
   }
 
+  // Generate a single-day trip message for a specific day's trips
+  function generateSingleDayMessage(driver, dayTrips, dayLabel) {
+    const lines = [];
+    const seenPassengers = new Set();
+
+    if (dayTrips.length === 0) {
+      lines.push(`Hi ${driver.name.split(" ")[0]},`);
+      lines.push("");
+      if (driver.tablet) {
+        const stopPart = driver.stop ? `, sign out @ ${driver.stop}` : "";
+        lines.push(`You are assigned to vehicle ${driver.vehicle}. Sign in @ ${driver.tablet}${stopPart}.`);
+        lines.push("");
+        lines.push("Please check your tablet for trip details.");
+      } else {
+        lines.push("No trips currently assigned. Please check your tablet for updates.");
+      }
+      lines.push("");
+      lines.push("Reply CONFIRM to acknowledge. Thank you!");
+      return lines.join("\n");
+    }
+
+    lines.push(`Hi ${driver.name.split(" ")[0]}, here are your trips for ${dayLabel}:`);
+    lines.push("");
+    lines.push(`${formatDayLabel(dayTrips[0].date)}:`);
+    dayTrips.forEach(trip => {
+      lines.push(formatTripLine(trip, seenPassengers));
+    });
+    lines.push("");
+
+    if (driver.tablet) {
+      lines.push(`BE SIGNED INTO YOUR TABLET @ ${driver.tablet}`);
+      lines.push("");
+    }
+
+    lines.push("Reply CONFIRM to acknowledge. Thank you!");
+    return lines.join("\n");
+  }
+
   function generateTripMessage(driver) {
     const lines = [];
-    const isMultiDay = window.ttIsMultiDay;
 
     if (driver.trips.length === 0) {
       lines.push(`Hi ${driver.name.split(" ")[0]},`);
@@ -1436,40 +1476,18 @@ s.forEach(d => {
       return lines.join("\n");
     }
 
-    if (isMultiDay) {
-      lines.push(`Hi ${driver.name.split(" ")[0]}, here are your trips for the weekend & Monday:`);
-    } else {
-      lines.push(`Hi ${driver.name.split(" ")[0]}, here are your trips for tomorrow:`);
-    }
+    lines.push(`Hi ${driver.name.split(" ")[0]}, here are your trips for tomorrow:`);
     lines.push("");
 
     // Track passengers we've seen to detect return trips
     const seenPassengers = new Set();
 
-    if (isMultiDay) {
-      // Group trips by date
-      const byDate = {};
-      driver.trips.forEach(trip => {
-        const key = trip.date || "unknown";
-        if (!byDate[key]) byDate[key] = [];
-        byDate[key].push(trip);
-      });
-      const sortedDates = Object.keys(byDate).sort();
-      sortedDates.forEach(date => {
-        lines.push(`${formatDayLabel(date)}:`);
-        byDate[date].forEach(trip => {
-          lines.push(formatTripLine(trip, seenPassengers));
-        });
-        lines.push("");
-      });
-    } else {
-      const dayLabel = driver.trips[0]?.date ? formatDayLabel(driver.trips[0].date) : "";
-      if (dayLabel) lines.push(`${dayLabel}:`);
-      driver.trips.forEach(trip => {
-        lines.push(formatTripLine(trip, seenPassengers));
-      });
-      lines.push("");
-    }
+    const dayLabel = driver.trips[0]?.date ? formatDayLabel(driver.trips[0].date) : "";
+    if (dayLabel) lines.push(`${dayLabel}:`);
+    driver.trips.forEach(trip => {
+      lines.push(formatTripLine(trip, seenPassengers));
+    });
+    lines.push("");
 
     if (driver.tablet) {
       lines.push(`BE SIGNED INTO YOUR TABLET @ ${driver.tablet}`);
@@ -1482,17 +1500,42 @@ s.forEach(d => {
 
   window.openTripReviewModal = () => {
     ttMessages = [];
+    const isMultiDay = window.ttIsMultiDay;
     // Include all matched drivers — every named driver gets a message
     const matchedWithTrips = ttDrivers.filter(d => d.matched);
 
     matchedWithTrips.forEach(d => {
-      ttMessages.push({
-        driver: d,
-        phone: d.matched.phone,
-        contactName: d.matched.name,
-        message: generateTripMessage(d),
-        enabled: true
-      });
+      if (isMultiDay && d.trips.length > 0) {
+        // Friday mode: create separate texts for each day (Sat, Sun, Mon)
+        const byDate = {};
+        d.trips.forEach(trip => {
+          const key = trip.date || "unknown";
+          if (!byDate[key]) byDate[key] = [];
+          byDate[key].push(trip);
+        });
+        const sortedDates = Object.keys(byDate).sort();
+        sortedDates.forEach(date => {
+          const dayName = formatDayLabel(date).toLowerCase();
+          // e.g. "Saturday", "Sunday", "Monday"
+          const dayNameCap = dayName.charAt(0).toUpperCase() + dayName.slice(1).toLowerCase();
+          ttMessages.push({
+            driver: d,
+            phone: d.matched.phone,
+            contactName: d.matched.name,
+            message: generateSingleDayMessage(d, byDate[date], dayNameCap),
+            enabled: true
+          });
+        });
+      } else {
+        // Thursday / normal day: single "trips for tomorrow" message
+        ttMessages.push({
+          driver: d,
+          phone: d.matched.phone,
+          contactName: d.matched.name,
+          message: generateTripMessage(d),
+          enabled: true
+        });
+      }
     });
 
     renderReviewModal();
