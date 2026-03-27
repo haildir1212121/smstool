@@ -1407,8 +1407,10 @@ s.forEach(d => {
     const isMultiDay = window.ttIsMultiDay;
     // Include all matched drivers with a tablet/start time
     const matchedWithTrips = ttDrivers.filter(d => d.matched && d.tablet);
+    const skippedDrivers = ttDrivers.filter(d => d.tablet && !d.matched);
     const noTripDrivers = matchedWithTrips.filter(d => d.trips.length === 0);
     console.log(`[Review] ${matchedWithTrips.length} drivers (${noTripDrivers.length} with no trips): ${noTripDrivers.map(d => d.name).join(", ")}`);
+    if (skippedDrivers.length) console.log(`[Review] SKIPPED (tablet but no contact match): ${skippedDrivers.map(d => `${d.name} [${d.region}]`).join(", ")}`);
 
     matchedWithTrips.forEach(d => {
       if (isMultiDay && d.trips.length > 0) {
