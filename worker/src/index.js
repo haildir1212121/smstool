@@ -307,10 +307,18 @@ async function removeTripFromDate(env, date, tripId, vehicleRef, passenger) {
 
   const removedTrips = [];
   const filtered = existing.filter((t) => {
+    // Match by trip ID (primary)
     if (tripId && t.id === tripId) { removedTrips.push(t); return false; }
-    if (!tripId && passenger && vehicleRef && t.passenger === passenger && t.vehicleRef === vehicleRef) { removedTrips.push(t); return false; }
+    // Match by passenger + vehicle
+    if (passenger && vehicleRef && t.passenger === passenger && t.vehicleRef === vehicleRef) { removedTrips.push(t); return false; }
+    // Match by just vehicle ref (if no passenger provided but vehicle matches)
+    if (!passenger && vehicleRef && t.vehicleRef === vehicleRef && !tripId) { removedTrips.push(t); return false; }
+    // Match by just passenger name (if no vehicle provided)
+    if (passenger && !vehicleRef && !tripId && t.passenger === passenger) { removedTrips.push(t); return false; }
     return true;
   });
+
+  console.log(`removeTripFromDate: key=${key}, existing=${before}, matched=${removedTrips.length}, tripId=${tripId}, vehicle=${vehicleRef}, passenger=${passenger}`);
 
   if (filtered.length < before) {
     console.log(`Removed ${before - filtered.length} trip(s) from ${key}`);
