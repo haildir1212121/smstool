@@ -2,15 +2,18 @@
  * iCabbi Trips Webhook Worker
  *
  * POST /webhook              — receives iCabbi "Pre-booking: Driver Designated" events
- * POST /webhook/undesignate  — receives iCabbi "Driver Undesignate" events (deletes trip from KV)
+ * POST /webhook/undesignate  — receives iCabbi "Driver Undesignate" events (deletes trip)
  * GET  /trips                — returns stored trips for a date range (?from=YYYY-MM-DD&to=YYYY-MM-DD)
  * GET  /trips/stats          — quick count of stored trips for a date
  *
+ * Storage: KV (fast cache) + Firestore (source of truth)
  * KV key format:  trips:YYYY-MM-DD  →  JSON array of trip objects
- * TTL: 7 days (604800 seconds)
+ * KV TTL: 7 days (604800 seconds)
+ * Firestore path:  organizations/{orgId}/trips/{docId}
  */
 
 const SEVEN_DAYS = 604800;
+const ORG_ID = "dispatch_team_main";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -18,9 +21,136 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Webhook-Secret",
 };
 
+// ── Firestore REST API helpers ───────────────────────────────────────────────
+
+let cachedAuthToken = null;
+let tokenExpiresAt = 0;
+
+async function getFirebaseIdToken(env) {
+  // Reuse cached token if still valid (with 5 min buffer)
+  if (cachedAuthToken && Date.now() < tokenExpiresAt - 300000) {
+    return cachedAuthToken;
+  }
+
+  const apiKey = env.FIREBASE_API_KEY;
+  if (!apiKey) {
+    console.warn("FIREBASE_API_KEY not set — Firestore writes disabled");
+    return null;
+  }
+
+  // Sign in anonymously to get an ID token
+  const res = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ returnSecureToken: true }),
+    }
+  );
+
+  if (!res.ok) {
+    console.error("Firebase auth failed:", await res.text());
+    return null;
+  }
+
+  const data = await res.json();
+  cachedAuthToken = data.idToken;
+  // ID tokens expire in 1 hour
+  tokenExpiresAt = Date.now() + 3600000;
+  return cachedAuthToken;
+}
+
+function tripToFirestoreDoc(trip) {
+  // Convert a trip object to Firestore REST API document format
+  const fields = {};
+  for (const [key, value] of Object.entries(trip)) {
+    if (value === null || value === undefined) {
+      fields[key] = { nullValue: null };
+    } else if (typeof value === "number") {
+      fields[key] = { doubleValue: value };
+    } else {
+      fields[key] = { stringValue: String(value) };
+    }
+  }
+  return { fields };
+}
+
+function firestoreDocToTrip(doc) {
+  // Convert Firestore REST API document back to a plain trip object
+  const trip = {};
+  if (!doc.fields) return trip;
+  for (const [key, val] of Object.entries(doc.fields)) {
+    if (val.stringValue !== undefined) trip[key] = val.stringValue;
+    else if (val.doubleValue !== undefined) trip[key] = val.doubleValue;
+    else if (val.integerValue !== undefined) trip[key] = Number(val.integerValue);
+    else if (val.nullValue !== undefined) trip[key] = "";
+    else trip[key] = "";
+  }
+  return trip;
+}
+
+function getTripDocId(trip) {
+  // Generate a stable document ID for a trip
+  if (trip.id) return trip.id;
+  // Fallback: hash from vehicle + time + passenger
+  const raw = `${trip.vehicleRef}_${trip.date}_${trip.time}_${trip.passenger}`;
+  return raw.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+async function firestoreWriteTrip(env, trip) {
+  const token = await getFirebaseIdToken(env);
+  if (!token) return;
+
+  const projectId = env.FIREBASE_PROJECT_ID || "sms-dlx";
+  const docId = getTripDocId(trip);
+  const path = `organizations/${ORG_ID}/trips/${docId}`;
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${path}?key=${env.FIREBASE_API_KEY}`;
+
+  const doc = tripToFirestoreDoc({ ...trip, updatedAt: new Date().toISOString() });
+
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(doc),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Firestore write failed for ${docId}:`, errText);
+  } else {
+    console.log(`Firestore: wrote trip ${docId}`);
+  }
+}
+
+async function firestoreDeleteTrip(env, trip) {
+  const token = await getFirebaseIdToken(env);
+  if (!token) return;
+
+  const projectId = env.FIREBASE_PROJECT_ID || "sms-dlx";
+  const docId = getTripDocId(trip);
+  const path = `organizations/${ORG_ID}/trips/${docId}`;
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${path}?key=${env.FIREBASE_API_KEY}`;
+
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Firestore delete failed for ${docId}:`, errText);
+  } else {
+    console.log(`Firestore: deleted trip ${docId}`);
+  }
+}
+
+// ── Main Router ──────────────────────────────────────────────────────────────
+
 export default {
   async fetch(request, env) {
-    // Handle CORS preflight
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
@@ -52,7 +182,6 @@ export default {
 // ── Webhook Handler ──────────────────────────────────────────────────────────
 
 async function handleWebhook(request, env) {
-  // Verify shared secret
   const secret = request.headers.get("X-Webhook-Secret") || "";
   if (!env.WEBHOOK_SECRET || secret !== env.WEBHOOK_SECRET) {
     return jsonResponse({ error: "Unauthorized" }, 401);
@@ -61,7 +190,6 @@ async function handleWebhook(request, env) {
   const payload = await request.json();
   console.log("Webhook payload:", JSON.stringify(payload).slice(0, 2000));
 
-  // iCabbi may send a single booking or an array
   const bookings = Array.isArray(payload) ? payload : [payload];
 
   let stored = 0;
@@ -72,37 +200,36 @@ async function handleWebhook(request, env) {
     console.log(`Designate: id=${trip.id} vehicle=${trip.vehicleRef} passenger=${trip.passenger} date=${trip.date}`);
 
     const key = `trips:${trip.date}`;
-
-    // Read existing trips for this date
     const existing = await getTripsFromKV(env, key);
 
-    // Upsert: replace if same trip ID exists, otherwise append
-    // When a trip is reassigned to a different vehicle, the ID stays the same —
-    // so findIndex by ID correctly replaces the old vehicle's entry.
+    // Upsert by trip ID, fallback to passenger+time match
     let idx = trip.id ? existing.findIndex((t) => t.id === trip.id) : -1;
 
-    // Fallback: if no ID match, look for same passenger + same time (reassignment without stable ID)
     if (idx < 0 && trip.passenger && trip.time) {
       idx = existing.findIndex((t) =>
         t.passenger === trip.passenger && t.time === trip.time && t.id !== trip.id
       );
       if (idx >= 0) {
         console.log(`Reassignment detected: ${trip.passenger} moved from vehicle ${existing[idx].vehicleRef} to ${trip.vehicleRef}`);
+        // Delete old Firestore doc if the ID changed
+        firestoreDeleteTrip(env, existing[idx]).catch(e => console.error("Firestore cleanup error:", e));
       }
     }
 
     if (idx >= 0) {
       existing[idx] = trip;
-      console.log(`Updated trip ${trip.id} for vehicle ${trip.vehicleRef} on ${trip.date}`);
     } else {
       existing.push(trip);
-      console.log(`Added trip ${trip.id || "(no id)"} for vehicle ${trip.vehicleRef} on ${trip.date} — now ${existing.length} trips this date`);
     }
 
-    // Write back with 7-day TTL
+    // Write to KV (fast cache)
     await env.TRIPS.put(key, JSON.stringify(existing), {
       expirationTtl: SEVEN_DAYS,
     });
+
+    // Write to Firestore (source of truth) — fire and forget
+    firestoreWriteTrip(env, trip).catch(e => console.error("Firestore write error:", e));
+
     stored++;
   }
 
@@ -112,7 +239,6 @@ async function handleWebhook(request, env) {
 // ── Undesignate Handler ─────────────────────────────────────────────────────
 
 async function handleUndesignate(request, env) {
-  // Verify shared secret
   const secret = request.headers.get("X-Webhook-Secret") || "";
   if (!env.WEBHOOK_SECRET || secret !== env.WEBHOOK_SECRET) {
     return jsonResponse({ error: "Unauthorized" }, 401);
@@ -126,18 +252,15 @@ async function handleUndesignate(request, env) {
   for (const raw of bookings) {
     const booking = raw.booking || raw.data || raw;
 
-    // Extract the trip ID
     const id = String(
       booking.perma_id || booking.id || booking.booking_id || ""
     ).trim();
 
-    // Extract vehicle ref for fallback matching
     const vehicleRef = String(
       booking.vehicle_number || booking.driver?.vehicle?.ref ||
       booking.vehicle_ref || booking.vehicleRef || booking.vehicle_id || ""
     ).trim();
 
-    // Extract passenger for fallback matching
     const passenger = booking.client_name || booking.name ||
       booking.passenger_name || booking.customer_name || "";
 
@@ -148,7 +271,6 @@ async function handleUndesignate(request, env) {
 
     console.log(`Undesignate: id=${id} vehicle=${vehicleRef} passenger=${passenger}`);
 
-    // Extract the date to find the right KV key
     const rawDate =
       booking.job_date ||
       booking.scheduled_pickup_date ||
@@ -160,18 +282,16 @@ async function handleUndesignate(request, env) {
     let date = extractDate(rawDate);
 
     if (date) {
-      // We know the date — remove from that specific key
-      const deleted = await removeTripFromDate(env, date, id, vehicleRef, passenger);
-      if (deleted) removed++;
+      const result = await removeTripFromDate(env, date, id, vehicleRef, passenger);
+      if (result.deleted) removed++;
     } else {
-      // No date in payload — scan recent dates (today + next 7 days)
       const today = new Date();
       for (let i = 0; i < 8; i++) {
         const d = new Date(today);
         d.setDate(d.getDate() + i);
         const dateStr = d.toISOString().split("T")[0];
-        const deleted = await removeTripFromDate(env, dateStr, id, vehicleRef, passenger);
-        if (deleted) { removed++; break; }
+        const result = await removeTripFromDate(env, dateStr, id, vehicleRef, passenger);
+        if (result.deleted) { removed++; break; }
       }
     }
   }
@@ -184,16 +304,18 @@ async function removeTripFromDate(env, date, tripId, vehicleRef, passenger) {
   const key = `trips:${date}`;
   const existing = await getTripsFromKV(env, key);
   const before = existing.length;
+
+  const removedTrips = [];
   const filtered = existing.filter((t) => {
-    // Match by trip ID if available
-    if (tripId && t.id === tripId) return false;
-    // Fallback: match by passenger + vehicle when no ID match
-    if (!tripId && passenger && vehicleRef && t.passenger === passenger && t.vehicleRef === vehicleRef) return false;
+    if (tripId && t.id === tripId) { removedTrips.push(t); return false; }
+    if (!tripId && passenger && vehicleRef && t.passenger === passenger && t.vehicleRef === vehicleRef) { removedTrips.push(t); return false; }
     return true;
   });
 
   if (filtered.length < before) {
-    console.log(`Removed ${before - filtered.length} trip(s) from ${key} (${before} → ${filtered.length})`);
+    console.log(`Removed ${before - filtered.length} trip(s) from ${key}`);
+
+    // Update KV
     if (filtered.length === 0) {
       await env.TRIPS.delete(key);
     } else {
@@ -201,10 +323,16 @@ async function removeTripFromDate(env, date, tripId, vehicleRef, passenger) {
         expirationTtl: SEVEN_DAYS,
       });
     }
-    return true;
+
+    // Delete from Firestore
+    for (const trip of removedTrips) {
+      firestoreDeleteTrip(env, trip).catch(e => console.error("Firestore delete error:", e));
+    }
+
+    return { deleted: true };
   }
-  console.log(`No matching trip found in ${key} (id=${tripId}, vehicle=${vehicleRef}, passenger=${passenger})`);
-  return false;
+
+  return { deleted: false };
 }
 
 function extractDate(rawDate) {
@@ -220,7 +348,7 @@ function extractDate(rawDate) {
   return "";
 }
 
-// ── Trips API ────────────────────────────────────────────────────────────────
+// ── Trips API (still serves from KV for backwards compatibility) ─────────
 
 async function handleGetTrips(request, env) {
   const url = new URL(request.url);
@@ -231,7 +359,6 @@ async function handleGetTrips(request, env) {
     return jsonResponse({ error: "Missing 'from' query parameter (YYYY-MM-DD)" }, 400);
   }
 
-  // Collect trips for every date in range
   const allTrips = {};
   const dates = getDateRange(from, to);
 
@@ -271,15 +398,12 @@ async function handleTripStats(request, env) {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function normalizeTrip(raw) {
-  // Handle various iCabbi payload shapes
   const booking = raw.booking || raw.data || raw;
 
-  // Use booking-specific IDs only — never driver_id (which is shared across trips for the same driver)
   const id = String(
     booking.perma_id || booking.id || booking.booking_id || ""
   ).trim();
 
-  // Extract date from various fields (including iCabbi's job_date)
   const rawDate =
     booking.job_date ||
     booking.scheduled_pickup_date ||
@@ -293,7 +417,6 @@ function normalizeTrip(raw) {
     date = new Date().toISOString().split("T")[0];
   }
 
-  // Extract time (including iCabbi's job_time)
   const time =
     booking.job_time ||
     booking.scheduled_pickup_time ||
@@ -310,7 +433,6 @@ function normalizeTrip(raw) {
     ""
   ).trim();
 
-  // Build driver name from first/last if available
   const driverName = [booking.driver_first, booking.driver_last]
     .filter(Boolean)
     .join(" ");
