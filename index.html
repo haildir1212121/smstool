@@ -882,6 +882,16 @@ s.forEach(d => {
     const regions = detectRegions(ws);
 
     regions.forEach(region => {
+      // Debug: dump first data row's raw cells for this region
+      const debugRow = region.startRow;
+      const debugCells = {};
+      for (let c = region.nameCol; c <= region.nameCol + 5; c++) {
+        const addr = XLSX.utils.encode_cell({ r: debugRow - 1, c });
+        const cell = ws[addr];
+        debugCells[addr] = cell ? { v: cell.v, t: cell.t } : null;
+      }
+      console.log(`[Parse] ${region.name} row ${debugRow} raw:`, debugCells);
+
       for (let r = region.startRow; r <= region.endRow; r++) {
         const nameCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.nameCol })];
         const vehCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.vehicleCol })];
