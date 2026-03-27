@@ -1206,39 +1206,78 @@ s.forEach(d => {
 
     try {
       setStepState(1, "active", "Fetching...");
-
-      // Read trips from Firestore (source of truth)
-      const tripsRef = collection(db, "organizations", SHARED_ORG_ID, "trips");
-      let q;
-      if (isMultiDay) {
-        q = query(tripsRef, where("date", ">=", tripDate), where("date", "<=", endDate));
-      } else {
-        q = query(tripsRef, where("date", "==", tripDate));
-      }
-
-      const snap = await getDocs(q);
+      console.log(`[TripTexts] Querying date range: ${tripDate} to ${endDate} (today=${todayDow})`);
 
       // Group all trips by vehicle ref
       ttTrips = {};
       const vehicleRefSet = new Set(ttDrivers.map(d => d.vehicle));
 
-      snap.forEach(docSnap => {
-        const trip = docSnap.data();
-        const vRef = String(trip.vehicleRef || "").trim();
-        if (!vRef || !vehicleRefSet.has(vRef)) return;
-        if (!ttTrips[vRef]) ttTrips[vRef] = [];
-        ttTrips[vRef].push({
-          id: trip.id || "",
-          time: trip.time || "",
-          date: trip.date || "",
-          pickup: trip.pickup || "",
-          dropoff: trip.dropoff || "",
-          passenger: trip.passenger || "",
-          passengerPhone: trip.passengerPhone || "",
-          notes: trip.notes || "",
-          status: trip.status || ""
+      // Try worker API first (Cloudflare KV — always up to date), fall back to Firestore
+      let tripsLoaded = false;
+      if (settings.workerUrl) {
+        try {
+          const workerRes = await fetch(`${settings.workerUrl}/trips?from=${tripDate}&to=${endDate}`);
+          if (workerRes.ok) {
+            const data = await workerRes.json();
+            // data.trips is { "YYYY-MM-DD": [ tripObj, ... ] }
+            const allTrips = data.trips || {};
+            for (const [date, trips] of Object.entries(allTrips)) {
+              for (const trip of trips) {
+                const vRef = String(trip.vehicleRef || "").trim();
+                if (!vRef || !vehicleRefSet.has(vRef)) continue;
+                if (!ttTrips[vRef]) ttTrips[vRef] = [];
+                ttTrips[vRef].push({
+                  id: trip.id || "",
+                  time: trip.time || "",
+                  date: trip.date || "",
+                  pickup: trip.pickup || "",
+                  dropoff: trip.dropoff || "",
+                  passenger: trip.passenger || "",
+                  passengerPhone: trip.passengerPhone || "",
+                  notes: trip.notes || "",
+                  status: trip.status || ""
+                });
+              }
+            }
+            tripsLoaded = true;
+            console.log(`[TripTexts] Loaded from worker API`);
+          }
+        } catch (workerErr) {
+          console.warn("[TripTexts] Worker API failed, falling back to Firestore:", workerErr);
+        }
+      }
+
+      // Fallback: read from Firestore
+      if (!tripsLoaded) {
+        const tripsRef = collection(db, "organizations", SHARED_ORG_ID, "trips");
+        let q;
+        if (isMultiDay) {
+          q = query(tripsRef, where("date", ">=", tripDate), where("date", "<=", endDate));
+        } else {
+          q = query(tripsRef, where("date", "==", tripDate));
+        }
+
+        const snap = await getDocs(q);
+        console.log(`[TripTexts] Firestore returned ${snap.size} docs`);
+
+        snap.forEach(docSnap => {
+          const trip = docSnap.data();
+          const vRef = String(trip.vehicleRef || "").trim();
+          if (!vRef || !vehicleRefSet.has(vRef)) return;
+          if (!ttTrips[vRef]) ttTrips[vRef] = [];
+          ttTrips[vRef].push({
+            id: trip.id || "",
+            time: trip.time || "",
+            date: trip.date || "",
+            pickup: trip.pickup || "",
+            dropoff: trip.dropoff || "",
+            passenger: trip.passenger || "",
+            passengerPhone: trip.passengerPhone || "",
+            notes: trip.notes || "",
+            status: trip.status || ""
+          });
         });
-      });
+      }
 
       // Sort each vehicle's trips by time
       Object.values(ttTrips).forEach(arr => arr.sort((a, b) => (a.time || "").localeCompare(b.time || "")));
