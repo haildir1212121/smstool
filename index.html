@@ -1204,66 +1204,32 @@ s.forEach(d => {
     }
     const isMultiDay = tripDate !== endDate;
 
+    if (!settings.workerUrl) {
+      window.showToast("Worker URL not configured — set it in iCabbi Settings", "error");
+      setStepState(1, "error", "No URL");
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch Trips';
+      return;
+    }
+
     try {
       setStepState(1, "active", "Fetching...");
-      console.log(`[TripTexts] Querying date range: ${tripDate} to ${endDate} (today=${todayDow})`);
+      console.log(`[TripTexts] Querying worker: ${tripDate} to ${endDate} (today=${todayDow})`);
+
+      const workerRes = await fetch(`${settings.workerUrl}/trips?from=${tripDate}&to=${endDate}`);
+      if (!workerRes.ok) throw new Error(`Worker returned ${workerRes.status}`);
+
+      const data = await workerRes.json();
+      const allTrips = data.trips || {};
 
       // Group all trips by vehicle ref
       ttTrips = {};
       const vehicleRefSet = new Set(ttDrivers.map(d => d.vehicle));
 
-      // Try worker API first (Cloudflare KV — always up to date), fall back to Firestore
-      let tripsLoaded = false;
-      if (settings.workerUrl) {
-        try {
-          const workerRes = await fetch(`${settings.workerUrl}/trips?from=${tripDate}&to=${endDate}`);
-          if (workerRes.ok) {
-            const data = await workerRes.json();
-            // data.trips is { "YYYY-MM-DD": [ tripObj, ... ] }
-            const allTrips = data.trips || {};
-            for (const [date, trips] of Object.entries(allTrips)) {
-              for (const trip of trips) {
-                const vRef = String(trip.vehicleRef || "").trim();
-                if (!vRef || !vehicleRefSet.has(vRef)) continue;
-                if (!ttTrips[vRef]) ttTrips[vRef] = [];
-                ttTrips[vRef].push({
-                  id: trip.id || "",
-                  time: trip.time || "",
-                  date: trip.date || "",
-                  pickup: trip.pickup || "",
-                  dropoff: trip.dropoff || "",
-                  passenger: trip.passenger || "",
-                  passengerPhone: trip.passengerPhone || "",
-                  notes: trip.notes || "",
-                  status: trip.status || ""
-                });
-              }
-            }
-            tripsLoaded = true;
-            console.log(`[TripTexts] Loaded from worker API`);
-          }
-        } catch (workerErr) {
-          console.warn("[TripTexts] Worker API failed, falling back to Firestore:", workerErr);
-        }
-      }
-
-      // Fallback: read from Firestore
-      if (!tripsLoaded) {
-        const tripsRef = collection(db, "organizations", SHARED_ORG_ID, "trips");
-        let q;
-        if (isMultiDay) {
-          q = query(tripsRef, where("date", ">=", tripDate), where("date", "<=", endDate));
-        } else {
-          q = query(tripsRef, where("date", "==", tripDate));
-        }
-
-        const snap = await getDocs(q);
-        console.log(`[TripTexts] Firestore returned ${snap.size} docs`);
-
-        snap.forEach(docSnap => {
-          const trip = docSnap.data();
+      for (const [date, trips] of Object.entries(allTrips)) {
+        for (const trip of trips) {
           const vRef = String(trip.vehicleRef || "").trim();
-          if (!vRef || !vehicleRefSet.has(vRef)) return;
+          if (!vRef || !vehicleRefSet.has(vRef)) continue;
           if (!ttTrips[vRef]) ttTrips[vRef] = [];
           ttTrips[vRef].push({
             id: trip.id || "",
@@ -1276,7 +1242,7 @@ s.forEach(d => {
             notes: trip.notes || "",
             status: trip.status || ""
           });
-        });
+        }
       }
 
       // Sort each vehicle's trips by time
@@ -1291,7 +1257,6 @@ s.forEach(d => {
       window.ttIsMultiDay = isMultiDay;
       window.ttTripDateRange = isMultiDay ? `${tripDate} to ${endDate}` : tripDate;
 
-      const sendCount = ttDrivers.filter(d => d.matched).length;
       const totalTrips = Object.values(ttTrips).reduce((s, arr) => s + arr.length, 0);
       const dayLabel = isMultiDay ? ` (Sat-Mon)` : "";
       setStepState(1, "done", `${totalTrips} trips`);
@@ -1300,11 +1265,6 @@ s.forEach(d => {
       // Show review button
       document.getElementById("ttReviewBtn").classList.remove("hidden");
       renderTripTextsView();
-
-      // Set up real-time listener for live updates (only if using Firestore as source)
-      if (!tripsLoaded) {
-        setupTripListener(tripDate, endDate);
-      }
 
     } catch (e) {
       console.error("Trip fetch error:", e);
@@ -1315,60 +1275,6 @@ s.forEach(d => {
       btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch Trips';
     }
   };
-
-  // --- Real-time Trip Listener ---
-  let tripListenerUnsub = null;
-
-  function setupTripListener(fromDate, toDate) {
-    // Clean up any existing listener
-    if (tripListenerUnsub) {
-      tripListenerUnsub();
-      tripListenerUnsub = null;
-    }
-
-    const tripsRef = collection(db, "organizations", SHARED_ORG_ID, "trips");
-    let q;
-    if (fromDate !== toDate) {
-      q = query(tripsRef, where("date", ">=", fromDate), where("date", "<=", toDate));
-    } else {
-      q = query(tripsRef, where("date", "==", fromDate));
-    }
-
-    tripListenerUnsub = onSnapshot(q, (snap) => {
-      // Rebuild ttTrips from the snapshot
-      const vehicleRefSet = new Set(ttDrivers.map(d => d.vehicle));
-      ttTrips = {};
-
-      snap.forEach(docSnap => {
-        const trip = docSnap.data();
-        const vRef = String(trip.vehicleRef || "").trim();
-        if (!vRef || !vehicleRefSet.has(vRef)) return;
-        if (!ttTrips[vRef]) ttTrips[vRef] = [];
-        ttTrips[vRef].push({
-          id: trip.id || "",
-          time: trip.time || "",
-          date: trip.date || "",
-          pickup: trip.pickup || "",
-          dropoff: trip.dropoff || "",
-          passenger: trip.passenger || "",
-          passengerPhone: trip.passengerPhone || "",
-          notes: trip.notes || "",
-          status: trip.status || ""
-        });
-      });
-
-      Object.values(ttTrips).forEach(arr => arr.sort((a, b) => (a.time || "").localeCompare(b.time || "")));
-
-      // Re-assign trips to drivers and refresh UI
-      ttDrivers.forEach(d => { d.trips = ttTrips[d.vehicle] || []; });
-
-      const totalTrips = Object.values(ttTrips).reduce((s, arr) => s + arr.length, 0);
-      setStepState(1, "done", `${totalTrips} trips (live)`);
-      renderTripTextsView();
-    }, (err) => {
-      console.error("Trip listener error:", err);
-    });
-  }
 
   // --- Message Generation & Review ---
   function formatDayLabel(dateStr) {
