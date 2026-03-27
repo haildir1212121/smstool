@@ -1190,19 +1190,10 @@ s.forEach(d => {
 
     const tripDate = settings.tripDate || new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
-    // Determine date range based on TODAY's day of week
-    // Thursday: just fetch tomorrow (Friday), single-day "trips for tomorrow"
-    // Friday: fetch Saturday, Sunday, Monday as separate texts per day
-    const tripDateObj = new Date(tripDate + "T12:00:00");
-    const todayDow = new Date().getDay(); // 0=Sun, 5=Fri, 4=Thu
-    let endDate = tripDate;
-    if (todayDow === 5) {
-      // Today is Friday — cover Sat, Sun, Mon
-      const mon = new Date(tripDateObj);
-      mon.setDate(mon.getDate() + 2);
-      endDate = mon.toISOString().split("T")[0];
-    }
-    const isMultiDay = tripDate !== endDate;
+    // Always query just tomorrow's date
+    const endDate = tripDate;
+    const isMultiDay = false;
+    const todayDow = new Date().getDay();
 
     if (!settings.workerUrl) {
       window.showToast("Worker URL not configured — set it in iCabbi Settings", "error");
