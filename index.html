@@ -1405,8 +1405,10 @@ s.forEach(d => {
   window.openTripReviewModal = () => {
     ttMessages = [];
     const isMultiDay = window.ttIsMultiDay;
-    // Include all matched drivers — every named driver gets a message
+    // Include all matched drivers with a tablet/start time
     const matchedWithTrips = ttDrivers.filter(d => d.matched && d.tablet);
+    const noTripDrivers = matchedWithTrips.filter(d => d.trips.length === 0);
+    console.log(`[Review] ${matchedWithTrips.length} drivers (${noTripDrivers.length} with no trips): ${noTripDrivers.map(d => d.name).join(", ")}`);
 
     matchedWithTrips.forEach(d => {
       if (isMultiDay && d.trips.length > 0) {
