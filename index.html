@@ -961,12 +961,16 @@ s.forEach(d => {
 
       const startRow = foundHeaderRow + 1;
 
-      // Scan downward to find end of data (stop at first empty name cell or 100 rows max)
+      // Scan downward to find end of data using vehicle column (name can be empty for some rows)
       let endRow = startRow;
+      const scanCol = rd.vehicleCol;
       for (let r = startRow; r < startRow + 100; r++) {
-        const cell = ws[XLSX.utils.encode_cell({ r: r - 1, c: rd.nameCol })];
-        const val = cell && cell.v ? String(cell.v).trim() : "";
-        if (!val || val.toLowerCase() === "name") break; // empty row or next section header
+        const nameCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: rd.nameCol })];
+        const vehCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: scanCol })];
+        const nameVal = nameCell && nameCell.v ? String(nameCell.v).trim() : "";
+        const vehVal = vehCell && vehCell.v ? String(vehCell.v).trim() : "";
+        if (!nameVal && !vehVal) break; // truly empty row
+        if (nameVal.toLowerCase() === "name") break; // next section header
         endRow = r;
       }
 
