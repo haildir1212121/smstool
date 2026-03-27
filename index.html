@@ -1502,7 +1502,7 @@ s.forEach(d => {
     ttMessages = [];
     const isMultiDay = window.ttIsMultiDay;
     // Include all matched drivers — every named driver gets a message
-    const matchedWithTrips = ttDrivers.filter(d => d.matched);
+    const matchedWithTrips = ttDrivers.filter(d => d.matched && d.tablet);
 
     matchedWithTrips.forEach(d => {
       if (isMultiDay && d.trips.length > 0) {
