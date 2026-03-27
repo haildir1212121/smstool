@@ -1301,8 +1301,10 @@ s.forEach(d => {
       document.getElementById("ttReviewBtn").classList.remove("hidden");
       renderTripTextsView();
 
-      // Set up real-time listener for live updates
-      setupTripListener(tripDate, endDate);
+      // Set up real-time listener for live updates (only if using Firestore as source)
+      if (!tripsLoaded) {
+        setupTripListener(tripDate, endDate);
+      }
 
     } catch (e) {
       console.error("Trip fetch error:", e);
