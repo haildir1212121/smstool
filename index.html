@@ -925,39 +925,53 @@ s.forEach(d => {
   }
 
   function detectRegions(ws) {
-    // Based on the known Excel structure, define regions with their column mappings
     // Column indices: A=0, B=1, C=2, D=3, E=4, F=5, G=6, H=7, I=8, J=9, K=10, L=11, M=12, N=13, O=14, P=15, Q=16, R=17
     const regions = [];
 
     const regionDefs = [
-      // Eugene: A4 title, A5=Name, B5=Vehicle, C5=Tablet, D5=End — rows end at 37
-      { name: "Eugene", nameCol: 0, vehicleCol: 1, originCol: null, tabletCol: 2, headerRow: 5, startRow: 6, endRow: 37 },
-      // Albany/Corvallis/Salem: G4 title, G5=Name, H5=Origin, I5=Vehicle, J5=Tablet, K5=End — rows end at 25
-      { name: "Albany/Corvallis/Salem", nameCol: 6, originCol: 7, vehicleCol: 8, tabletCol: 9, headerRow: 5, startRow: 6, endRow: 25 },
-      // Coast: M4 title, M5=Name, N5=Origin, O5=Vehicle, P5=Tablet, Q5=End — rows end at 32
-      { name: "Coast", nameCol: 12, originCol: 13, vehicleCol: 14, tabletCol: 15, headerRow: 5, startRow: 6, endRow: 32 },
-      // Roseburg: G26 title, G27=Name, H27=Origin, I27=Vehicle, J27=Tablet, K27=End — rows end at 37
-      { name: "Roseburg", nameCol: 6, originCol: 7, vehicleCol: 8, tabletCol: 9, headerRow: 27, startRow: 28, endRow: 37 },
+      // Eugene: A4 title, A5=Name, B5=Vehicle, C5=Tablet, D5=End
+      { name: "Eugene", nameCol: 0, vehicleCol: 1, originCol: null, tabletCol: 2, headerRow: 5, startRow: 6 },
+      // Albany/Corvallis/Salem: G4 title, G5=Name, H5=Origin, I5=Vehicle, J5=Tablet, K5=End
+      { name: "Albany/Corvallis/Salem", nameCol: 6, originCol: 7, vehicleCol: 8, tabletCol: 9, headerRow: 5, startRow: 6 },
+      // Coast: M4 title, M5=Name, N5=Origin, O5=Vehicle, P5=Tablet, Q5=End
+      { name: "Coast", nameCol: 12, originCol: 13, vehicleCol: 14, tabletCol: 15, headerRow: 5, startRow: 6 },
+      // Roseburg: G26 title, G27=Name, H27=Origin, I27=Vehicle, J27=Tablet, K27=End
+      { name: "Roseburg", nameCol: 6, originCol: 7, vehicleCol: 8, tabletCol: 9, headerRow: 27, startRow: 28 },
       // Portland/I-84 Corridor: A40 title, A41=Name, B41=Origin, C41=Vehicle, D41=Start, E41=End
-      { name: "Portland/I-84 Corridor", nameCol: 0, originCol: 1, vehicleCol: 2, tabletCol: 3, headerRow: 41, startRow: 42, endRow: 57 },
+      { name: "Portland/I-84 Corridor", nameCol: 0, originCol: 1, vehicleCol: 2, tabletCol: 3, headerRow: 41, startRow: 42 },
       // LTD: G39 title, G40=Name, H40=Origin, I40=Vehicle, J40=Start, K40=Stop
-      { name: "LTD", nameCol: 6, originCol: 7, vehicleCol: 8, tabletCol: 9, stopCol: 10, headerRow: 40, startRow: 41, endRow: 57 },
-      // Direct Medical Transport: M33 title, M34=Name, N34=Origin, O34=Vehicle, P34=Tablet, Q34=End — rows end at 57
-      { name: "Direct Medical Transport", nameCol: 12, originCol: 13, vehicleCol: 14, tabletCol: 15, headerRow: 34, startRow: 35, endRow: 57 },
+      { name: "LTD", nameCol: 6, originCol: 7, vehicleCol: 8, tabletCol: 9, stopCol: 10, headerRow: 40, startRow: 41 },
+      // Direct Medical Transport: M33 title, M34=Name, N34=Origin, O34=Vehicle, P34=Tablet, Q34=End
+      { name: "Direct Medical Transport", nameCol: 12, originCol: 13, vehicleCol: 14, tabletCol: 15, headerRow: 34, startRow: 35 },
     ];
 
-    // Validate: only include regions that have a "Name" header or data in first few rows
+    // Dynamically find header rows and scan for end of data
     regionDefs.forEach(rd => {
-      const headerCell = ws[XLSX.utils.encode_cell({ r: rd.headerRow - 1, c: rd.nameCol })];
-      const hasHeader = headerCell && String(headerCell.v).toLowerCase().startsWith("name");
-      let hasData = false;
-      for (let dr = rd.startRow; dr < Math.min(rd.startRow + 3, rd.endRow + 1); dr++) {
-        const cell = ws[XLSX.utils.encode_cell({ r: dr - 1, c: rd.nameCol })];
-        if (cell && cell.v) { hasData = true; break; }
+      // Try to find "Name" header near expected position (search ±5 rows)
+      let foundHeaderRow = -1;
+      for (let r = Math.max(1, rd.headerRow - 5); r <= rd.headerRow + 5; r++) {
+        const cell = ws[XLSX.utils.encode_cell({ r: r - 1, c: rd.nameCol })];
+        if (cell && String(cell.v).toLowerCase().startsWith("name")) {
+          foundHeaderRow = r;
+          break;
+        }
       }
-      if (hasHeader || hasData) {
-        regions.push(rd);
+
+      if (foundHeaderRow < 0) return; // Region not found in this sheet
+
+      const startRow = foundHeaderRow + 1;
+
+      // Scan downward to find end of data (stop at first empty name cell or 100 rows max)
+      let endRow = startRow;
+      for (let r = startRow; r < startRow + 100; r++) {
+        const cell = ws[XLSX.utils.encode_cell({ r: r - 1, c: rd.nameCol })];
+        const val = cell && cell.v ? String(cell.v).trim() : "";
+        if (!val || val.toLowerCase() === "name") break; // empty row or next section header
+        endRow = r;
       }
+
+      regions.push({ ...rd, headerRow: foundHeaderRow, startRow, endRow });
+      console.log(`[Region] ${rd.name}: header=${foundHeaderRow}, rows=${startRow}-${endRow}`);
     });
 
     return regions;
