@@ -1264,6 +1264,7 @@ s.forEach(d => {
 
       // Store multi-day flag for message generation
       window.ttIsMultiDay = isMultiDay;
+      window.ttTripDate = tripDate;
       window.ttTripDateRange = isMultiDay ? `${tripDate} to ${endDate}` : tripDate;
 
       const totalTrips = Object.values(ttTrips).reduce((s, arr) => s + arr.length, 0);
@@ -1389,7 +1390,7 @@ s.forEach(d => {
   }
 
   function generateTripMessage(driver) {
-    const dayLabel = driver.trips[0]?.date ? formatDayLabel(driver.trips[0].date) : "TOMORROW";
+    const dayLabel = driver.trips[0]?.date ? formatDayLabel(driver.trips[0].date) : formatDayLabel(window.ttTripDate);
 
     if (driver.trips.length === 0) {
       return `${dayLabel}: You are assigned to vehicle ${driver.vehicle}. Sign in @ ${driver.tablet}. Please check your tablet for trip details. Reply CONFIRM to acknowledge. Thank you!`;
