@@ -1409,7 +1409,8 @@ s.forEach(d => {
     }
 
     if (driver.trips.length === 0) {
-      return `${dayLabel}: You are assigned to vehicle ${driver.vehicle}. Sign in @ ${driver.tablet}. Please check your tablet for trip details. Reply CONFIRM to acknowledge. Thank you!`;
+      const signInPart = driver.tablet ? ` Sign in @ ${driver.tablet}.` : "";
+      return `${dayLabel}: You are assigned to vehicle ${driver.vehicle}.${signInPart} Please check your tablet for trip details. Reply CONFIRM to acknowledge. Thank you!`;
     }
 
     const seenPassengers = new Set();
@@ -1421,8 +1422,8 @@ s.forEach(d => {
   window.openTripReviewModal = () => {
     ttMessages = [];
     const isMultiDay = window.ttIsMultiDay;
-    // Include all matched drivers with a tablet/start time
-    const matchedWithTrips = ttDrivers.filter(d => d.matched && d.tablet);
+    // Include matched drivers that have a tablet/start time OR have trips assigned
+    const matchedWithTrips = ttDrivers.filter(d => d.matched && (d.tablet || d.trips.length > 0));
     const skippedNoMatch = ttDrivers.filter(d => d.tablet && !d.matched);
     const skippedNoTablet = ttDrivers.filter(d => d.matched && !d.tablet);
     const noTripDrivers = matchedWithTrips.filter(d => d.trips.length === 0);
