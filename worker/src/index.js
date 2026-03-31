@@ -58,7 +58,8 @@ function rowToTrip(row) {
 }
 
 async function supabaseRequest(env, path, options = {}) {
-  const url = `${env.SUPABASE_URL}/rest/v1/${path}`;
+  const baseUrl = (env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const url = `${baseUrl}/rest/v1/${path}`;
   const headers = {
     apikey: env.SUPABASE_SERVICE_KEY,
     Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
