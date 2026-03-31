@@ -195,8 +195,10 @@ function tripToFirestoreDoc(trip) {
 
 function getTripDocId(trip) {
   if (trip.id) return trip.id;
-  // Include pickup+dropoff to distinguish return trips for the same passenger
-  const raw = `${trip.vehicleRef}_${trip.date}_${trip.time}_${trip.passenger}_${trip.pickup}_${trip.dropoff}`;
+  // Vehicle is NOT part of the ID — it's a mutable attribute that can change.
+  // Trip identity = date + time + passenger + pickup + dropoff.
+  // Return trips differ by pickup/dropoff. Different times = different trips.
+  const raw = `${trip.date}_${trip.time}_${trip.passenger}_${trip.pickup}_${trip.dropoff}`;
   return raw.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
@@ -305,27 +307,11 @@ async function handleWebhook(request, env) {
       trip.id = getTripDocId(trip);
     }
 
-    console.log(`Designate: id=${trip.id} vehicle=${trip.vehicleRef} passenger=${trip.passenger} date=${trip.date}`);
+    console.log(`Designate: id=${trip.id} vehicle=${trip.vehicleRef} passenger=${trip.passenger} date=${trip.date} time=${trip.time}`);
 
-    // Check for reassignment: same passenger+time+pickup+dropoff moved to a different vehicle.
-    // Only triggers when BOTH the old and new trips have a vehicle assigned —
-    // an empty old vehicle means the trip is just getting its first assignment, not a reassignment.
-    if (trip.passenger && trip.time && trip.vehicleRef) {
-      const existing = await supabaseGetTrips(env, trip.date, trip.date);
-      const oldTrip = existing.find(
-        (r) => r.passenger === trip.passenger && r.time === trip.time
-          && r.pickup === (trip.pickup || "") && r.dropoff === (trip.dropoff || "")
-          && r.vehicle_ref && r.vehicle_ref !== trip.vehicleRef
-          && r.id !== trip.id
-      );
-      if (oldTrip) {
-        console.log(`Reassignment detected: ${trip.passenger} moved from vehicle ${oldTrip.vehicle_ref} to ${trip.vehicleRef}`);
-        await supabaseDeleteById(env, oldTrip.id);
-        firestoreDeleteTrip(env, rowToTrip(oldTrip)).catch((e) => console.error("Firestore cleanup error:", e));
-      }
-    }
-
-    // Atomic UPSERT into Supabase — no read-modify-write needed
+    // Atomic UPSERT into Supabase — no read-modify-write needed.
+    // Since vehicleRef is NOT part of the trip ID, reassigning a trip to a
+    // different vehicle naturally updates the existing row via UPSERT.
     const ok = await supabaseUpsertTrip(env, trip);
     if (ok) stored++;
 
