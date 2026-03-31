@@ -279,9 +279,13 @@
   <div id="icabbiSettingsModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
       <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold"><i class="fa-solid fa-taxi mr-2 text-amber-500"></i>Trip Settings</h3><button onclick="document.getElementById('icabbiSettingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div>
-      <p class="text-xs text-slate-500 mb-4">Trips are received via iCabbi webhooks through your Worker and stored in Firestore. The Worker URL is used for webhook configuration.</p>
-      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Worker URL</label>
+      <p class="text-xs text-slate-500 mb-4">Trips are received via iCabbi webhooks and stored in Supabase for strong consistency. Configure your Supabase project below.</p>
+      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Worker URL <span class="text-slate-400 normal-case">(for webhook config)</span></label>
       <input id="icabbiWorkerUrl" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="https://icabbi-trips.your-subdomain.workers.dev">
+      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Supabase URL</label>
+      <input id="icabbiSupabaseUrl" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="https://xxxxx.supabase.co">
+      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Supabase Anon Key</label>
+      <input id="icabbiSupabaseKey" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="eyJhbGciOi...">
       <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Trip Date (for fetching)</label>
       <input id="icabbiTripDate" type="date" class="w-full bg-gray-50 border border-gray-200 p-3 mb-4 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm">
       <div class="flex gap-2">
@@ -345,9 +349,15 @@
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
   import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp, where, getDocs, increment, writeBatch } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
   import { getStorage, ref as storageRef, getDownloadURL, uploadBytes } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js";
+  import { createClient as createSupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
   const app = initializeApp({ apiKey: "AIzaSyCaypEoug2f7OTJjKOdkkJPaZDypcr3NF8", authDomain: "sms-dlx.firebaseapp.com", projectId: "sms-dlx", storageBucket: "sms-dlx.firebasestorage.app", messagingSenderId: "522453095698", appId: "1:522453095698:web:ea217285e6e5160ee4cfcb" });
   const auth = getAuth(app); const db = getFirestore(app); const storage = getStorage(app);
+
+  // Supabase client for direct trip queries (strong consistency)
+  const SUPABASE_URL = "https://mdutrtmdjodabggirntb.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1kdXRydG1kam9kYWJnZ2lybnRiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5MDk3MzQsImV4cCI6MjA5MDQ4NTczNH0.GlrbsjnkBSwhnguBQUCb418NxvRO02PhXhBJZ69xTi4";
+  const supabase = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   // ADDED PAGINATION STATE
   let store = { threads: [], logs: [], activeThreadId: null, activeThread: null, pinned: new Set(), drafts: {}, cannedReplies: [], deletedSids: new Set(), lastInboundSidSeen: new Set(), isPolling: false, pendingMedia: [], isFirstLoad: true, onlyUnread: false, onlyUrgent: false, tagFilter: new Set(), notifQueue: {}, notifTimer: null, cmPage: 1, logPage: 1, itemsPerPage: 15 };
   
@@ -808,6 +818,8 @@ s.forEach(d => {
   window.openIcabbiSettings = () => {
     const saved = JSON.parse(localStorage.getItem("icabbi_settings") || "{}");
     document.getElementById("icabbiWorkerUrl").value = saved.workerUrl || "";
+    document.getElementById("icabbiSupabaseUrl").value = saved.supabaseUrl || SUPABASE_URL;
+    document.getElementById("icabbiSupabaseKey").value = saved.supabaseKey || SUPABASE_ANON_KEY;
     const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
     document.getElementById("icabbiTripDate").value = saved.tripDate || tomorrow.toISOString().split("T")[0];
     document.getElementById("icabbiSettingsModal").classList.remove("hidden");
@@ -816,6 +828,8 @@ s.forEach(d => {
   window.saveIcabbiSettings = () => {
     const settings = {
       workerUrl: document.getElementById("icabbiWorkerUrl").value.trim().replace(/\/+$/, "").replace(/\/trips$/, ""),
+      supabaseUrl: document.getElementById("icabbiSupabaseUrl").value.trim(),
+      supabaseKey: document.getElementById("icabbiSupabaseKey").value.trim(),
       tripDate: document.getElementById("icabbiTripDate").value
     };
     localStorage.setItem("icabbi_settings", JSON.stringify(settings));
@@ -1223,45 +1237,39 @@ s.forEach(d => {
     const isMultiDay = false;
     const todayDow = new Date().getDay();
 
-    if (!settings.workerUrl) {
-      window.showToast("Worker URL not configured — set it in iCabbi Settings", "error");
-      setStepState(1, "error", "No URL");
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch Trips';
-      return;
-    }
-
     try {
       setStepState(1, "active", "Fetching...");
-      console.log(`[TripTexts] Querying worker: ${tripDate} to ${endDate} (today=${todayDow})`);
+      console.log(`[TripTexts] Querying Supabase: ${tripDate} to ${endDate} (today=${todayDow})`);
 
-      const workerRes = await fetch(`${settings.workerUrl}/trips?from=${tripDate}&to=${endDate}`);
-      if (!workerRes.ok) throw new Error(`Worker returned ${workerRes.status}`);
+      const { data: rows, error } = await supabase
+        .from("trips")
+        .select("*")
+        .gte("date", tripDate)
+        .lte("date", endDate)
+        .order("date")
+        .order("time");
 
-      const data = await workerRes.json();
-      const allTrips = data.trips || {};
+      if (error) throw new Error(`Supabase error: ${error.message}`);
 
       // Group all trips by vehicle ref
       ttTrips = {};
       const vehicleRefSet = new Set(ttDrivers.map(d => d.vehicle));
 
-      for (const [date, trips] of Object.entries(allTrips)) {
-        for (const trip of trips) {
-          const vRef = String(trip.vehicleRef || "").trim();
-          if (!vRef || !vehicleRefSet.has(vRef)) continue;
-          if (!ttTrips[vRef]) ttTrips[vRef] = [];
-          ttTrips[vRef].push({
-            id: trip.id || "",
-            time: trip.time || "",
-            date: trip.date || "",
-            pickup: trip.pickup || "",
-            dropoff: trip.dropoff || "",
-            passenger: trip.passenger || "",
-            passengerPhone: trip.passengerPhone || "",
-            notes: trip.notes || "",
-            status: trip.status || ""
-          });
-        }
+      for (const row of (rows || [])) {
+        const vRef = String(row.vehicle_ref || "").trim();
+        if (!vRef || !vehicleRefSet.has(vRef)) continue;
+        if (!ttTrips[vRef]) ttTrips[vRef] = [];
+        ttTrips[vRef].push({
+          id: row.id || "",
+          time: row.time || "",
+          date: row.date || "",
+          pickup: row.pickup || "",
+          dropoff: row.dropoff || "",
+          passenger: row.passenger || "",
+          passengerPhone: row.passenger_phone || "",
+          notes: row.notes || "",
+          status: row.status || ""
+        });
       }
 
       // Sort each vehicle's trips by time

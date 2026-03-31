@@ -6,13 +6,11 @@
  * GET  /trips                — returns stored trips for a date range (?from=YYYY-MM-DD&to=YYYY-MM-DD)
  * GET  /trips/stats          — quick count of stored trips for a date
  *
- * Storage: KV (fast cache) + Firestore (source of truth)
- * KV key format:  trips:YYYY-MM-DD  →  JSON array of trip objects
- * KV TTL: 7 days (604800 seconds)
- * Firestore path:  organizations/{orgId}/trips/{docId}
+ * Storage: Supabase (source of truth, strong consistency) + Firestore (fire-and-forget backup)
+ * Supabase table: trips (each trip is a row, atomic UPSERT/DELETE)
+ * Firestore path: organizations/{orgId}/trips/{docId}
  */
 
-const SEVEN_DAYS = 604800;
 const ORG_ID = "dispatch_team_main";
 
 const CORS_HEADERS = {
@@ -21,13 +19,135 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Webhook-Secret",
 };
 
+// ── Supabase REST API helpers ───────────────────────────────────────────────
+
+function tripToRow(trip) {
+  return {
+    id: trip.id,
+    date: trip.date,
+    time: trip.time || "",
+    vehicle_ref: trip.vehicleRef || "",
+    pickup: trip.pickup || "",
+    dropoff: trip.dropoff || "",
+    passenger: trip.passenger || "",
+    passenger_phone: trip.passengerPhone || "",
+    driver_name: trip.driverName || "",
+    driver_phone: trip.driverPhone || "",
+    notes: trip.notes || "",
+    status: trip.status || "",
+    received_at: trip.receivedAt || new Date().toISOString(),
+  };
+}
+
+function rowToTrip(row) {
+  return {
+    id: row.id,
+    date: row.date,
+    time: row.time || "",
+    vehicleRef: row.vehicle_ref || "",
+    pickup: row.pickup || "",
+    dropoff: row.dropoff || "",
+    passenger: row.passenger || "",
+    passengerPhone: row.passenger_phone || "",
+    driverName: row.driver_name || "",
+    driverPhone: row.driver_phone || "",
+    notes: row.notes || "",
+    status: row.status || "",
+    receivedAt: row.received_at || "",
+  };
+}
+
+async function supabaseRequest(env, path, options = {}) {
+  const url = `${env.SUPABASE_URL}/rest/v1/${path}`;
+  const headers = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    "Content-Type": "application/json",
+    ...options.headers,
+  };
+
+  const res = await fetch(url, { ...options, headers });
+  return res;
+}
+
+async function supabaseUpsertTrip(env, trip) {
+  const row = tripToRow(trip);
+  const res = await supabaseRequest(env, "trips", {
+    method: "POST",
+    headers: {
+      Prefer: "resolution=merge-duplicates,return=minimal",
+    },
+    body: JSON.stringify(row),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Supabase upsert failed for ${trip.id}:`, errText);
+    return false;
+  }
+  console.log(`Supabase: upserted trip ${trip.id}`);
+  return true;
+}
+
+async function supabaseDeleteById(env, tripId) {
+  const res = await supabaseRequest(env, `trips?id=eq.${encodeURIComponent(tripId)}`, {
+    method: "DELETE",
+    headers: { Prefer: "return=representation" },
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Supabase delete failed for ${tripId}:`, errText);
+    return [];
+  }
+  const deleted = await res.json();
+  if (deleted.length > 0) console.log(`Supabase: deleted trip ${tripId}`);
+  return deleted;
+}
+
+async function supabaseDeleteByMatch(env, filters) {
+  // Build PostgREST filter string
+  const parts = [];
+  for (const [col, val] of Object.entries(filters)) {
+    parts.push(`${col}=eq.${encodeURIComponent(val)}`);
+  }
+  const query = parts.join("&");
+
+  const res = await supabaseRequest(env, `trips?${query}`, {
+    method: "DELETE",
+    headers: { Prefer: "return=representation" },
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Supabase delete by match failed:`, errText);
+    return [];
+  }
+  const deleted = await res.json();
+  if (deleted.length > 0) console.log(`Supabase: deleted ${deleted.length} trip(s) by match`);
+  return deleted;
+}
+
+async function supabaseGetTrips(env, from, to) {
+  const res = await supabaseRequest(env, `trips?date=gte.${from}&date=lte.${to}&order=date,time`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Supabase get trips failed:`, errText);
+    return [];
+  }
+  return await res.json();
+}
+
 // ── Firestore REST API helpers ───────────────────────────────────────────────
 
 let cachedAuthToken = null;
 let tokenExpiresAt = 0;
 
 async function getFirebaseIdToken(env) {
-  // Reuse cached token if still valid (with 5 min buffer)
   if (cachedAuthToken && Date.now() < tokenExpiresAt - 300000) {
     return cachedAuthToken;
   }
@@ -38,7 +158,6 @@ async function getFirebaseIdToken(env) {
     return null;
   }
 
-  // Sign in anonymously to get an ID token
   const res = await fetch(
     `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
     {
@@ -55,13 +174,11 @@ async function getFirebaseIdToken(env) {
 
   const data = await res.json();
   cachedAuthToken = data.idToken;
-  // ID tokens expire in 1 hour
   tokenExpiresAt = Date.now() + 3600000;
   return cachedAuthToken;
 }
 
 function tripToFirestoreDoc(trip) {
-  // Convert a trip object to Firestore REST API document format
   const fields = {};
   for (const [key, value] of Object.entries(trip)) {
     if (value === null || value === undefined) {
@@ -75,24 +192,8 @@ function tripToFirestoreDoc(trip) {
   return { fields };
 }
 
-function firestoreDocToTrip(doc) {
-  // Convert Firestore REST API document back to a plain trip object
-  const trip = {};
-  if (!doc.fields) return trip;
-  for (const [key, val] of Object.entries(doc.fields)) {
-    if (val.stringValue !== undefined) trip[key] = val.stringValue;
-    else if (val.doubleValue !== undefined) trip[key] = val.doubleValue;
-    else if (val.integerValue !== undefined) trip[key] = Number(val.integerValue);
-    else if (val.nullValue !== undefined) trip[key] = "";
-    else trip[key] = "";
-  }
-  return trip;
-}
-
 function getTripDocId(trip) {
-  // Generate a stable document ID for a trip
   if (trip.id) return trip.id;
-  // Fallback: hash from vehicle + time + passenger
   const raw = `${trip.vehicleRef}_${trip.date}_${trip.time}_${trip.passenger}`;
   return raw.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
@@ -197,40 +298,32 @@ async function handleWebhook(request, env) {
     const trip = normalizeTrip(booking);
     if (!trip || !trip.date) continue;
 
+    // Ensure we have a stable ID
+    if (!trip.id) {
+      trip.id = getTripDocId(trip);
+    }
+
     console.log(`Designate: id=${trip.id} vehicle=${trip.vehicleRef} passenger=${trip.passenger} date=${trip.date}`);
 
-    const key = `trips:${trip.date}`;
-    const existing = await getTripsFromKV(env, key);
-
-    // Upsert by trip ID, fallback to passenger+time match
-    let idx = trip.id ? existing.findIndex((t) => t.id === trip.id) : -1;
-
-    if (idx < 0 && trip.passenger && trip.time) {
-      idx = existing.findIndex((t) =>
-        t.passenger === trip.passenger && t.time === trip.time && t.id !== trip.id
+    // Check for reassignment: same passenger+time but different vehicle
+    if (trip.passenger && trip.time) {
+      const existing = await supabaseGetTrips(env, trip.date, trip.date);
+      const oldTrip = existing.find(
+        (r) => r.passenger === trip.passenger && r.time === trip.time && r.id !== trip.id
       );
-      if (idx >= 0) {
-        console.log(`Reassignment detected: ${trip.passenger} moved from vehicle ${existing[idx].vehicleRef} to ${trip.vehicleRef}`);
-        // Delete old Firestore doc if the ID changed
-        firestoreDeleteTrip(env, existing[idx]).catch(e => console.error("Firestore cleanup error:", e));
+      if (oldTrip) {
+        console.log(`Reassignment detected: ${trip.passenger} moved from vehicle ${oldTrip.vehicle_ref} to ${trip.vehicleRef}`);
+        await supabaseDeleteById(env, oldTrip.id);
+        firestoreDeleteTrip(env, rowToTrip(oldTrip)).catch((e) => console.error("Firestore cleanup error:", e));
       }
     }
 
-    if (idx >= 0) {
-      existing[idx] = trip;
-    } else {
-      existing.push(trip);
-    }
+    // Atomic UPSERT into Supabase — no read-modify-write needed
+    const ok = await supabaseUpsertTrip(env, trip);
+    if (ok) stored++;
 
-    // Write to KV (fast cache)
-    await env.TRIPS.put(key, JSON.stringify(existing), {
-      expirationTtl: SEVEN_DAYS,
-    });
-
-    // Write to Firestore (source of truth) — fire and forget
-    firestoreWriteTrip(env, trip).catch(e => console.error("Firestore write error:", e));
-
-    stored++;
+    // Write to Firestore (fire-and-forget backup)
+    firestoreWriteTrip(env, trip).catch((e) => console.error("Firestore write error:", e));
   }
 
   return jsonResponse({ ok: true, stored });
@@ -279,68 +372,98 @@ async function handleUndesignate(request, env) {
       booking.release_date ||
       "";
 
-    let date = extractDate(rawDate);
-
-    if (date) {
-      const result = await removeTripFromDate(env, date, id, vehicleRef, passenger);
-      if (result.deleted) removed++;
-    } else {
-      const today = new Date();
-      for (let i = 0; i < 8; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() + i);
-        const dateStr = d.toISOString().split("T")[0];
-        const result = await removeTripFromDate(env, dateStr, id, vehicleRef, passenger);
-        if (result.deleted) { removed++; break; }
-      }
-    }
+    const date = extractDate(rawDate);
+    const result = await removeTripFromSupabase(env, id, vehicleRef, passenger, date);
+    if (result.deleted) removed += result.count;
   }
 
   console.log(`Undesignate: removed ${removed} trip(s)`);
   return jsonResponse({ ok: true, removed });
 }
 
-async function removeTripFromDate(env, date, tripId, vehicleRef, passenger) {
-  const key = `trips:${date}`;
-  const existing = await getTripsFromKV(env, key);
-  const before = existing.length;
+async function removeTripFromSupabase(env, tripId, vehicleRef, passenger, date) {
+  let deletedRows = [];
 
-  const removedTrips = [];
-  const filtered = existing.filter((t) => {
-    // Match by trip ID (primary)
-    if (tripId && t.id === tripId) { removedTrips.push(t); return false; }
-    // Match by passenger + vehicle
-    if (passenger && vehicleRef && t.passenger === passenger && t.vehicleRef === vehicleRef) { removedTrips.push(t); return false; }
-    // Match by just vehicle ref (if no passenger provided but vehicle matches)
-    if (!passenger && vehicleRef && t.vehicleRef === vehicleRef && !tripId) { removedTrips.push(t); return false; }
-    // Match by just passenger name (if no vehicle provided)
-    if (passenger && !vehicleRef && !tripId && t.passenger === passenger) { removedTrips.push(t); return false; }
-    return true;
-  });
-
-  console.log(`removeTripFromDate: key=${key}, existing=${before}, matched=${removedTrips.length}, tripId=${tripId}, vehicle=${vehicleRef}, passenger=${passenger}`);
-
-  if (filtered.length < before) {
-    console.log(`Removed ${before - filtered.length} trip(s) from ${key}`);
-
-    // Update KV
-    if (filtered.length === 0) {
-      await env.TRIPS.delete(key);
-    } else {
-      await env.TRIPS.put(key, JSON.stringify(filtered), {
-        expirationTtl: SEVEN_DAYS,
-      });
+  // 1. Try by trip ID (most specific)
+  if (tripId) {
+    deletedRows = await supabaseDeleteById(env, tripId);
+    if (deletedRows.length > 0) {
+      for (const row of deletedRows) {
+        firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error("Firestore delete error:", e));
+      }
+      return { deleted: true, count: deletedRows.length };
     }
-
-    // Delete from Firestore
-    for (const trip of removedTrips) {
-      firestoreDeleteTrip(env, trip).catch(e => console.error("Firestore delete error:", e));
-    }
-
-    return { deleted: true };
   }
 
-  return { deleted: false };
+  // 2. Try by passenger + vehicle + date (if we have a date)
+  if (passenger && vehicleRef && date) {
+    deletedRows = await supabaseDeleteByMatch(env, { passenger, vehicle_ref: vehicleRef, date });
+    if (deletedRows.length > 0) {
+      for (const row of deletedRows) {
+        firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error("Firestore delete error:", e));
+      }
+      return { deleted: true, count: deletedRows.length };
+    }
+  }
+
+  // 3. Try by passenger + vehicle (no date)
+  if (passenger && vehicleRef) {
+    deletedRows = await supabaseDeleteByMatch(env, { passenger, vehicle_ref: vehicleRef });
+    if (deletedRows.length > 0) {
+      for (const row of deletedRows) {
+        firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error("Firestore delete error:", e));
+      }
+      return { deleted: true, count: deletedRows.length };
+    }
+  }
+
+  // 4. Try by vehicle only (if no passenger)
+  if (!passenger && vehicleRef) {
+    const dateFilter = date || new Date().toISOString().split("T")[0];
+    deletedRows = await supabaseDeleteByMatch(env, { vehicle_ref: vehicleRef, date: dateFilter });
+    if (deletedRows.length > 0) {
+      for (const row of deletedRows) {
+        firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error("Firestore delete error:", e));
+      }
+      return { deleted: true, count: deletedRows.length };
+    }
+  }
+
+  // 5. Try by passenger only (if no vehicle)
+  if (passenger && !vehicleRef) {
+    const filters = { passenger };
+    if (date) filters.date = date;
+    deletedRows = await supabaseDeleteByMatch(env, filters);
+    if (deletedRows.length > 0) {
+      for (const row of deletedRows) {
+        firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error("Firestore delete error:", e));
+      }
+      return { deleted: true, count: deletedRows.length };
+    }
+  }
+
+  // 6. Scan upcoming 8 days if no date was provided and nothing matched yet
+  if (!date) {
+    const today = new Date();
+    for (let i = 0; i < 8; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() + i);
+      const dateStr = d.toISOString().split("T")[0];
+      const filters = { date: dateStr };
+      if (passenger) filters.passenger = passenger;
+      if (vehicleRef) filters.vehicle_ref = vehicleRef;
+
+      deletedRows = await supabaseDeleteByMatch(env, filters);
+      if (deletedRows.length > 0) {
+        for (const row of deletedRows) {
+          firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error("Firestore delete error:", e));
+        }
+        return { deleted: true, count: deletedRows.length };
+      }
+    }
+  }
+
+  return { deleted: false, count: 0 };
 }
 
 function extractDate(rawDate) {
@@ -356,7 +479,7 @@ function extractDate(rawDate) {
   return "";
 }
 
-// ── Trips API (still serves from KV for backwards compatibility) ─────────
+// ── Trips API (reads from Supabase for backward compatibility) ──────────────
 
 async function handleGetTrips(request, env) {
   const url = new URL(request.url);
@@ -367,15 +490,15 @@ async function handleGetTrips(request, env) {
     return jsonResponse({ error: "Missing 'from' query parameter (YYYY-MM-DD)" }, 400);
   }
 
-  const allTrips = {};
+  const rows = await supabaseGetTrips(env, from, to);
   const dates = getDateRange(from, to);
 
-  for (const date of dates) {
-    const key = `trips:${date}`;
-    const trips = await getTripsFromKV(env, key);
-    if (trips.length > 0) {
-      allTrips[date] = trips;
-    }
+  // Group by date for backward-compatible response format
+  const allTrips = {};
+  for (const row of rows) {
+    const trip = rowToTrip(row);
+    if (!allTrips[trip.date]) allTrips[trip.date] = [];
+    allTrips[trip.date].push(trip);
   }
 
   return jsonResponse({ from, to, dates: dates.length, trips: allTrips });
@@ -390,14 +513,19 @@ async function handleTripStats(request, env) {
     return jsonResponse({ error: "Missing 'from' query parameter" }, 400);
   }
 
+  const rows = await supabaseGetTrips(env, from, to);
   const dates = getDateRange(from, to);
+
+  // Count by date
   const stats = {};
   let total = 0;
-
   for (const date of dates) {
-    const trips = await getTripsFromKV(env, `trips:${date}`);
-    stats[date] = trips.length;
-    total += trips.length;
+    stats[date] = 0;
+  }
+  for (const row of rows) {
+    const d = row.date;
+    stats[d] = (stats[d] || 0) + 1;
+    total++;
   }
 
   return jsonResponse({ from, to, total, byDate: stats });
@@ -475,16 +603,6 @@ function normalizeTrip(raw) {
     status: booking.status || "",
     receivedAt: new Date().toISOString(),
   };
-}
-
-async function getTripsFromKV(env, key) {
-  const raw = await env.TRIPS.get(key);
-  if (!raw) return [];
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
 }
 
 function getDateRange(from, to) {
