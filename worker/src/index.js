@@ -195,7 +195,8 @@ function tripToFirestoreDoc(trip) {
 
 function getTripDocId(trip) {
   if (trip.id) return trip.id;
-  const raw = `${trip.vehicleRef}_${trip.date}_${trip.time}_${trip.passenger}`;
+  // Include pickup+dropoff to distinguish return trips for the same passenger
+  const raw = `${trip.vehicleRef}_${trip.date}_${trip.time}_${trip.passenger}_${trip.pickup}_${trip.dropoff}`;
   return raw.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
@@ -306,11 +307,15 @@ async function handleWebhook(request, env) {
 
     console.log(`Designate: id=${trip.id} vehicle=${trip.vehicleRef} passenger=${trip.passenger} date=${trip.date}`);
 
-    // Check for reassignment: same passenger+time but different vehicle
+    // Check for reassignment: same passenger+time+pickup+dropoff but different vehicle
+    // This detects when a trip is moved to a different driver, not return trips
     if (trip.passenger && trip.time) {
       const existing = await supabaseGetTrips(env, trip.date, trip.date);
       const oldTrip = existing.find(
-        (r) => r.passenger === trip.passenger && r.time === trip.time && r.id !== trip.id
+        (r) => r.passenger === trip.passenger && r.time === trip.time
+          && r.pickup === (trip.pickup || "") && r.dropoff === (trip.dropoff || "")
+          && r.vehicle_ref !== (trip.vehicleRef || "")
+          && r.id !== trip.id
       );
       if (oldTrip) {
         console.log(`Reassignment detected: ${trip.passenger} moved from vehicle ${oldTrip.vehicle_ref} to ${trip.vehicleRef}`);
