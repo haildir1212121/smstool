@@ -307,14 +307,15 @@ async function handleWebhook(request, env) {
 
     console.log(`Designate: id=${trip.id} vehicle=${trip.vehicleRef} passenger=${trip.passenger} date=${trip.date}`);
 
-    // Check for reassignment: same passenger+time+pickup+dropoff but different vehicle
-    // This detects when a trip is moved to a different driver, not return trips
-    if (trip.passenger && trip.time) {
+    // Check for reassignment: same passenger+time+pickup+dropoff moved to a different vehicle.
+    // Only triggers when BOTH the old and new trips have a vehicle assigned —
+    // an empty old vehicle means the trip is just getting its first assignment, not a reassignment.
+    if (trip.passenger && trip.time && trip.vehicleRef) {
       const existing = await supabaseGetTrips(env, trip.date, trip.date);
       const oldTrip = existing.find(
         (r) => r.passenger === trip.passenger && r.time === trip.time
           && r.pickup === (trip.pickup || "") && r.dropoff === (trip.dropoff || "")
-          && r.vehicle_ref !== (trip.vehicleRef || "")
+          && r.vehicle_ref && r.vehicle_ref !== trip.vehicleRef
           && r.id !== trip.id
       );
       if (oldTrip) {
