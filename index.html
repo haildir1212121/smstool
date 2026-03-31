@@ -1399,12 +1399,12 @@ s.forEach(d => {
     const seenPassengers = new Set();
 
     if (dayTrips.length === 0) {
-      return `${dayLabel}: You are assigned to vehicle ${driver.vehicle}. Sign in @ ${driver.tablet}. Please check your tablet for trip details. Reply CONFIRM to acknowledge. Thank you!`;
+      return `${dayLabel}: You are assigned to vehicle ${driver.vehicle}. Sign in @ ${driver.tablet}. Please check your tablet for trip details. Thank you!`;
     }
 
     const tripLines = dayTrips.map(trip => formatTripLine(trip, seenPassengers)).join(" ");
     const tabletPart = driver.tablet ? ` BE SIGNED INTO YOUR TABLET @ ${driver.tablet}` : "";
-    return `${dayLabel}: ${tripLines}${tabletPart} Reply CONFIRM to acknowledge. Thank you!`;
+    return `${dayLabel}: ${tripLines}${tabletPart} Thank you!`;
   }
 
   function generateTripMessage(driver) {
@@ -1413,18 +1413,18 @@ s.forEach(d => {
     // LTD drivers: include vehicle, start time, and stop time
     if (driver.region === "LTD") {
       const stopPart = driver.stop ? ` AND STOP TIME IS ${driver.stop}` : "";
-      return `${dayLabel}: ASSIGNED VEHICLE IS ${driver.vehicle}. START TIME IS ${driver.tablet}${stopPart}. Reply CONFIRM to acknowledge. Thank you!`;
+      return `${dayLabel}: ASSIGNED VEHICLE IS ${driver.vehicle}. START TIME IS ${driver.tablet}${stopPart}. Thank you!`;
     }
 
     if (driver.trips.length === 0) {
       const signInPart = driver.tablet ? ` Sign in @ ${driver.tablet}.` : "";
-      return `${dayLabel}: You are assigned to vehicle ${driver.vehicle}.${signInPart} Please check your tablet for trip details. Reply CONFIRM to acknowledge. Thank you!`;
+      return `${dayLabel}: You are assigned to vehicle ${driver.vehicle}.${signInPart} Please check your tablet for trip details. Thank you!`;
     }
 
     const seenPassengers = new Set();
     const tripLines = driver.trips.map(trip => formatTripLine(trip, seenPassengers)).join(" ");
     const tabletPart = driver.tablet ? ` BE SIGNED INTO YOUR TABLET @ ${driver.tablet}` : "";
-    return `${dayLabel}: ${tripLines}${tabletPart} Reply CONFIRM to acknowledge. Thank you!`;
+    return `${dayLabel}: ${tripLines}${tabletPart} . Thank you!`;
   }
 
   window.openTripReviewModal = () => {
