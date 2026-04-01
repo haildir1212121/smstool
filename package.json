@@ -1,0 +1,19 @@
+{
+  "name": "dispatch-command",
+  "version": "1.0.0",
+  "description": "Dispatch Command Center - SMS & Trip Management Mobile App",
+  "scripts": {
+    "build": "mkdir -p www && cp index.html www/index.html",
+    "sync": "npm run build && npx cap sync",
+    "open:android": "npx cap open android",
+    "apk:debug": "npm run sync && cd android && ./gradlew assembleDebug",
+    "apk:release": "npm run sync && cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/core": "^6.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0"
+  }
+}

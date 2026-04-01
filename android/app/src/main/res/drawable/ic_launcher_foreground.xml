@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- White "D" letter centered in safe zone (within 72x72 centered at 54,54) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="
+            M28,22 L46,22
+            C70,22 82,34 82,54
+            C82,74 70,86 46,86
+            L28,86 Z
+            M40,34 L46,34
+            C62,34 70,40 70,54
+            C70,68 62,74 46,74
+            L40,74 Z" />
+</vector>

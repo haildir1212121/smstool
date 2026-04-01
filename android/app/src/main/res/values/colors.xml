@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand colors matching the Dispatch Command web app -->
+    <color name="colorPrimary">#2563eb</color>
+    <color name="colorPrimaryDark">#1d4ed8</color>
+    <color name="colorAccent">#60a5fa</color>
+    <color name="colorBackground">#0f172a</color>
+    <color name="splashBackground">#0f172a</color>
+</resources>
