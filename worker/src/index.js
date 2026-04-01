@@ -674,48 +674,43 @@ async function handleFleetioWebhook(request, env) {
 }
 
 // Parse Fleetio webhook payload into a normalized issue object
-function normalizeFleetioIssue(payload) {
-  // Fleetio webhooks can have various structures depending on the event type
-  // Common: { event_type, data: { ... } } or direct issue object
-  const data = payload.data || payload;
-  const vehicle = data.vehicle || {};
-  const submitter = data.submitted_by || data.driver || data.user || {};
+function normalizeFleetioIssue(raw) {
+  // Fleetio webhook structure: { id, event, timestamp, payload: { ...issue }, triggered_by }
+  const data = raw.payload || raw.data || raw;
+  const reporter = data.reported_by || {};
 
-  // Extract vehicle ref — Fleetio uses vehicle number, name, or custom ref
+  // Extract vehicle ref — Fleetio uses vehicle_name (e.g. "Codys testing Rig")
   const vehicleRef = String(
-    vehicle.number || vehicle.name || vehicle.ref ||
-    data.vehicle_number || data.vehicle_name || data.vehicle_ref ||
+    data.vehicle_name || data.vehicle_number || data.vehicle_ref ||
     data.vehicle_id || ""
   ).trim();
 
   // Extract site/location — maps to iCabbi site_ref
+  // Fleetio uses reported_by.group_name or labels for location grouping
   const siteRef = String(
-    data.site_ref || data.location_name || data.group_name ||
-    vehicle.group_name || vehicle.location || data.site || ""
+    reporter.group_name || data.group_name ||
+    data.site_ref || data.location_name || ""
   ).trim();
 
-  // Issue description — from DVIR items, issue body, or comment
-  let description = "";
-  if (data.dvir_items && Array.isArray(data.dvir_items)) {
-    description = data.dvir_items
-      .filter(item => item.status === "failed" || item.condition === "failed" || item.defect)
-      .map(item => item.name || item.label || item.description || "Unknown item")
-      .join(", ");
-  }
-  if (!description) {
-    description = data.description || data.title || data.summary ||
-      data.issue_description || data.comment || data.body || "";
-  }
+  // Issue description — name/summary is the issue title in Fleetio
+  const description = String(
+    data.name || data.summary || data.title ||
+    data.description || ""
+  ).trim();
 
   return {
     vehicleRef,
     siteRef,
-    description: String(description).trim(),
-    driverName: [submitter.first_name, submitter.last_name].filter(Boolean).join(" ") ||
-      submitter.name || data.driver_name || "",
-    driverPhone: submitter.phone || data.driver_phone || "",
-    fleetioId: String(data.id || data.issue_id || data.dvir_id || payload.id || "").trim(),
-    eventType: payload.event_type || payload.type || ""
+    description,
+    driverName: String(
+      data.reported_by_name || reporter.name ||
+      [reporter.first_name, reporter.last_name].filter(Boolean).join(" ") || ""
+    ).trim(),
+    driverPhone: String(reporter.mobile_phone_number || reporter.home_phone_number || "").trim(),
+    driverEmail: String(reporter.email || raw.triggered_by || "").trim(),
+    fleetioId: String(data.id || raw.id || "").trim(),
+    fleetioNumber: String(data.number || "").trim(),
+    eventType: String(raw.event || raw.event_type || "").trim()
   };
 }
 
