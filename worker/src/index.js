@@ -542,8 +542,10 @@ async function handleTripStats(request, env) {
 //   4. Write a notification to Firestore for the SMS platform UI
 
 async function handleFleetioWebhook(request, env) {
-  // Validate webhook secret (same secret or a dedicated FLEETIO_WEBHOOK_SECRET)
-  const secret = request.headers.get("X-Webhook-Secret") || "";
+  // Fleetio uses the "Authorization" HTTP header for webhook secrets
+  const authHeader = request.headers.get("Authorization") || "";
+  const xSecret = request.headers.get("X-Webhook-Secret") || "";
+  const secret = authHeader || xSecret;
   const expectedSecret = env.FLEETIO_WEBHOOK_SECRET || env.WEBHOOK_SECRET;
   if (!expectedSecret || secret !== expectedSecret) {
     return jsonResponse({ error: "Unauthorized" }, 401);
