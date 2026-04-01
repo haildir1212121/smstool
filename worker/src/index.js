@@ -542,20 +542,50 @@ async function handleTripStats(request, env) {
 //   4. Write a notification to Firestore for the SMS platform UI
 
 async function handleFleetioWebhook(request, env) {
-  // Fleetio sends the secret via the "Authorization" HTTP header,
-  // potentially prefixed with "Token ", "Bearer ", or sent raw
-  const authHeader = request.headers.get("Authorization") || "";
-  const xSecret = request.headers.get("X-Webhook-Secret") || "";
-  const rawSecret = authHeader.replace(/^(Bearer|Token)\s+/i, "").trim() || xSecret;
+  // Fleetio uses HMAC-SHA256 signature verification:
+  //   - The secret you enter in Fleetio's "Authorization HTTP Header" field is the signing key
+  //   - Fleetio signs the request body and sends the signature in "x-fleetio-webhook-signature"
+  //   - We verify by computing HMAC-SHA256(body, secret) and comparing
+  const signature = request.headers.get("x-fleetio-webhook-signature") || "";
   const expectedSecret = env.FLEETIO_WEBHOOK_SECRET || env.WEBHOOK_SECRET;
 
-  console.log(`Fleetio auth: header="${authHeader.slice(0, 20)}..." expected="${expectedSecret ? "set" : "NOT SET"}"`);
-
-  if (!expectedSecret || rawSecret !== expectedSecret) {
+  if (!expectedSecret) {
+    console.error("FLEETIO_WEBHOOK_SECRET not set");
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
-  const payload = await request.json();
+  // Read the raw body for signature verification
+  const rawBody = await request.text();
+
+  if (signature) {
+    // Verify HMAC-SHA256 signature
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(expectedSecret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
+    const computed = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
+
+    console.log(`Fleetio HMAC: received="${signature.slice(0, 16)}..." computed="${computed.slice(0, 16)}..."`);
+
+    if (computed !== signature) {
+      return jsonResponse({ error: "Unauthorized" }, 401);
+    }
+  } else {
+    // Fallback: check Authorization header directly (for testing)
+    const authHeader = request.headers.get("Authorization") || "";
+    const rawSecret = authHeader.replace(/^(Bearer|Token)\s+/i, "").trim();
+    if (!rawSecret || rawSecret !== expectedSecret) {
+      console.log("No signature header and Authorization doesn't match");
+      return jsonResponse({ error: "Unauthorized" }, 401);
+    }
+  }
+
+  const payload = JSON.parse(rawBody);
   console.log("Fleetio webhook payload:", JSON.stringify(payload).slice(0, 3000));
 
   // Fleetio can send various event types. We care about issues/DVIRs.
