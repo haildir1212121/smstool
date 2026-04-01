@@ -562,7 +562,7 @@ async function handleFleetioWebhook(request, env) {
   // Normalize the payload — Fleetio sends different shapes for different events
   const issue = normalizeFleetioIssue(payload);
 
-  if (!issue || !issue.description) {
+  if (!issue || (!issue.description && !issue.fleetioId)) {
     return jsonResponse({ error: "No actionable issue found in payload" }, 400);
   }
 
@@ -677,6 +677,7 @@ async function handleFleetioWebhook(request, env) {
 function normalizeFleetioIssue(raw) {
   // Fleetio webhook structure: { id, event, timestamp, payload: { ...issue }, triggered_by }
   const data = raw.payload || raw.data || raw;
+  console.log(`normalizeFleetioIssue: keys=${Object.keys(data).slice(0,10).join(",")} name="${data.name}" summary="${data.summary}" desc="${data.description}"`);
   const reporter = data.reported_by || {};
 
   // Extract vehicle ref — Fleetio uses vehicle_name (e.g. "Codys testing Rig")
