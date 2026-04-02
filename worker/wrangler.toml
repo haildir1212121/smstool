@@ -11,11 +11,13 @@ SUPABASE_URL = "https://mdutrtmdjodabggirntb.supabase.co"
 
 # Set SUPABASE_SERVICE_KEY via `wrangler secret put SUPABASE_SERVICE_KEY`
 
-# Fleetio → iCabbi automation (optional)
+# Fleetio → iCabbi automation
 # Set FLEETIO_WEBHOOK_SECRET via `wrangler secret put FLEETIO_WEBHOOK_SECRET`
-# Set ICABBI_API_KEY via `wrangler secret put ICABBI_API_KEY`
-# ICABBI_API_URL = "https://your-icabbi-instance.com/api"
+ICABBI_API_URL = "https://api.icabbi.us/us4"
 
-# Fallback repair/issue mappings (can also be configured in Firestore UI)
+# Set ICABBI_AUTH via `wrangler secret put ICABBI_AUTH`
+# Value: YjI4NWMwNDMxZGMyZWIyZmNkNzZmNWU4MDJkODljODEyOWExZmZiOToyNDJmNzMxNGI5MjcyMDFhNDA2NTk0MTZlMGFjNjZiYWZjMTY0N2E1
+
+# Repair shop / issue type mappings (can also be configured in Automation Settings UI)
 # REPAIR_MAPPINGS = "RBG:Jiffy Lube:123 Main St Roseburg OR;EUG:Shop Name:456 Oak Eugene OR"
 # ISSUE_MAPPINGS = "headlight:Headlight repair;oil:Oil change"

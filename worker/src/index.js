@@ -596,7 +596,6 @@ async function handleFleetioWebhook(request, env) {
   const rawBody = await request.text();
 
   if (signature) {
-    // Verify HMAC-SHA256 signature
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
       "raw",
@@ -614,7 +613,6 @@ async function handleFleetioWebhook(request, env) {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
   } else {
-    // Fallback: check Authorization header directly (for testing)
     const authHeader = request.headers.get("Authorization") || "";
     const rawSecret = authHeader.replace(/^(Bearer|Token)\s+/i, "").trim();
     if (!rawSecret || rawSecret !== expectedSecret) {
@@ -626,87 +624,104 @@ async function handleFleetioWebhook(request, env) {
   const payload = JSON.parse(rawBody);
   console.log("Fleetio webhook payload:", JSON.stringify(payload).slice(0, 3000));
 
+  // Step 1: Parse the Fleetio issue to get driver name, vehicle, description
   const issue = normalizeFleetioIssue(payload);
 
-  if (!issue || (!issue.description && !issue.fleetioId)) {
-    return jsonResponse({ error: "No actionable issue found in payload" }, 400);
-  }
-
-  console.log(`Fleetio issue: vehicle=${issue.vehicleRef} site=${issue.siteRef} desc="${issue.description}"`);
-
-  // Step 1: Load automation settings from Firestore
-  const settings = await loadAutomationSettings(env);
-
-  // Step 2: Find repair shop mapping for this site_ref
-  const repairShop = findRepairShop(settings, issue.siteRef, issue.description);
-
-  if (!repairShop) {
-    console.log(`No repair shop mapping found for site_ref="${issue.siteRef}". Writing notification only.`);
+  if (!issue || !issue.driverName) {
+    console.log("Fleetio: no driver name found in payload, cannot match");
     await writeNotificationToFirestore(env, {
       type: "fleetio_issue",
-      title: `Fleetio Issue: ${issue.description.slice(0, 60)}`,
-      message: `Vehicle ${issue.vehicleRef || "Unknown"} at ${issue.siteRef || "Unknown site"} reported: ${issue.description}. No repair shop mapping found — trip not auto-created.`,
-      vehicleRef: issue.vehicleRef || "",
-      siteRef: issue.siteRef || "",
-      driverName: issue.driverName || "",
+      title: `Fleetio Issue: ${(issue?.description || "Unknown").slice(0, 60)}`,
+      message: `No driver name found in Fleetio event. Cannot match to SMS contact. Vehicle: ${issue?.vehicleRef || "Unknown"}. Description: ${issue?.description || "N/A"}`,
+      vehicleRef: issue?.vehicleRef || "",
+      driverName: "",
       pipelineSteps: [
         { label: "Issue Reported", status: "done" },
+        { label: "Driver Match", status: "pending" },
         { label: "Trip Creation", status: "pending" },
         { label: "Notification", status: "done" }
       ]
     });
-    return jsonResponse({ ok: true, action: "notification_only", reason: "no_repair_mapping" });
+    return jsonResponse({ ok: true, action: "notification_only", reason: "no_driver_name" });
   }
 
-  // Step 3: Determine trip name from issue type mapping
+  console.log(`Fleetio issue: driver="${issue.driverName}" vehicle=${issue.vehicleRef} desc="${issue.description}"`);
+
+  // Step 2: Look up driver in SMS tool contacts (Firestore threads) by name
+  const contact = await findContactByName(env, issue.driverName);
+
+  if (!contact) {
+    console.log(`No SMS contact found matching driver "${issue.driverName}"`);
+    await writeNotificationToFirestore(env, {
+      type: "fleetio_issue",
+      title: `Fleetio Issue: ${issue.description.slice(0, 60)}`,
+      message: `Driver "${issue.driverName}" not found in SMS contacts. Vehicle: ${issue.vehicleRef || "Unknown"}. Description: ${issue.description}. Trip not auto-created.`,
+      vehicleRef: issue.vehicleRef || "",
+      driverName: issue.driverName,
+      pipelineSteps: [
+        { label: "Issue Reported", status: "done" },
+        { label: "Driver Match", status: "pending" },
+        { label: "Trip Creation", status: "pending" },
+        { label: "Notification", status: "done" }
+      ]
+    });
+    return jsonResponse({ ok: true, action: "notification_only", reason: "driver_not_found" });
+  }
+
+  console.log(`Matched driver "${issue.driverName}" → contact "${contact.name}" phone=${contact.phone}`);
+
+  // Step 3: Load automation settings for issue type mappings (repair shop address, etc.)
+  const settings = await loadAutomationSettings(env);
+  const repairShop = findRepairShop(settings, issue.siteRef, issue.description);
   const tripName = buildTripName(settings, issue);
 
-  // Step 4: Create trip in iCabbi
+  // Step 4: Create trip in iCabbi using their /bookings/add endpoint
   let icabbiResult = null;
-  const icabbiApiUrl = env.ICABBI_API_URL || "";
-  const icabbiApiKey = env.ICABBI_API_KEY || "";
+  const icabbiAuth = env.ICABBI_AUTH; // Basic auth header value
 
-  const tripData = {
-    pickup_address: repairShop.address,
-    pickup_name: repairShop.shopName || repairShop.address,
-    passenger_name: tripName,
-    vehicle_ref: issue.vehicleRef || "",
-    site_ref: issue.siteRef || "",
-    date: new Date().toISOString().split("T")[0],
-    time: "23:59",
-    notes: `Auto-created from Fleetio issue: ${issue.description}`
+  const pickupAddress = repairShop?.address || "";
+  const now = new Date();
+
+  const icabbiBody = {
+    date: now.toISOString(),
+    name: contact.name || issue.driverName,
+    phone: contact.phone || "",
+    address: pickupAddress ? {
+      formatted: pickupAddress
+    } : undefined,
+    notes: `Fleetio: ${issue.description}. Vehicle: ${issue.vehicleRef || "N/A"}.`
   };
 
-  if (icabbiApiUrl && icabbiApiKey) {
+  if (icabbiAuth) {
     try {
-      icabbiResult = await createIcabbiTrip(icabbiApiUrl, icabbiApiKey, tripData);
+      icabbiResult = await createIcabbiTrip(env, icabbiBody);
       console.log("iCabbi trip created:", JSON.stringify(icabbiResult));
     } catch (e) {
       console.error("iCabbi trip creation failed:", e.message);
       icabbiResult = { error: e.message };
     }
   } else {
-    console.log("iCabbi API not configured — skipping trip creation. Trip data:", JSON.stringify(tripData));
-    icabbiResult = { skipped: true, reason: "icabbi_api_not_configured" };
+    console.log("ICABBI_AUTH not configured — skipping trip creation. Body:", JSON.stringify(icabbiBody));
+    icabbiResult = { skipped: true, reason: "icabbi_auth_not_configured" };
   }
 
   const tripCreated = icabbiResult && !icabbiResult.error && !icabbiResult.skipped;
 
-  // Step 5: Also store in Supabase as a local trip record
+  // Step 5: Store in Supabase as a local trip record
   const localTrip = {
     id: `fleetio_${issue.vehicleRef || "unknown"}_${Date.now()}`,
-    date: tripData.date,
-    time: tripData.time,
-    vehicleRef: tripData.vehicle_ref,
-    pickup: tripData.pickup_address,
+    date: now.toISOString().split("T")[0],
+    time: now.toTimeString().slice(0, 5),
+    vehicleRef: issue.vehicleRef || "",
+    pickup: pickupAddress,
     dropoff: "",
-    passenger: tripData.passenger_name,
-    passengerPhone: "",
-    driverName: issue.driverName || "",
-    driverPhone: issue.driverPhone || "",
-    notes: tripData.notes,
+    passenger: tripName,
+    passengerPhone: contact.phone || "",
+    driverName: contact.name || issue.driverName,
+    driverPhone: contact.phone || "",
+    notes: icabbiBody.notes,
     status: tripCreated ? "auto_created" : "pending_manual",
-    receivedAt: new Date().toISOString()
+    receivedAt: now.toISOString()
   };
   await supabaseUpsertTrip(env, localTrip);
 
@@ -715,15 +730,16 @@ async function handleFleetioWebhook(request, env) {
     type: "trip_created",
     title: tripName,
     message: tripCreated
-      ? `Auto-created trip for vehicle ${issue.vehicleRef} → ${repairShop.shopName || repairShop.address}. Pickup at 23:59.`
-      : `Trip prepared for vehicle ${issue.vehicleRef} → ${repairShop.shopName || repairShop.address}. iCabbi API ${icabbiResult?.skipped ? "not configured" : "error: " + icabbiResult?.error}. Saved locally.`,
+      ? `Auto-created trip for ${contact.name} (${contact.phone}). Vehicle: ${issue.vehicleRef}. Issue: ${issue.description}`
+      : `Trip prepared for ${contact.name}. iCabbi API ${icabbiResult?.skipped ? "not configured" : "error: " + icabbiResult?.error}. Saved locally.`,
     vehicleRef: issue.vehicleRef || "",
-    siteRef: issue.siteRef || "",
+    driverName: contact.name || issue.driverName,
+    driverPhone: contact.phone || "",
     tripName: tripName,
-    repairShop: repairShop.shopName || repairShop.address,
-    driverName: issue.driverName || "",
+    repairShop: repairShop?.shopName || pickupAddress || "",
     pipelineSteps: [
       { label: "Issue Reported", status: "done" },
+      { label: "Driver Match", status: "done" },
       { label: "Trip Creation", status: tripCreated ? "done" : "pending" },
       { label: "Notification", status: "done" }
     ]
@@ -733,9 +749,72 @@ async function handleFleetioWebhook(request, env) {
     ok: true,
     tripCreated,
     tripName,
-    repairShop: repairShop.shopName || repairShop.address,
+    driverName: contact.name,
+    driverPhone: contact.phone,
     vehicleRef: issue.vehicleRef
   });
+}
+
+// Look up a contact in SMS tool (Firestore threads) by driver name.
+// Matches: exact name, last name + first initial, or case-insensitive contains.
+async function findContactByName(env, driverName) {
+  const token = await getFirebaseIdToken(env);
+  if (!token) return null;
+
+  const projectId = env.FIREBASE_PROJECT_ID || "sms-dlx";
+  const colPath = `organizations/${ORG_ID}/threads`;
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${colPath}?key=${env.FIREBASE_API_KEY}&pageSize=500`;
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!res.ok) {
+    console.error("Failed to fetch threads for driver match:", await res.text());
+    return null;
+  }
+
+  const data = await res.json();
+  const documents = data.documents || [];
+
+  const searchName = driverName.toLowerCase().trim();
+  const searchParts = searchName.split(/\s+/);
+
+  let bestMatch = null;
+
+  for (const doc of documents) {
+    const fields = doc.fields || {};
+    const name = (fields.name?.stringValue || "").trim();
+    const phone = (fields.phone?.stringValue || doc.name?.split("/").pop() || "").trim();
+    const nameLower = name.toLowerCase();
+
+    if (!name || !phone) continue;
+
+    // Exact match
+    if (nameLower === searchName) {
+      return { name, phone };
+    }
+
+    // Last name match + first name starts with
+    const contactParts = nameLower.split(/\s+/);
+    if (searchParts.length >= 2 && contactParts.length >= 2) {
+      const searchFirst = searchParts[0];
+      const searchLast = searchParts[searchParts.length - 1];
+      const contactFirst = contactParts[0];
+      const contactLast = contactParts[contactParts.length - 1];
+
+      if (searchLast === contactLast && (contactFirst.startsWith(searchFirst) || searchFirst.startsWith(contactFirst))) {
+        bestMatch = { name, phone };
+      }
+    }
+
+    // Contains match (either direction)
+    if (!bestMatch && (nameLower.includes(searchName) || searchName.includes(nameLower))) {
+      bestMatch = { name, phone };
+    }
+  }
+
+  return bestMatch;
 }
 
 function normalizeFleetioIssue(raw) {
@@ -872,28 +951,18 @@ function buildTripName(settings, issue) {
   return `${shortDesc} / ${issue.vehicleRef || "Unknown"}`;
 }
 
-async function createIcabbiTrip(apiUrl, apiKey, tripData) {
-  const url = `${apiUrl.replace(/\/+$/, "")}/bookings`;
+// Create a trip in iCabbi via POST /bookings/add with Basic auth
+async function createIcabbiTrip(env, tripBody) {
+  const apiUrl = (env.ICABBI_API_URL || "https://api.icabbi.us/us4").replace(/\/+$/, "");
+  const auth = env.ICABBI_AUTH; // Base64 Basic auth credentials
 
-  const body = {
-    pickup_address: tripData.pickup_address,
-    pickup_name: tripData.pickup_name,
-    passenger_name: tripData.passenger_name,
-    vehicle_ref: tripData.vehicle_ref,
-    date: tripData.date,
-    time: tripData.time,
-    notes: tripData.notes,
-    status: "pre_booked"
-  };
-
-  const res = await fetch(url, {
+  const res = await fetch(`${apiUrl}/bookings/add`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-      "X-API-Key": apiKey
+      "Authorization": `Basic ${auth}`
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(tripBody)
   });
 
   if (!res.ok) {
