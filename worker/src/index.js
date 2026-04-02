@@ -4,12 +4,18 @@
  * POST /webhook              — receives iCabbi "Pre-booking: Driver Designated" events
  * POST /webhook/undesignate  — receives iCabbi "Driver Undesignate" events (deletes trip)
  * POST /webhook/update       — receives iCabbi "Pre-booking: Update" events (patches vehicle/driver)
+ * POST /webhook/fleetio      — receives Fleetio issue reports, auto-creates iCabbi trips
  * GET  /trips                — returns stored trips for a date range (?from=YYYY-MM-DD&to=YYYY-MM-DD)
  * GET  /trips/stats          — quick count of stored trips for a date
  *
  * Storage: Supabase (source of truth, strong consistency) + Firestore (fire-and-forget backup)
  * Supabase table: trips (each trip is a row, atomic UPSERT/DELETE)
  * Firestore path: organizations/{orgId}/trips/{docId}
+ *
+ * Fleetio → iCabbi Pipeline:
+ *   1. Driver reports issue in Fleetio → webhook fires here
+ *   2. Worker maps issue + site_ref to repair shop → creates iCabbi trip
+ *   3. Writes notification to Firestore for the SMS platform UI
  */
 
 const ORG_ID = "dispatch_team_main";
@@ -272,6 +278,9 @@ export default {
       }
       if (url.pathname === "/webhook/update" && request.method === "POST") {
         return await handleUpdate(request, env);
+      }
+      if (url.pathname === "/webhook/fleetio" && request.method === "POST") {
+        return await handleFleetioWebhook(request, env);
       }
       if (url.pathname === "/trips" && request.method === "GET") {
         return await handleGetTrips(request, env);
@@ -564,6 +573,392 @@ async function handleTripStats(request, env) {
   }
 
   return jsonResponse({ from, to, total, byDate: stats });
+}
+
+// ── Fleetio Webhook Handler ─────────────────────────────────────────────────
+//
+// Fleetio fires webhooks for issues/DVIRs. We:
+//   1. Parse the issue details (vehicle, site/location, issue description)
+//   2. Look up automation settings from Firestore (repair shop mappings, issue type mappings)
+//   3. Create a trip in iCabbi (pickup at repair shop, name = "Issue / vehicle_ref", time = 23:59)
+//   4. Write a notification to Firestore for the SMS platform UI
+
+async function handleFleetioWebhook(request, env) {
+  const signature = request.headers.get("x-fleetio-webhook-signature") || "";
+  const expectedSecret = env.FLEETIO_WEBHOOK_SECRET || env.WEBHOOK_SECRET;
+
+  if (!expectedSecret) {
+    console.error("FLEETIO_WEBHOOK_SECRET not set");
+    return jsonResponse({ error: "Unauthorized" }, 401);
+  }
+
+  // Read the raw body for signature verification
+  const rawBody = await request.text();
+
+  if (signature) {
+    // Verify HMAC-SHA256 signature
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(expectedSecret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
+    const computed = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
+
+    console.log(`Fleetio HMAC: received="${signature.slice(0, 16)}..." computed="${computed.slice(0, 16)}..."`);
+
+    if (computed !== signature) {
+      return jsonResponse({ error: "Unauthorized" }, 401);
+    }
+  } else {
+    // Fallback: check Authorization header directly (for testing)
+    const authHeader = request.headers.get("Authorization") || "";
+    const rawSecret = authHeader.replace(/^(Bearer|Token)\s+/i, "").trim();
+    if (!rawSecret || rawSecret !== expectedSecret) {
+      console.log("No signature header and Authorization doesn't match");
+      return jsonResponse({ error: "Unauthorized" }, 401);
+    }
+  }
+
+  const payload = JSON.parse(rawBody);
+  console.log("Fleetio webhook payload:", JSON.stringify(payload).slice(0, 3000));
+
+  const issue = normalizeFleetioIssue(payload);
+
+  if (!issue || (!issue.description && !issue.fleetioId)) {
+    return jsonResponse({ error: "No actionable issue found in payload" }, 400);
+  }
+
+  console.log(`Fleetio issue: vehicle=${issue.vehicleRef} site=${issue.siteRef} desc="${issue.description}"`);
+
+  // Step 1: Load automation settings from Firestore
+  const settings = await loadAutomationSettings(env);
+
+  // Step 2: Find repair shop mapping for this site_ref
+  const repairShop = findRepairShop(settings, issue.siteRef, issue.description);
+
+  if (!repairShop) {
+    console.log(`No repair shop mapping found for site_ref="${issue.siteRef}". Writing notification only.`);
+    await writeNotificationToFirestore(env, {
+      type: "fleetio_issue",
+      title: `Fleetio Issue: ${issue.description.slice(0, 60)}`,
+      message: `Vehicle ${issue.vehicleRef || "Unknown"} at ${issue.siteRef || "Unknown site"} reported: ${issue.description}. No repair shop mapping found — trip not auto-created.`,
+      vehicleRef: issue.vehicleRef || "",
+      siteRef: issue.siteRef || "",
+      driverName: issue.driverName || "",
+      pipelineSteps: [
+        { label: "Issue Reported", status: "done" },
+        { label: "Trip Creation", status: "pending" },
+        { label: "Notification", status: "done" }
+      ]
+    });
+    return jsonResponse({ ok: true, action: "notification_only", reason: "no_repair_mapping" });
+  }
+
+  // Step 3: Determine trip name from issue type mapping
+  const tripName = buildTripName(settings, issue);
+
+  // Step 4: Create trip in iCabbi
+  let icabbiResult = null;
+  const icabbiApiUrl = env.ICABBI_API_URL || "";
+  const icabbiApiKey = env.ICABBI_API_KEY || "";
+
+  const tripData = {
+    pickup_address: repairShop.address,
+    pickup_name: repairShop.shopName || repairShop.address,
+    passenger_name: tripName,
+    vehicle_ref: issue.vehicleRef || "",
+    site_ref: issue.siteRef || "",
+    date: new Date().toISOString().split("T")[0],
+    time: "23:59",
+    notes: `Auto-created from Fleetio issue: ${issue.description}`
+  };
+
+  if (icabbiApiUrl && icabbiApiKey) {
+    try {
+      icabbiResult = await createIcabbiTrip(icabbiApiUrl, icabbiApiKey, tripData);
+      console.log("iCabbi trip created:", JSON.stringify(icabbiResult));
+    } catch (e) {
+      console.error("iCabbi trip creation failed:", e.message);
+      icabbiResult = { error: e.message };
+    }
+  } else {
+    console.log("iCabbi API not configured — skipping trip creation. Trip data:", JSON.stringify(tripData));
+    icabbiResult = { skipped: true, reason: "icabbi_api_not_configured" };
+  }
+
+  const tripCreated = icabbiResult && !icabbiResult.error && !icabbiResult.skipped;
+
+  // Step 5: Also store in Supabase as a local trip record
+  const localTrip = {
+    id: `fleetio_${issue.vehicleRef || "unknown"}_${Date.now()}`,
+    date: tripData.date,
+    time: tripData.time,
+    vehicleRef: tripData.vehicle_ref,
+    pickup: tripData.pickup_address,
+    dropoff: "",
+    passenger: tripData.passenger_name,
+    passengerPhone: "",
+    driverName: issue.driverName || "",
+    driverPhone: issue.driverPhone || "",
+    notes: tripData.notes,
+    status: tripCreated ? "auto_created" : "pending_manual",
+    receivedAt: new Date().toISOString()
+  };
+  await supabaseUpsertTrip(env, localTrip);
+
+  // Step 6: Write notification to Firestore
+  await writeNotificationToFirestore(env, {
+    type: "trip_created",
+    title: tripName,
+    message: tripCreated
+      ? `Auto-created trip for vehicle ${issue.vehicleRef} → ${repairShop.shopName || repairShop.address}. Pickup at 23:59.`
+      : `Trip prepared for vehicle ${issue.vehicleRef} → ${repairShop.shopName || repairShop.address}. iCabbi API ${icabbiResult?.skipped ? "not configured" : "error: " + icabbiResult?.error}. Saved locally.`,
+    vehicleRef: issue.vehicleRef || "",
+    siteRef: issue.siteRef || "",
+    tripName: tripName,
+    repairShop: repairShop.shopName || repairShop.address,
+    driverName: issue.driverName || "",
+    pipelineSteps: [
+      { label: "Issue Reported", status: "done" },
+      { label: "Trip Creation", status: tripCreated ? "done" : "pending" },
+      { label: "Notification", status: "done" }
+    ]
+  });
+
+  return jsonResponse({
+    ok: true,
+    tripCreated,
+    tripName,
+    repairShop: repairShop.shopName || repairShop.address,
+    vehicleRef: issue.vehicleRef
+  });
+}
+
+function normalizeFleetioIssue(raw) {
+  const data = raw.payload || raw.data || raw;
+  console.log(`normalizeFleetioIssue: keys=${Object.keys(data).slice(0,10).join(",")} name="${data.name}" summary="${data.summary}" desc="${data.description}"`);
+  const reporter = data.reported_by || {};
+
+  const vehicleRef = String(
+    data.vehicle_name || data.vehicle_number || data.vehicle_ref ||
+    data.vehicle_id || ""
+  ).trim();
+
+  const siteRef = String(
+    reporter.group_name || data.group_name ||
+    data.site_ref || data.location_name || ""
+  ).trim();
+
+  const description = String(
+    data.name || data.summary || data.title ||
+    data.description || ""
+  ).trim();
+
+  return {
+    vehicleRef,
+    siteRef,
+    description,
+    driverName: String(
+      data.reported_by_name || reporter.name ||
+      [reporter.first_name, reporter.last_name].filter(Boolean).join(" ") || ""
+    ).trim(),
+    driverPhone: String(reporter.mobile_phone_number || reporter.home_phone_number || "").trim(),
+    driverEmail: String(reporter.email || raw.triggered_by || "").trim(),
+    fleetioId: String(data.id || raw.id || "").trim(),
+    fleetioNumber: String(data.number || "").trim(),
+    eventType: String(raw.event || raw.event_type || "").trim()
+  };
+}
+
+async function loadAutomationSettings(env) {
+  try {
+    const token = await getFirebaseIdToken(env);
+    if (!token) return { repairMappings: [], issueMappings: [] };
+
+    const projectId = env.FIREBASE_PROJECT_ID || "sms-dlx";
+    const path = `organizations/${ORG_ID}/settings/automation`;
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${path}?key=${env.FIREBASE_API_KEY}`;
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (!res.ok) {
+      console.log("No automation settings found in Firestore, using env fallbacks");
+      return buildSettingsFromEnv(env);
+    }
+
+    const doc = await res.json();
+    const fields = doc.fields || {};
+
+    const repairMappings = parseFirestoreArray(fields.repairMappings);
+    const issueMappings = parseFirestoreArray(fields.issueMappings);
+
+    return { repairMappings, issueMappings };
+  } catch (e) {
+    console.error("Failed to load automation settings:", e.message);
+    return buildSettingsFromEnv(env);
+  }
+}
+
+function parseFirestoreArray(field) {
+  if (!field || !field.arrayValue || !field.arrayValue.values) return [];
+  return field.arrayValue.values.map(v => {
+    if (!v.mapValue || !v.mapValue.fields) return {};
+    const f = v.mapValue.fields;
+    const obj = {};
+    for (const [key, val] of Object.entries(f)) {
+      obj[key] = val.stringValue || val.integerValue || "";
+    }
+    return obj;
+  });
+}
+
+// Fallback: build settings from environment variables
+// Env format: REPAIR_MAPPINGS="RBG:Jiffy Lube:123 Main St Roseburg OR;EUG:Jiffy Lube:456 Oak Eugene OR"
+function buildSettingsFromEnv(env) {
+  const repairMappings = [];
+  const issueMappings = [];
+
+  if (env.REPAIR_MAPPINGS) {
+    for (const entry of env.REPAIR_MAPPINGS.split(";")) {
+      const [siteRef, shopName, address] = entry.split(":");
+      if (siteRef) repairMappings.push({ siteRef: siteRef.trim(), shopName: (shopName || "").trim(), address: (address || "").trim() });
+    }
+  }
+
+  if (env.ISSUE_MAPPINGS) {
+    for (const entry of env.ISSUE_MAPPINGS.split(";")) {
+      const [keyword, tripPrefix] = entry.split(":");
+      if (keyword) issueMappings.push({ keyword: keyword.trim().toLowerCase(), tripPrefix: (tripPrefix || "").trim() });
+    }
+  }
+
+  return { repairMappings, issueMappings };
+}
+
+function findRepairShop(settings, siteRef, description) {
+  if (!settings.repairMappings || settings.repairMappings.length === 0) return null;
+
+  const exactMatch = settings.repairMappings.find(
+    m => m.siteRef && m.siteRef.toUpperCase() === (siteRef || "").toUpperCase()
+  );
+  if (exactMatch) return exactMatch;
+
+  const defaultMapping = settings.repairMappings.find(
+    m => m.siteRef === "*" || m.siteRef.toUpperCase() === "DEFAULT"
+  );
+  return defaultMapping || null;
+}
+
+function buildTripName(settings, issue) {
+  const desc = (issue.description || "").toLowerCase();
+
+  if (settings.issueMappings && settings.issueMappings.length > 0) {
+    for (const mapping of settings.issueMappings) {
+      if (mapping.keyword && desc.includes(mapping.keyword)) {
+        return `${mapping.tripPrefix} / ${issue.vehicleRef || "Unknown"}`;
+      }
+    }
+  }
+
+  const shortDesc = issue.description.length > 40
+    ? issue.description.slice(0, 40) + "..."
+    : issue.description;
+  return `${shortDesc} / ${issue.vehicleRef || "Unknown"}`;
+}
+
+async function createIcabbiTrip(apiUrl, apiKey, tripData) {
+  const url = `${apiUrl.replace(/\/+$/, "")}/bookings`;
+
+  const body = {
+    pickup_address: tripData.pickup_address,
+    pickup_name: tripData.pickup_name,
+    passenger_name: tripData.passenger_name,
+    vehicle_ref: tripData.vehicle_ref,
+    date: tripData.date,
+    time: tripData.time,
+    notes: tripData.notes,
+    status: "pre_booked"
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+      "X-API-Key": apiKey
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`iCabbi API ${res.status}: ${errText}`);
+  }
+
+  return await res.json();
+}
+
+async function writeNotificationToFirestore(env, data) {
+  const token = await getFirebaseIdToken(env);
+  if (!token) {
+    console.warn("No Firebase token — cannot write notification");
+    return;
+  }
+
+  const projectId = env.FIREBASE_PROJECT_ID || "sms-dlx";
+  const colPath = `organizations/${ORG_ID}/notifications`;
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${colPath}?key=${env.FIREBASE_API_KEY}`;
+
+  const fields = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value === null || value === undefined) {
+      fields[key] = { nullValue: null };
+    } else if (Array.isArray(value)) {
+      fields[key] = {
+        arrayValue: {
+          values: value.map(item => {
+            if (typeof item === "object") {
+              const mapFields = {};
+              for (const [k, v] of Object.entries(item)) {
+                mapFields[k] = { stringValue: String(v) };
+              }
+              return { mapValue: { fields: mapFields } };
+            }
+            return { stringValue: String(item) };
+          })
+        }
+      };
+    } else if (typeof value === "boolean") {
+      fields[key] = { booleanValue: value };
+    } else {
+      fields[key] = { stringValue: String(value) };
+    }
+  }
+
+  fields.read = { booleanValue: false };
+  fields.createdAt = { timestampValue: new Date().toISOString() };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ fields }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error("Notification write failed:", errText);
+  } else {
+    console.log("Notification written to Firestore");
+  }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

@@ -10,3 +10,12 @@ FIREBASE_PROJECT_ID = "sms-dlx"
 SUPABASE_URL = "https://mdutrtmdjodabggirntb.supabase.co"
 
 # Set SUPABASE_SERVICE_KEY via `wrangler secret put SUPABASE_SERVICE_KEY`
+
+# Fleetio → iCabbi automation (optional)
+# Set FLEETIO_WEBHOOK_SECRET via `wrangler secret put FLEETIO_WEBHOOK_SECRET`
+# Set ICABBI_API_KEY via `wrangler secret put ICABBI_API_KEY`
+# ICABBI_API_URL = "https://your-icabbi-instance.com/api"
+
+# Fallback repair/issue mappings (can also be configured in Firestore UI)
+# REPAIR_MAPPINGS = "RBG:Jiffy Lube:123 Main St Roseburg OR;EUG:Shop Name:456 Oak Eugene OR"
+# ISSUE_MAPPINGS = "headlight:Headlight repair;oil:Oil change"
