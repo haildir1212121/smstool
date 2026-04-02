@@ -3,6 +3,7 @@
  *
  * POST /webhook              — receives iCabbi "Pre-booking: Driver Designated" events
  * POST /webhook/undesignate  — receives iCabbi "Driver Undesignate" events (deletes trip)
+ * POST /webhook/update       — receives iCabbi "Pre-booking: Update" events (patches vehicle/driver)
  * GET  /trips                — returns stored trips for a date range (?from=YYYY-MM-DD&to=YYYY-MM-DD)
  * GET  /trips/stats          — quick count of stored trips for a date
  *
@@ -269,6 +270,9 @@ export default {
       if (url.pathname === "/webhook/undesignate" && request.method === "POST") {
         return await handleUndesignate(request, env);
       }
+      if (url.pathname === "/webhook/update" && request.method === "POST") {
+        return await handleUpdate(request, env);
+      }
       if (url.pathname === "/trips" && request.method === "GET") {
         return await handleGetTrips(request, env);
       }
@@ -320,6 +324,44 @@ async function handleWebhook(request, env) {
   }
 
   return jsonResponse({ ok: true, stored });
+}
+
+// ── Update Handler (Pre-booking: Update) ────────────────────────────────────
+// Catches edits like vehicle/driver assignment that don't trigger DESIGNATE.
+// Uses the full normalizeTrip so the UPSERT updates all fields on the
+// existing row (matched by stable trip ID).
+
+async function handleUpdate(request, env) {
+  const secret = request.headers.get("X-Webhook-Secret") || "";
+  if (!env.WEBHOOK_SECRET || secret !== env.WEBHOOK_SECRET) {
+    return jsonResponse({ error: "Unauthorized" }, 401);
+  }
+
+  const payload = await request.json();
+  console.log("Update payload:", JSON.stringify(payload).slice(0, 2000));
+
+  const bookings = Array.isArray(payload) ? payload : [payload];
+
+  let updated = 0;
+  for (const booking of bookings) {
+    const trip = normalizeTrip(booking);
+    if (!trip || !trip.date) continue;
+
+    if (!trip.id) {
+      trip.id = getTripDocId(trip);
+    }
+
+    console.log(`Update: id=${trip.id} vehicle=${trip.vehicleRef} passenger=${trip.passenger} date=${trip.date} time=${trip.time}`);
+
+    // UPSERT — if the trip already exists (same ID), this updates all fields
+    // including vehicleRef. If it's a new trip we haven't seen, it gets created.
+    const ok = await supabaseUpsertTrip(env, trip);
+    if (ok) updated++;
+
+    firestoreWriteTrip(env, trip).catch((e) => console.error("Firestore write error:", e));
+  }
+
+  return jsonResponse({ ok: true, updated });
 }
 
 // ── Undesignate Handler ─────────────────────────────────────────────────────
