@@ -670,29 +670,51 @@ async function handleFleetioWebhook(request, env) {
 
   console.log(`Matched driver "${issue.driverName}" → contact "${contact.name}" phone=${contact.phone}`);
 
-  // Step 3: Load automation settings for issue type mappings (repair shop address, etc.)
+  // Step 3: Look up vehicle in iCabbi to get site_ref for repair shop mapping
+  //   Fleetio sends 3-digit ref (e.g. "197"), iCabbi uses 4-digit (e.g. "7197")
+  const icabbiVehicleRef = toIcabbiVehicleRef(issue.vehicleRef);
+  let siteRef = "";
+  let vehicleId = null;
+
+  if (icabbiVehicleRef && env.ICABBI_AUTH) {
+    vehicleId = await lookupIcabbiVehicleId(env, icabbiVehicleRef);
+    if (vehicleId) {
+      siteRef = await lookupVehicleSiteRef(env, vehicleId) || "";
+      console.log(`Vehicle ${icabbiVehicleRef} → id=${vehicleId} → site_ref="${siteRef}"`);
+    } else {
+      console.log(`Vehicle ${icabbiVehicleRef} not found in iCabbi`);
+    }
+  }
+
+  // Step 4: Load automation settings and find repair shop by site_ref
   const settings = await loadAutomationSettings(env);
-  const repairShop = findRepairShop(settings, issue.siteRef, issue.description);
+  const repairShop = findRepairShop(settings, siteRef, issue.description);
   const tripName = buildTripName(settings, issue);
 
-  // Step 4: Create trip in iCabbi using their /bookings/add endpoint
-  let icabbiResult = null;
-  const icabbiAuth = env.ICABBI_AUTH; // Basic auth header value
+  console.log(`Trip name: "${tripName}" | site_ref: "${siteRef}" | repair shop: "${repairShop?.shopName || "none"}"`);
 
-  const pickupAddress = repairShop?.address || "";
+  // Step 5: Create trip in iCabbi using their /bookings/add endpoint
+  let icabbiResult = null;
+
+  const pickupAddress = repairShop?.address || "Repair Shop (Address TBD)";
   const now = new Date();
 
   const icabbiBody = {
     date: now.toISOString(),
-    name: contact.name || issue.driverName,
-    phone: contact.phone || "",
-    address: pickupAddress ? {
+    name: tripName,
+    phone: contact.phone || "0000000000",
+    address: {
       formatted: pickupAddress
-    } : undefined,
-    notes: `Fleetio: ${issue.description}. Vehicle: ${issue.vehicleRef || "N/A"}.`
+    },
+    instructions: `Fleetio: ${issue.description}. Vehicle: ${issue.vehicleRef || "N/A"}. Driver: ${contact.name}.`
   };
 
-  if (icabbiAuth) {
+  // If we found a site_ref, include it so iCabbi binds to the right site
+  if (siteRef) {
+    icabbiBody.site_ref = siteRef;
+  }
+
+  if (env.ICABBI_AUTH) {
     try {
       icabbiResult = await createIcabbiTrip(env, icabbiBody);
       console.log("iCabbi trip created:", JSON.stringify(icabbiResult));
@@ -707,32 +729,33 @@ async function handleFleetioWebhook(request, env) {
 
   const tripCreated = icabbiResult && !icabbiResult.error && !icabbiResult.skipped;
 
-  // Step 5: Store in Supabase as a local trip record
+  // Step 6: Store in Supabase as a local trip record
   const localTrip = {
     id: `fleetio_${issue.vehicleRef || "unknown"}_${Date.now()}`,
     date: now.toISOString().split("T")[0],
     time: now.toTimeString().slice(0, 5),
-    vehicleRef: issue.vehicleRef || "",
+    vehicleRef: icabbiVehicleRef || issue.vehicleRef || "",
     pickup: pickupAddress,
     dropoff: "",
     passenger: tripName,
     passengerPhone: contact.phone || "",
     driverName: contact.name || issue.driverName,
     driverPhone: contact.phone || "",
-    notes: icabbiBody.notes,
+    notes: icabbiBody.instructions,
     status: tripCreated ? "auto_created" : "pending_manual",
     receivedAt: now.toISOString()
   };
   await supabaseUpsertTrip(env, localTrip);
 
-  // Step 6: Write notification to Firestore
+  // Step 7: Write notification to Firestore
   await writeNotificationToFirestore(env, {
     type: "trip_created",
     title: tripName,
     message: tripCreated
-      ? `Auto-created trip for ${contact.name} (${contact.phone}). Vehicle: ${issue.vehicleRef}. Issue: ${issue.description}`
-      : `Trip prepared for ${contact.name}. iCabbi API ${icabbiResult?.skipped ? "not configured" : "error: " + icabbiResult?.error}. Saved locally.`,
+      ? `Auto-created trip for ${contact.name} (${contact.phone}). Vehicle: ${issue.vehicleRef} → site: ${siteRef || "unknown"}. Repair shop: ${repairShop?.shopName || "TBD"}.`
+      : `Trip prepared for ${contact.name}. Vehicle: ${issue.vehicleRef}. iCabbi API ${icabbiResult?.skipped ? "not configured" : "error: " + icabbiResult?.error}. Saved locally.`,
     vehicleRef: issue.vehicleRef || "",
+    siteRef: siteRef || "",
     driverName: contact.name || issue.driverName,
     driverPhone: contact.phone || "",
     tripName: tripName,
@@ -740,6 +763,7 @@ async function handleFleetioWebhook(request, env) {
     pipelineSteps: [
       { label: "Issue Reported", status: "done" },
       { label: "Driver Match", status: "done" },
+      { label: "Vehicle Lookup", status: vehicleId ? "done" : "pending" },
       { label: "Trip Creation", status: tripCreated ? "done" : "pending" },
       { label: "Notification", status: "done" }
     ]
@@ -934,13 +958,15 @@ function findRepairShop(settings, siteRef, description) {
   return defaultMapping || null;
 }
 
+// Trip name: "{issue description} / {3-digit vehicle number}" e.g. "Headlight / 197"
 function buildTripName(settings, issue) {
+  const vehicleShort = (issue.vehicleRef || "Unknown").replace(/^7/, ""); // strip leading 7 if 4-digit
   const desc = (issue.description || "").toLowerCase();
 
   if (settings.issueMappings && settings.issueMappings.length > 0) {
     for (const mapping of settings.issueMappings) {
       if (mapping.keyword && desc.includes(mapping.keyword)) {
-        return `${mapping.tripPrefix} / ${issue.vehicleRef || "Unknown"}`;
+        return `${mapping.tripPrefix} / ${vehicleShort}`;
       }
     }
   }
@@ -948,7 +974,71 @@ function buildTripName(settings, issue) {
   const shortDesc = issue.description.length > 40
     ? issue.description.slice(0, 40) + "..."
     : issue.description;
-  return `${shortDesc} / ${issue.vehicleRef || "Unknown"}`;
+  return `${shortDesc} / ${vehicleShort}`;
+}
+
+// Convert Fleetio's 3-digit vehicle ref to iCabbi's 4-digit (prefix with 7)
+// e.g. "197" → "7197", "160" → "7160". If already 4+ digits, leave as-is.
+function toIcabbiVehicleRef(fleetioRef) {
+  const ref = String(fleetioRef || "").trim();
+  if (!ref) return "";
+  if (ref.length <= 3) return `7${ref}`;
+  return ref;
+}
+
+// Look up vehicle ID in iCabbi by ref number
+// GET {icabbi_url}/vehicle/id?ref={vehicle_ref}
+async function lookupIcabbiVehicleId(env, vehicleRef) {
+  const apiUrl = (env.ICABBI_API_URL || "https://api.icabbi.us/us4").replace(/\/+$/, "");
+  const url = `${apiUrl}/vehicle/id?ref=${encodeURIComponent(vehicleRef)}`;
+
+  console.log(`iCabbi vehicle lookup: ${url}`);
+  const res = await fetch(url, {
+    headers: { "Authorization": `Basic ${env.ICABBI_AUTH}` }
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`iCabbi vehicle/id lookup failed (${res.status}):`, errText);
+    return null;
+  }
+
+  const data = await res.json();
+  console.log("iCabbi vehicle/id response:", JSON.stringify(data).slice(0, 500));
+
+  // Response may be { id: 1234 } or { body: { id: 1234 } } depending on API version
+  const vehicleId = data.id || data.body?.id || data.vehicle_id || null;
+  return vehicleId;
+}
+
+// Look up vehicle's site_ref from iCabbi
+// GET {icabbi_url}/vehicle/sites?id={vehicle_id}
+async function lookupVehicleSiteRef(env, vehicleId) {
+  const apiUrl = (env.ICABBI_API_URL || "https://api.icabbi.us/us4").replace(/\/+$/, "");
+  const url = `${apiUrl}/vehicle/sites?id=${encodeURIComponent(vehicleId)}`;
+
+  console.log(`iCabbi vehicle/sites lookup: ${url}`);
+  const res = await fetch(url, {
+    headers: { "Authorization": `Basic ${env.ICABBI_AUTH}` }
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`iCabbi vehicle/sites lookup failed (${res.status}):`, errText);
+    return null;
+  }
+
+  const data = await res.json();
+  console.log("iCabbi vehicle/sites response:", JSON.stringify(data).slice(0, 500));
+
+  // Extract site_ref from response — could be array of sites or single object
+  if (Array.isArray(data)) {
+    return data[0]?.site_ref || data[0]?.ref || data[0]?.name || null;
+  }
+  if (Array.isArray(data.body)) {
+    return data.body[0]?.site_ref || data.body[0]?.ref || data.body[0]?.name || null;
+  }
+  return data.site_ref || data.ref || data.name || null;
 }
 
 // Create a trip in iCabbi via POST /bookings/add with Basic auth
