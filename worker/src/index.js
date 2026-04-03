@@ -1,10 +1,10 @@
 /**
  * iCabbi Trips Webhook Worker
  *
- * POST /webhook              — receives iCabbi "Pre-booking: Driver Designated" events
- * POST /webhook/undesignate  — receives iCabbi "Driver Undesignate" events (deletes trip)
- * POST /webhook/update       — receives iCabbi "Pre-booking: Update" events (patches vehicle/driver)
- * POST /webhook/fleetio      — receives Fleetio issue reports, auto-creates iCabbi trips
+ * POST /webhook               — receives iCabbi "Pre-booking: Driver Designated" events
+ * POST /webhook/undesignate   — receives iCabbi "Driver Undesignate" events (deletes trip)
+ * POST /webhook/update        — receives iCabbi "Pre-booking: Update" events (patches vehicle/driver)
+ * POST /webhook/fleetio       — receives Fleetio issue reports, auto-creates iCabbi trips
  * GET  /trips                — returns stored trips for a date range (?from=YYYY-MM-DD&to=YYYY-MM-DD)
  * GET  /trips/stats          — quick count of stored trips for a date
  *
@@ -13,9 +13,9 @@
  * Firestore path: organizations/{orgId}/trips/{docId}
  *
  * Fleetio → iCabbi Pipeline:
- *   1. Driver reports issue in Fleetio → webhook fires here
- *   2. Worker maps issue + site_ref to repair shop → creates iCabbi trip
- *   3. Writes notification to Firestore for the SMS platform UI
+ * 1. Driver reports issue in Fleetio → webhook fires here
+ * 2. Worker maps issue + site_ref to repair shop → creates iCabbi trip
+ * 3. Writes notification to Firestore for the SMS platform UI
  */
 
 const ORG_ID = "dispatch_team_main";
@@ -114,7 +114,6 @@ async function supabaseDeleteById(env, tripId) {
 }
 
 async function supabaseDeleteByMatch(env, filters) {
-  // Build PostgREST filter string
   const parts = [];
   for (const [col, val] of Object.entries(filters)) {
     parts.push(`${col}=eq.${encodeURIComponent(val)}`);
@@ -202,9 +201,6 @@ function tripToFirestoreDoc(trip) {
 
 function getTripDocId(trip) {
   if (trip.id) return trip.id;
-  // Vehicle is NOT part of the ID — it's a mutable attribute that can change.
-  // Trip identity = date + time + passenger + pickup + dropoff.
-  // Return trips differ by pickup/dropoff. Different times = different trips.
   const raw = `${trip.date}_${trip.time}_${trip.passenger}_${trip.pickup}_${trip.dropoff}`;
   return raw.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
@@ -306,8 +302,6 @@ async function handleWebhook(request, env) {
   }
 
   const payload = await request.json();
-  console.log("Webhook payload:", JSON.stringify(payload).slice(0, 2000));
-
   const bookings = Array.isArray(payload) ? payload : [payload];
 
   let stored = 0;
@@ -315,30 +309,14 @@ async function handleWebhook(request, env) {
     const trip = normalizeTrip(booking);
     if (!trip || !trip.date) continue;
 
-    // Ensure we have a stable ID
-    if (!trip.id) {
-      trip.id = getTripDocId(trip);
-    }
 
-    console.log(`Designate: id=${trip.id} vehicle=${trip.vehicleRef} passenger=${trip.passenger} date=${trip.date} time=${trip.time}`);
-
-    // Atomic UPSERT into Supabase — no read-modify-write needed.
-    // Since vehicleRef is NOT part of the trip ID, reassigning a trip to a
-    // different vehicle naturally updates the existing row via UPSERT.
     const ok = await supabaseUpsertTrip(env, trip);
     if (ok) stored++;
-
-    // Write to Firestore (fire-and-forget backup)
     firestoreWriteTrip(env, trip).catch((e) => console.error("Firestore write error:", e));
   }
 
   return jsonResponse({ ok: true, stored });
 }
-
-// ── Update Handler (Pre-booking: Update) ────────────────────────────────────
-// Catches edits like vehicle/driver assignment that don't trigger DESIGNATE.
-// Uses the full normalizeTrip so the UPSERT updates all fields on the
-// existing row (matched by stable trip ID).
 
 async function handleUpdate(request, env) {
   const secret = request.headers.get("X-Webhook-Secret") || "";
@@ -347,8 +325,6 @@ async function handleUpdate(request, env) {
   }
 
   const payload = await request.json();
-  console.log("Update payload:", JSON.stringify(payload).slice(0, 2000));
-
   const bookings = Array.isArray(payload) ? payload : [payload];
 
   let updated = 0;
@@ -356,24 +332,14 @@ async function handleUpdate(request, env) {
     const trip = normalizeTrip(booking);
     if (!trip || !trip.date) continue;
 
-    if (!trip.id) {
-      trip.id = getTripDocId(trip);
-    }
 
-    console.log(`Update: id=${trip.id} vehicle=${trip.vehicleRef} passenger=${trip.passenger} date=${trip.date} time=${trip.time}`);
-
-    // UPSERT — if the trip already exists (same ID), this updates all fields
-    // including vehicleRef. If it's a new trip we haven't seen, it gets created.
     const ok = await supabaseUpsertTrip(env, trip);
     if (ok) updated++;
-
     firestoreWriteTrip(env, trip).catch((e) => console.error("Firestore write error:", e));
   }
 
   return jsonResponse({ ok: true, updated });
 }
-
-// ── Undesignate Handler ─────────────────────────────────────────────────────
 
 async function handleUndesignate(request, env) {
   const secret = request.headers.get("X-Webhook-Secret") || "";
@@ -382,111 +348,66 @@ async function handleUndesignate(request, env) {
   }
 
   const payload = await request.json();
-  console.log("Undesignate payload:", JSON.stringify(payload).slice(0, 2000));
   const bookings = Array.isArray(payload) ? payload : [payload];
 
   let removed = 0;
   for (const raw of bookings) {
     const booking = raw.booking || raw.data || raw;
+    const id = String(booking.perma_id || booking.id || booking.booking_id || "").trim();
+    const vehicleRef = String(booking.vehicle_number || booking.driver?.vehicle?.ref || booking.vehicle_ref || "").trim();
+    const passenger = booking.client_name || booking.name || booking.passenger_name || "";
 
-    const id = String(
-      booking.perma_id || booking.id || booking.booking_id || ""
-    ).trim();
+    if (!id && !passenger) continue;
 
-    const vehicleRef = String(
-      booking.vehicle_number || booking.driver?.vehicle?.ref ||
-      booking.vehicle_ref || booking.vehicleRef || booking.vehicle_id || ""
-    ).trim();
-
-    const passenger = booking.client_name || booking.name ||
-      booking.passenger_name || booking.customer_name || "";
-
-    if (!id && !passenger) {
-      console.log("Undesignate: no id or passenger to match, skipping");
-      continue;
-    }
-
-    console.log(`Undesignate: id=${id} vehicle=${vehicleRef} passenger=${passenger}`);
-
-    const rawDate =
-      booking.job_date ||
-      booking.scheduled_pickup_date ||
-      booking.pickup_date ||
-      booking.date ||
-      booking.release_date ||
-      "";
-
+    const rawDate = booking.job_date || booking.pickup_date || booking.date || "";
     const date = extractDate(rawDate);
     const result = await removeTripFromSupabase(env, id, vehicleRef, passenger, date);
     if (result.deleted) removed += result.count;
   }
 
-  console.log(`Undesignate: removed ${removed} trip(s)`);
   return jsonResponse({ ok: true, removed });
 }
 
 async function removeTripFromSupabase(env, tripId, vehicleRef, passenger, date) {
   let deletedRows = [];
-
-  // 1. Try by trip ID (most specific)
   if (tripId) {
     deletedRows = await supabaseDeleteById(env, tripId);
     if (deletedRows.length > 0) {
-      for (const row of deletedRows) {
-        firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error("Firestore delete error:", e));
-      }
+      for (const row of deletedRows) firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error(e));
       return { deleted: true, count: deletedRows.length };
     }
   }
-
-  // 2. Try by passenger + vehicle + date (if we have a date)
   if (passenger && vehicleRef && date) {
     deletedRows = await supabaseDeleteByMatch(env, { passenger, vehicle_ref: vehicleRef, date });
     if (deletedRows.length > 0) {
-      for (const row of deletedRows) {
-        firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error("Firestore delete error:", e));
-      }
+      for (const row of deletedRows) firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error(e));
       return { deleted: true, count: deletedRows.length };
     }
   }
-
-  // 3. Try by passenger + vehicle (no date)
   if (passenger && vehicleRef) {
     deletedRows = await supabaseDeleteByMatch(env, { passenger, vehicle_ref: vehicleRef });
     if (deletedRows.length > 0) {
-      for (const row of deletedRows) {
-        firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error("Firestore delete error:", e));
-      }
+      for (const row of deletedRows) firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error(e));
       return { deleted: true, count: deletedRows.length };
     }
   }
-
-  // 4. Try by vehicle only (if no passenger)
   if (!passenger && vehicleRef) {
     const dateFilter = date || new Date().toISOString().split("T")[0];
     deletedRows = await supabaseDeleteByMatch(env, { vehicle_ref: vehicleRef, date: dateFilter });
     if (deletedRows.length > 0) {
-      for (const row of deletedRows) {
-        firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error("Firestore delete error:", e));
-      }
+      for (const row of deletedRows) firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error(e));
       return { deleted: true, count: deletedRows.length };
     }
   }
-
-  // 5. Try by passenger only (if no vehicle)
   if (passenger && !vehicleRef) {
     const filters = { passenger };
     if (date) filters.date = date;
     deletedRows = await supabaseDeleteByMatch(env, filters);
     if (deletedRows.length > 0) {
-      for (const row of deletedRows) {
-        firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error("Firestore delete error:", e));
-      }
+      for (const row of deletedRows) firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error(e));
       return { deleted: true, count: deletedRows.length };
     }
   }
-
-  // 6. Scan upcoming 8 days if no date was provided and nothing matched yet
   if (!date) {
     const today = new Date();
     for (let i = 0; i < 8; i++) {
@@ -496,17 +417,13 @@ async function removeTripFromSupabase(env, tripId, vehicleRef, passenger, date) 
       const filters = { date: dateStr };
       if (passenger) filters.passenger = passenger;
       if (vehicleRef) filters.vehicle_ref = vehicleRef;
-
       deletedRows = await supabaseDeleteByMatch(env, filters);
       if (deletedRows.length > 0) {
-        for (const row of deletedRows) {
-          firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error("Firestore delete error:", e));
-        }
+        for (const row of deletedRows) firestoreDeleteTrip(env, rowToTrip(row)).catch((e) => console.error(e));
         return { deleted: true, count: deletedRows.length };
       }
     }
   }
-
   return { deleted: false, count: 0 };
 }
 
@@ -515,7 +432,7 @@ function extractDate(rawDate) {
   try {
     const dt = new Date(rawDate);
     if (!isNaN(dt.getTime())) return dt.toISOString().split("T")[0];
-  } catch (e) { /* ignore */ }
+  } catch (e) { }
   const isoMatch = String(rawDate).match(/(\d{4}-\d{2}-\d{2})/);
   if (isoMatch) return isoMatch[1];
   const dmyMatch = String(rawDate).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
@@ -523,28 +440,19 @@ function extractDate(rawDate) {
   return "";
 }
 
-// ── Trips API (reads from Supabase for backward compatibility) ──────────────
-
 async function handleGetTrips(request, env) {
   const url = new URL(request.url);
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to") || from;
-
-  if (!from) {
-    return jsonResponse({ error: "Missing 'from' query parameter (YYYY-MM-DD)" }, 400);
-  }
-
+  if (!from) return jsonResponse({ error: "Missing from param" }, 400);
   const rows = await supabaseGetTrips(env, from, to);
   const dates = getDateRange(from, to);
-
-  // Group by date for backward-compatible response format
   const allTrips = {};
   for (const row of rows) {
     const trip = rowToTrip(row);
     if (!allTrips[trip.date]) allTrips[trip.date] = [];
     allTrips[trip.date].push(trip);
   }
-
   return jsonResponse({ from, to, dates: dates.length, trips: allTrips });
 }
 
@@ -552,36 +460,20 @@ async function handleTripStats(request, env) {
   const url = new URL(request.url);
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to") || from;
-
-  if (!from) {
-    return jsonResponse({ error: "Missing 'from' query parameter" }, 400);
-  }
-
+  if (!from) return jsonResponse({ error: "Missing from param" }, 400);
   const rows = await supabaseGetTrips(env, from, to);
   const dates = getDateRange(from, to);
-
-  // Count by date
   const stats = {};
   let total = 0;
-  for (const date of dates) {
-    stats[date] = 0;
-  }
+  for (const date of dates) stats[date] = 0;
   for (const row of rows) {
-    const d = row.date;
-    stats[d] = (stats[d] || 0) + 1;
+    stats[row.date] = (stats[row.date] || 0) + 1;
     total++;
   }
-
   return jsonResponse({ from, to, total, byDate: stats });
 }
 
 // ── Fleetio Webhook Handler ─────────────────────────────────────────────────
-//
-// Fleetio fires webhooks for issues/DVIRs. We:
-//   1. Parse the issue details (vehicle, site/location, issue description)
-//   2. Look up automation settings from Firestore (repair shop mappings, issue type mappings)
-//   3. Create a trip in iCabbi (pickup at repair shop, name = "Issue / vehicle_ref", time = 23:59)
-//   4. Write a notification to Firestore for the SMS platform UI
 
 async function handleFleetioWebhook(request, env) {
   const signature = request.headers.get("x-fleetio-webhook-signature") || "";
@@ -592,604 +484,324 @@ async function handleFleetioWebhook(request, env) {
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
-  // Read the raw body for signature verification
   const rawBody = await request.text();
 
   if (signature) {
     const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(expectedSecret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"]
-    );
+    const key = await crypto.subtle.importKey("raw", encoder.encode(expectedSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
     const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
     const computed = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
-
-    console.log(`Fleetio HMAC: received="${signature.slice(0, 16)}..." computed="${computed.slice(0, 16)}..."`);
-
-    if (computed !== signature) {
-      return jsonResponse({ error: "Unauthorized" }, 401);
-    }
+    if (computed !== signature) return jsonResponse({ error: "Unauthorized" }, 401);
   } else {
     const authHeader = request.headers.get("Authorization") || "";
     const rawSecret = authHeader.replace(/^(Bearer|Token)\s+/i, "").trim();
-    if (!rawSecret || rawSecret !== expectedSecret) {
-      console.log("No signature header and Authorization doesn't match");
-      return jsonResponse({ error: "Unauthorized" }, 401);
-    }
+    if (!rawSecret || rawSecret !== expectedSecret) return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
   const payload = JSON.parse(rawBody);
-  console.log("Fleetio webhook payload:", JSON.stringify(payload).slice(0, 3000));
-
-  // Step 1: Parse the Fleetio issue to get driver name, vehicle, description
   const issue = normalizeFleetioIssue(payload);
 
   if (!issue || !issue.driverName) {
-    console.log("Fleetio: no driver name found in payload, cannot match");
     await writeNotificationToFirestore(env, {
       type: "fleetio_issue",
       title: `Fleetio Issue: ${(issue?.description || "Unknown").slice(0, 60)}`,
-      message: `No driver name found in Fleetio event. Cannot match to SMS contact. Vehicle: ${issue?.vehicleRef || "Unknown"}. Description: ${issue?.description || "N/A"}`,
+      message: `No driver name found. Vehicle: ${issue?.vehicleRef || "Unknown"}.`,
       vehicleRef: issue?.vehicleRef || "",
       driverName: "",
-      pipelineSteps: [
-        { label: "Issue Reported", status: "done" },
-        { label: "Driver Match", status: "pending" },
-        { label: "Trip Creation", status: "pending" },
-        { label: "Notification", status: "done" }
-      ]
+      pipelineSteps: [{ label: "Issue Reported", status: "done" }, { label: "Driver Match", status: "pending" }, { label: "Trip Creation", status: "pending" }, { label: "Notification", status: "done" }]
     });
     return jsonResponse({ ok: true, action: "notification_only", reason: "no_driver_name" });
   }
 
-  console.log(`Fleetio issue: driver="${issue.driverName}" vehicle=${issue.vehicleRef} desc="${issue.description}"`);
-
-  // Step 2: Look up driver in SMS tool contacts (Firestore threads) by name
   const contact = await findContactByName(env, issue.driverName);
 
   if (!contact) {
-    console.log(`No SMS contact found matching driver "${issue.driverName}"`);
     await writeNotificationToFirestore(env, {
       type: "fleetio_issue",
       title: `Fleetio Issue: ${issue.description.slice(0, 60)}`,
-      message: `Driver "${issue.driverName}" not found in SMS contacts. Vehicle: ${issue.vehicleRef || "Unknown"}. Description: ${issue.description}. Trip not auto-created.`,
+      message: `Driver "${issue.driverName}" not found in SMS contacts. Vehicle: ${issue.vehicleRef || "Unknown"}. Trip not auto-created.`,
       vehicleRef: issue.vehicleRef || "",
       driverName: issue.driverName,
-      pipelineSteps: [
-        { label: "Issue Reported", status: "done" },
-        { label: "Driver Match", status: "pending" },
-        { label: "Trip Creation", status: "pending" },
-        { label: "Notification", status: "done" }
-      ]
+      pipelineSteps: [{ label: "Issue Reported", status: "done" }, { label: "Driver Match", status: "pending" }, { label: "Trip Creation", status: "pending" }, { label: "Notification", status: "done" }]
     });
     return jsonResponse({ ok: true, action: "notification_only", reason: "driver_not_found" });
   }
 
-  console.log(`Matched driver "${issue.driverName}" → contact "${contact.name}" phone=${contact.phone}`);
-
-  // Step 3: Look up vehicle in iCabbi to get site_ref for repair shop mapping
-  //   Fleetio sends 3-digit ref (e.g. "197"), iCabbi uses 4-digit (e.g. "7197")
-  const icabbiVehicleRef = toIcabbiVehicleRef(issue.vehicleRef);
-  let siteRef = "";
-  let vehicleId = null;
-
-  if (icabbiVehicleRef && env.ICABBI_AUTH) {
-    vehicleId = await lookupIcabbiVehicleId(env, icabbiVehicleRef);
-    if (vehicleId) {
-      siteRef = await lookupVehicleSiteRef(env, vehicleId) || "";
-      console.log(`Vehicle ${icabbiVehicleRef} → id=${vehicleId} → site_ref="${siteRef}"`);
-    } else {
-      console.log(`Vehicle ${icabbiVehicleRef} not found in iCabbi`);
-    }
-  }
-
-  // Step 4: Load automation settings and find repair shop by site_ref
   const settings = await loadAutomationSettings(env);
-  const repairShop = findRepairShop(settings, siteRef, issue.description);
+  const repairShop = findRepairShop(settings, issue.siteRef, issue.description);
   const tripName = buildTripName(settings, issue);
 
-  console.log(`Trip name: "${tripName}" | site_ref: "${siteRef}" | repair shop: "${repairShop?.shopName || "none"}"`);
-
-  // Step 5: Create trip in iCabbi using their /bookings/add endpoint
-  let icabbiResult = null;
-
-  const pickupAddress = repairShop?.address || "Repair Shop (Address TBD)";
+  // Time Fix: 23:59 PDT
   const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const bookingTimePST = `${year}-${month}-${day}T23:59:00`;
+
+  let icabbiResult = null;
+  const pickupAddress = repairShop?.address || "Repair Shop (Address TBD)";
 
   const icabbiBody = {
-    date: now.toISOString(),
+    date: bookingTimePST,
     name: tripName,
-    phone: contact.phone || "0000000000",
+    phone: "",
     address: {
+      lat: 44.0521,
+      lng: -123.0868,
       formatted: pickupAddress
     },
-    instructions: `Fleetio: ${issue.description}. Vehicle: ${issue.vehicleRef || "N/A"}. Driver: ${contact.name}.`
+    destination: {
+      lat: 44.0521,
+      lng: -123.0868,
+      formatted: "Vehicle Home Base"
+    },
+    driver_instructions: `Fleetio: ${issue.description}. Vehicle: ${issue.vehicleRef || "N/A"}.`
   };
-
-  // If we found a site_ref, include it so iCabbi binds to the right site
-  if (siteRef) {
-    icabbiBody.site_ref = siteRef;
-  }
 
   if (env.ICABBI_AUTH) {
     try {
       icabbiResult = await createIcabbiTrip(env, icabbiBody);
-      console.log("iCabbi trip created:", JSON.stringify(icabbiResult));
     } catch (e) {
-      console.error("iCabbi trip creation failed:", e.message);
       icabbiResult = { error: e.message };
     }
   } else {
-    console.log("ICABBI_AUTH not configured — skipping trip creation. Body:", JSON.stringify(icabbiBody));
     icabbiResult = { skipped: true, reason: "icabbi_auth_not_configured" };
   }
 
   const tripCreated = icabbiResult && !icabbiResult.error && !icabbiResult.skipped;
 
-  // Step 6: Store in Supabase as a local trip record
   const localTrip = {
     id: `fleetio_${issue.vehicleRef || "unknown"}_${Date.now()}`,
-    date: now.toISOString().split("T")[0],
-    time: now.toTimeString().slice(0, 5),
-    vehicleRef: icabbiVehicleRef || issue.vehicleRef || "",
+    date: `${year}-${month}-${day}`,
+    time: "23:59",
+    vehicleRef: issue.vehicleRef || "",
     pickup: pickupAddress,
     dropoff: "",
     passenger: tripName,
     passengerPhone: contact.phone || "",
     driverName: contact.name || issue.driverName,
     driverPhone: contact.phone || "",
-    notes: icabbiBody.instructions,
+    notes: icabbiBody.driver_instructions,
     status: tripCreated ? "auto_created" : "pending_manual",
     receivedAt: now.toISOString()
   };
   await supabaseUpsertTrip(env, localTrip);
 
-  // Step 7: Write notification to Firestore
   await writeNotificationToFirestore(env, {
     type: "trip_created",
     title: tripName,
     message: tripCreated
-      ? `Auto-created trip for ${contact.name} (${contact.phone}). Vehicle: ${issue.vehicleRef} → site: ${siteRef || "unknown"}. Repair shop: ${repairShop?.shopName || "TBD"}.`
-      : `Trip prepared for ${contact.name}. Vehicle: ${issue.vehicleRef}. iCabbi API ${icabbiResult?.skipped ? "not configured" : "error: " + icabbiResult?.error}. Saved locally.`,
+      ? `Auto-created trip for ${contact.name}. Vehicle: ${issue.vehicleRef}.`
+      : `Trip prepared for ${contact.name}. iCabbi API Error: ${icabbiResult?.error}.`,
     vehicleRef: issue.vehicleRef || "",
-    siteRef: siteRef || "",
     driverName: contact.name || issue.driverName,
     driverPhone: contact.phone || "",
     tripName: tripName,
     repairShop: repairShop?.shopName || pickupAddress || "",
-    pipelineSteps: [
-      { label: "Issue Reported", status: "done" },
-      { label: "Driver Match", status: "done" },
-      { label: "Vehicle Lookup", status: vehicleId ? "done" : "pending" },
-      { label: "Trip Creation", status: tripCreated ? "done" : "pending" },
-      { label: "Notification", status: "done" }
-    ]
+    pipelineSteps: [{ label: "Issue Reported", status: "done" }, { label: "Driver Match", status: "done" }, { label: "Trip Creation", status: tripCreated ? "done" : "pending" }, { label: "Notification", status: "done" }]
   });
 
-  return jsonResponse({
-    ok: true,
-    tripCreated,
-    tripName,
-    driverName: contact.name,
-    driverPhone: contact.phone,
-    vehicleRef: issue.vehicleRef
-  });
+  return jsonResponse({ ok: true, tripCreated, tripName, driverName: contact.name, vehicleRef: issue.vehicleRef });
 }
 
-// Look up a contact in SMS tool (Firestore threads) by driver name.
-// Matches: exact name, last name + first initial, or case-insensitive contains.
+// ── Helpers & Lookups ────────────────────────────────────────────────────────
+
 async function findContactByName(env, driverName) {
   const token = await getFirebaseIdToken(env);
   if (!token) return null;
-
-  const projectId = env.FIREBASE_PROJECT_ID || "sms-dlx";
-  const colPath = `organizations/${ORG_ID}/threads`;
-  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${colPath}?key=${env.FIREBASE_API_KEY}&pageSize=500`;
-
-  const res = await fetch(url, {
+  const res = await fetch(`https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID || "sms-dlx"}/databases/(default)/documents/organizations/${ORG_ID}/threads?key=${env.FIREBASE_API_KEY}&pageSize=500`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-
-  if (!res.ok) {
-    console.error("Failed to fetch threads for driver match:", await res.text());
-    return null;
-  }
-
+  if (!res.ok) return null;
   const data = await res.json();
   const documents = data.documents || [];
-
   const searchName = driverName.toLowerCase().trim();
   const searchParts = searchName.split(/\s+/);
-
   let bestMatch = null;
-
   for (const doc of documents) {
-    const fields = doc.fields || {};
-    const name = (fields.name?.stringValue || "").trim();
-    const phone = (fields.phone?.stringValue || doc.name?.split("/").pop() || "").trim();
-    const nameLower = name.toLowerCase();
-
+    const name = (doc.fields?.name?.stringValue || "").trim().toLowerCase();
+    const phone = (doc.fields?.phone?.stringValue || doc.name?.split("/").pop() || "").trim();
     if (!name || !phone) continue;
-
-    // Exact match
-    if (nameLower === searchName) {
-      return { name, phone };
-    }
-
-    // Last name match + first name starts with
-    const contactParts = nameLower.split(/\s+/);
+    if (name === searchName) return { name: doc.fields.name.stringValue, phone };
+    const contactParts = name.split(/\s+/);
     if (searchParts.length >= 2 && contactParts.length >= 2) {
-      const searchFirst = searchParts[0];
-      const searchLast = searchParts[searchParts.length - 1];
-      const contactFirst = contactParts[0];
-      const contactLast = contactParts[contactParts.length - 1];
-
-      if (searchLast === contactLast && (contactFirst.startsWith(searchFirst) || searchFirst.startsWith(contactFirst))) {
-        bestMatch = { name, phone };
-      }
+      if (searchParts[searchParts.length - 1] === contactParts[contactParts.length - 1] && (contactParts[0].startsWith(searchParts[0]) || searchParts[0].startsWith(contactParts[0]))) bestMatch = { name: doc.fields.name.stringValue, phone };
     }
-
-    // Contains match (either direction)
-    if (!bestMatch && (nameLower.includes(searchName) || searchName.includes(nameLower))) {
-      bestMatch = { name, phone };
-    }
+    if (!bestMatch && (name.includes(searchName) || searchName.includes(name))) bestMatch = { name: doc.fields.name.stringValue, phone };
   }
-
   return bestMatch;
 }
 
 function normalizeFleetioIssue(raw) {
   const data = raw.payload || raw.data || raw;
-  console.log(`normalizeFleetioIssue: keys=${Object.keys(data).slice(0,10).join(",")} name="${data.name}" summary="${data.summary}" desc="${data.description}"`);
   const reporter = data.reported_by || {};
-
-  const vehicleRef = String(
-    data.vehicle_name || data.vehicle_number || data.vehicle_ref ||
-    data.vehicle_id || ""
-  ).trim();
-
-  const siteRef = String(
-    reporter.group_name || data.group_name ||
-    data.site_ref || data.location_name || ""
-  ).trim();
-
-  const description = String(
-    data.name || data.summary || data.title ||
-    data.description || ""
-  ).trim();
-
   return {
-    vehicleRef,
-    siteRef,
-    description,
-    driverName: String(
-      data.reported_by_name || reporter.name ||
-      [reporter.first_name, reporter.last_name].filter(Boolean).join(" ") || ""
-    ).trim(),
-    driverPhone: String(reporter.mobile_phone_number || reporter.home_phone_number || "").trim(),
-    driverEmail: String(reporter.email || raw.triggered_by || "").trim(),
-    fleetioId: String(data.id || raw.id || "").trim(),
-    fleetioNumber: String(data.number || "").trim(),
-    eventType: String(raw.event || raw.event_type || "").trim()
+    vehicleRef: String(data.vehicle_name || data.vehicle_number || "").trim(),
+    siteRef: String(reporter.group_name || data.location_name || "").trim(),
+    description: String(data.name || data.summary || data.description || "").trim(),
+    driverName: String(data.reported_by_name || reporter.name || "").trim(),
+    driverPhone: String(reporter.mobile_phone_number || "").trim(),
+    driverEmail: String(reporter.email || "").trim(),
+    fleetioId: String(data.id || "").trim(),
+    eventType: String(raw.event || "").trim()
   };
 }
 
 async function loadAutomationSettings(env) {
-  try {
-    const token = await getFirebaseIdToken(env);
-    if (!token) return { repairMappings: [], issueMappings: [] };
-
-    const projectId = env.FIREBASE_PROJECT_ID || "sms-dlx";
-    const path = `organizations/${ORG_ID}/settings/automation`;
-    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${path}?key=${env.FIREBASE_API_KEY}`;
-
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    if (!res.ok) {
-      console.log("No automation settings found in Firestore, using env fallbacks");
-      return buildSettingsFromEnv(env);
-    }
-
-    const doc = await res.json();
-    const fields = doc.fields || {};
-
-    const repairMappings = parseFirestoreArray(fields.repairMappings);
-    const issueMappings = parseFirestoreArray(fields.issueMappings);
-
-    return { repairMappings, issueMappings };
-  } catch (e) {
-    console.error("Failed to load automation settings:", e.message);
-    return buildSettingsFromEnv(env);
-  }
+  const token = await getFirebaseIdToken(env);
+  if (!token) return { repairMappings: [], issueMappings: [] };
+  const res = await fetch(`https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID || "sms-dlx"}/databases/(default)/documents/organizations/${ORG_ID}/settings/automation?key=${env.FIREBASE_API_KEY}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!res.ok) return buildSettingsFromEnv(env);
+  const doc = await res.json();
+  const fields = doc.fields || {};
+  return { repairMappings: parseFirestoreArray(fields.repairMappings), issueMappings: parseFirestoreArray(fields.issueMappings) };
 }
 
 function parseFirestoreArray(field) {
-  if (!field || !field.arrayValue || !field.arrayValue.values) return [];
+  if (!field?.arrayValue?.values) return [];
+
   return field.arrayValue.values.map(v => {
-    if (!v.mapValue || !v.mapValue.fields) return {};
-    const f = v.mapValue.fields;
+    const f = v.mapValue?.fields || {};
     const obj = {};
-    for (const [key, val] of Object.entries(f)) {
-      obj[key] = val.stringValue || val.integerValue || "";
+
+    for (const [k, val] of Object.entries(f)) {
+      if (val.arrayValue) {
+        obj[k] = val.arrayValue.values.map(x => x.stringValue);
+      } else {
+        obj[k] = val.stringValue || val.integerValue || "";
+      }
     }
+
     return obj;
   });
 }
 
-// Fallback: build settings from environment variables
-// Env format: REPAIR_MAPPINGS="RBG:Jiffy Lube:123 Main St Roseburg OR;EUG:Jiffy Lube:456 Oak Eugene OR"
 function buildSettingsFromEnv(env) {
   const repairMappings = [];
   const issueMappings = [];
-
   if (env.REPAIR_MAPPINGS) {
     for (const entry of env.REPAIR_MAPPINGS.split(";")) {
-      const [siteRef, shopName, address] = entry.split(":");
-      if (siteRef) repairMappings.push({ siteRef: siteRef.trim(), shopName: (shopName || "").trim(), address: (address || "").trim() });
+      const [site, shop, addr] = entry.split(":");
+      if (site) repairMappings.push({ siteRef: site.trim(), shopName: shop.trim(), address: addr.trim() });
     }
   }
-
-  if (env.ISSUE_MAPPINGS) {
-    for (const entry of env.ISSUE_MAPPINGS.split(";")) {
-      const [keyword, tripPrefix] = entry.split(":");
-      if (keyword) issueMappings.push({ keyword: keyword.trim().toLowerCase(), tripPrefix: (tripPrefix || "").trim() });
-    }
-  }
-
   return { repairMappings, issueMappings };
 }
 
 function findRepairShop(settings, siteRef, description) {
-  if (!settings.repairMappings || settings.repairMappings.length === 0) return null;
+  const normalized = (siteRef || "").toUpperCase().trim();
 
-  const exactMatch = settings.repairMappings.find(
-    m => m.siteRef && m.siteRef.toUpperCase() === (siteRef || "").toUpperCase()
-  );
-  if (exactMatch) return exactMatch;
+  // Match against groupNames array
+  const match = settings.repairMappings.find(m => {
+    if (!m.groupNames) return false;
 
-  const defaultMapping = settings.repairMappings.find(
-    m => m.siteRef === "*" || m.siteRef.toUpperCase() === "DEFAULT"
-  );
-  return defaultMapping || null;
+    return m.groupNames.some(name =>
+      normalized.includes(name.toUpperCase())
+    );
+  });
+
+  if (match) return match;
+
+  // fallback
+  return settings.repairMappings.find(m =>
+    m.groupNames?.includes("*") || m.groupNames?.includes("DEFAULT")
+  ) || null;
 }
 
-// Trip name: "{issue description} / {3-digit vehicle number}" e.g. "Headlight / 197"
+// Fixed Trip Name Format
 function buildTripName(settings, issue) {
-  const vehicleShort = (issue.vehicleRef || "Unknown").replace(/^7/, ""); // strip leading 7 if 4-digit
-  const desc = (issue.description || "").toLowerCase();
-
-  if (settings.issueMappings && settings.issueMappings.length > 0) {
-    for (const mapping of settings.issueMappings) {
-      if (mapping.keyword && desc.includes(mapping.keyword)) {
-        return `${mapping.tripPrefix} / ${vehicleShort}`;
-      }
-    }
-  }
-
-  const shortDesc = issue.description.length > 40
-    ? issue.description.slice(0, 40) + "..."
-    : issue.description;
-  return `${shortDesc} / ${vehicleShort}`;
+  const issueName = issue.description || "Unknown Issue";
+  const vehicleName = issue.vehicleRef || "Unknown Vehicle";
+  return `${issueName} / ${vehicleName}`;
 }
 
-// Convert Fleetio's 3-digit vehicle ref to iCabbi's 4-digit (prefix with 7)
-// e.g. "197" → "7197", "160" → "7160". If already 4+ digits, leave as-is.
-function toIcabbiVehicleRef(fleetioRef) {
-  const ref = String(fleetioRef || "").trim();
-  if (!ref) return "";
-  if (ref.length <= 3) return `7${ref}`;
-  return ref;
-}
-
-// Look up vehicle ID in iCabbi by ref number
-// GET {icabbi_url}/vehicle/id?ref={vehicle_ref}
-async function lookupIcabbiVehicleId(env, vehicleRef) {
-  const apiUrl = (env.ICABBI_API_URL || "https://api.icabbi.us/us4").replace(/\/+$/, "");
-  const url = `${apiUrl}/vehicle/id?ref=${encodeURIComponent(vehicleRef)}`;
-
-  console.log(`iCabbi vehicle lookup: ${url}`);
-  const res = await fetch(url, {
-    headers: { "Authorization": `Basic ${env.ICABBI_AUTH}` }
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error(`iCabbi vehicle/id lookup failed (${res.status}):`, errText);
-    return null;
-  }
-
-  const data = await res.json();
-  console.log("iCabbi vehicle/id response:", JSON.stringify(data).slice(0, 500));
-
-  // Response may be { id: 1234 } or { body: { id: 1234 } } depending on API version
-  const vehicleId = data.id || data.body?.id || data.vehicle_id || null;
-  return vehicleId;
-}
-
-// Look up vehicle's site_ref from iCabbi
-// GET {icabbi_url}/vehicle/sites?id={vehicle_id}
-async function lookupVehicleSiteRef(env, vehicleId) {
-  const apiUrl = (env.ICABBI_API_URL || "https://api.icabbi.us/us4").replace(/\/+$/, "");
-  const url = `${apiUrl}/vehicle/sites?id=${encodeURIComponent(vehicleId)}`;
-
-  console.log(`iCabbi vehicle/sites lookup: ${url}`);
-  const res = await fetch(url, {
-    headers: { "Authorization": `Basic ${env.ICABBI_AUTH}` }
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error(`iCabbi vehicle/sites lookup failed (${res.status}):`, errText);
-    return null;
-  }
-
-  const data = await res.json();
-  console.log("iCabbi vehicle/sites response:", JSON.stringify(data).slice(0, 500));
-
-  // Extract site_ref from response — could be array of sites or single object
-  if (Array.isArray(data)) {
-    return data[0]?.site_ref || data[0]?.ref || data[0]?.name || null;
-  }
-  if (Array.isArray(data.body)) {
-    return data.body[0]?.site_ref || data.body[0]?.ref || data.body[0]?.name || null;
-  }
-  return data.site_ref || data.ref || data.name || null;
-}
-
-// Create a trip in iCabbi via POST /bookings/add with Basic auth
 async function createIcabbiTrip(env, tripBody) {
   const apiUrl = (env.ICABBI_API_URL || "https://api.icabbi.us/us4").replace(/\/+$/, "");
-  const auth = env.ICABBI_AUTH; // Base64 Basic auth credentials
-
   const res = await fetch(`${apiUrl}/bookings/add`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Basic ${auth}`
-    },
+    headers: { "Content-Type": "application/json", "Authorization": `basic ${env.ICABBI_AUTH}` },
     body: JSON.stringify(tripBody)
   });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`iCabbi API ${res.status}: ${errText}`);
-  }
-
+  if (!res.ok) throw new Error(await res.text());
   return await res.json();
 }
 
 async function writeNotificationToFirestore(env, data) {
   const token = await getFirebaseIdToken(env);
-  if (!token) {
-    console.warn("No Firebase token — cannot write notification");
-    return;
-  }
-
-  const projectId = env.FIREBASE_PROJECT_ID || "sms-dlx";
-  const colPath = `organizations/${ORG_ID}/notifications`;
-  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${colPath}?key=${env.FIREBASE_API_KEY}`;
-
-  const fields = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (value === null || value === undefined) {
-      fields[key] = { nullValue: null };
-    } else if (Array.isArray(value)) {
-      fields[key] = {
-        arrayValue: {
-          values: value.map(item => {
-            if (typeof item === "object") {
-              const mapFields = {};
-              for (const [k, v] of Object.entries(item)) {
-                mapFields[k] = { stringValue: String(v) };
-              }
-              return { mapValue: { fields: mapFields } };
-            }
-            return { stringValue: String(item) };
-          })
-        }
-      };
-    } else if (typeof value === "boolean") {
-      fields[key] = { booleanValue: value };
+  const url = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID || "sms-dlx"}/databases/(default)/documents/organizations/${ORG_ID}/notifications?key=${env.FIREBASE_API_KEY}`;
+  const fields = { read: { booleanValue: false }, createdAt: { timestampValue: new Date().toISOString() } };
+  for (const [k, v] of Object.entries(data)) {
+    if (Array.isArray(v)) {
+      fields[k] = { arrayValue: { values: v.map(i => ({ mapValue: { fields: { label: { stringValue: i.label }, status: { stringValue: i.status } } } })) } };
+    } else if (typeof v === "boolean") {
+      fields[k] = { booleanValue: v };
     } else {
-      fields[key] = { stringValue: String(value) };
+      fields[k] = { stringValue: String(v) };
     }
   }
-
-  fields.read = { booleanValue: false };
-  fields.createdAt = { timestampValue: new Date().toISOString() };
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ fields }),
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error("Notification write failed:", errText);
-  } else {
-    console.log("Notification written to Firestore");
-  }
+  await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ fields }) });
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
 function normalizeTrip(raw) {
-  const booking = raw.booking || raw.data || raw;
+  const b = raw.booking || raw.data || raw;
 
-  const id = String(
-    booking.perma_id || booking.id || booking.booking_id || ""
-  ).trim();
+  const pickup =
+    b.city || // restore this
+    b.pickup_address ||
+    b.pickup_name ||
+    b.pickup?.formatted ||
+    b.pickup?.address ||
+    b.pickup?.text ||
+    b.pickup?.name ||
+    b.pickup_area ||
+    b.from ||
+    "Unknown";
 
-  const rawDate =
-    booking.job_date ||
-    booking.scheduled_pickup_date ||
-    booking.pickup_date ||
-    booking.date ||
-    booking.release_date ||
+  const dropoff =
+    b.dropoff_address ||
+    b.destination_name ||
+    b.destination?.formatted ||
+    b.destination?.address ||
+    b.destination?.text ||
+    b.destination?.name ||
+    b.to ||
     "";
 
-  let date = extractDate(rawDate);
-  if (!date) {
-    date = new Date().toISOString().split("T")[0];
+  const baseId = String(b.perma_id || b.id || "").trim();
+  const leg = b.leg_number || b.leg || b.sequence || "";
+
+  let id = baseId;
+
+  if (baseId && leg) {
+    id = `${baseId}_${leg}`;
   }
 
-  const time =
-    booking.job_time ||
-    booking.scheduled_pickup_time ||
-    booking.pickup_time ||
-    booking.time ||
-    "";
-
-  const vehicleRef = String(
-    booking.vehicle_number ||
-    booking.driver?.vehicle?.ref ||
-    booking.vehicle_ref ||
-    booking.vehicleRef ||
-    booking.vehicle_id ||
-    ""
-  ).trim();
-
-  const driverName = [booking.driver_first, booking.driver_last]
-    .filter(Boolean)
-    .join(" ");
+  if (!id) {
+    id =
+      String(b.perma_id || "") +
+      "_" +
+      (b.job_time || "") +
+      "_" +
+      (b.pickup_address || b.pickup_area || "") +
+      "_" +
+      Math.random().toString(36).slice(2, 6);
+  }
 
   return {
     id,
-    date,
-    time,
-    vehicleRef,
-    pickup:
-      booking.city ||
-      booking.address_formatted ||
-      booking.pickup_address ||
-      booking.from ||
-      "",
-    dropoff:
-      booking.address ||
-      booking.dropoff_address_formatted ||
-      booking.dropoff_address ||
-      booking.to ||
-      "",
-    passenger:
-      booking.client_name ||
-      booking.name ||
-      booking.passenger_name ||
-      booking.customer_name ||
-      "",
-    passengerPhone: booking.phone || booking.passenger_phone || "",
-    driverName,
-    driverPhone: booking.driver_phone || "",
-    notes: booking.notes || booking.driver_notes || "",
-    status: booking.status || "",
+    date: extractDate(b.job_date || b.date || ""),
+    time: b.job_time || b.time || "",
+    vehicleRef: String(b.vehicle_number || "").trim(),
+    pickup,
+    dropoff,
+    passenger: b.client_name || b.name || "",
+    passengerPhone: b.phone || "",
+    driverName: [b.driver_first, b.driver_last].filter(Boolean).join(" "),
+    driverPhone: b.driver_phone || "",
+    notes: b.notes || b.driver_notes || "",
+    status: b.status || "",
     receivedAt: new Date().toISOString(),
   };
 }
@@ -1198,23 +810,12 @@ function getDateRange(from, to) {
   const dates = [];
   const start = new Date(from + "T12:00:00Z");
   const end = new Date(to + "T12:00:00Z");
-
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) return [from];
-
+  if (isNaN(start.getTime())) return [from];
   const current = new Date(start);
-  while (current <= end) {
-    dates.push(current.toISOString().split("T")[0]);
-    current.setDate(current.getDate() + 1);
-  }
+  while (current <= end) { dates.push(current.toISOString().split("T")[0]); current.setDate(current.getDate() + 1); }
   return dates;
 }
 
 function jsonResponse(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-      ...CORS_HEADERS,
-    },
-  });
+  return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", ...CORS_HEADERS } });
 }
