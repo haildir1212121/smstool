@@ -11,76 +11,134 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
   <style>
-    body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; overflow: hidden; }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    body { font-family: 'Inter', sans-serif; background-color: #ffffff; overflow: hidden; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .fade-in { animation: fadeIn 0.15s ease-out forwards; }
     @keyframes fadeIn { from { opacity:0; transform:scale(0.99);} to { opacity:1; transform:scale(1);} }
-    .msg-sent { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; border-radius: 18px 18px 4px 18px; box-shadow: 0 2px 4px rgba(37,99,235,0.15); }
-    .msg-received { background: #ffffff; color: #1e293b; border: 1px solid #e2e8f0; border-radius: 18px 18px 18px 4px; }
-    .nav-item.active { background-color: #334155; color: #60a5fa; border-left: 3px solid #60a5fa; }
-    .nav-item { border-left: 3px solid transparent; }
+    .msg-sent { background: #0f172a; color: white; border-radius: 18px 18px 4px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+    .msg-received { background: #ffffff; color: #1e293b; border: 1px solid #e5e7eb; border-radius: 18px 18px 18px 4px; }
+    .nav-item { border-radius: 8px; transition: background 0.12s, color 0.12s; }
+    .nav-item.active { background-color: #ffffff; color: #000000; }
+    .nav-item:not(.active):hover { background-color: rgba(255,255,255,0.1); color: #ffffff; }
+    #sidebar { transition: transform 0.25s cubic-bezier(.4,0,.2,1); }
+    #sidebarOverlay { display: none; }
+    @media (max-width: 767px) {
+      #sidebar { position: fixed; left: 0; top: 0; height: 100%; z-index: 60; transform: translateX(-100%); }
+      #sidebar.sidebar-open { transform: translateX(0); }
+      #sidebarOverlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 59; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+      #sidebarOverlay.sidebar-open { opacity: 1; pointer-events: all; }
+    }
+    .btn-primary { background: #000000; color: #ffffff; transition: background 0.12s; }
+    .btn-primary:hover { background: #1f2937; }
+    .btn-secondary { background: #ffffff; color: #374151; border: 1px solid #e5e7eb; transition: background 0.12s, border-color 0.12s; }
+    .btn-secondary:hover { background: #f9fafb; border-color: #d1d5db; }
   </style>
 </head>
 
-<body class="h-screen w-full flex text-slate-800 bg-slate-50">
+<body class="h-screen w-full flex text-slate-800 bg-white">
 
   <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3"></audio>
 
-  <nav class="w-[64px] bg-slate-900 flex flex-col items-center py-4 z-50 shrink-0 shadow-xl">
-    <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg mb-6 shadow-lg shadow-blue-900/50">D</div>
-    <div class="flex flex-col gap-2 w-full">
-      <button onclick="window.switchView('inbox')" id="nav-inbox" class="nav-item active w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-solid fa-inbox text-xl"></i></button>
-      <button onclick="window.switchView('contacts')" id="nav-contacts" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-regular fa-address-book text-xl"></i></button>
-      <button onclick="window.switchView('broadcast')" id="nav-broadcast" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-solid fa-bullhorn text-xl"></i></button>
-      <button onclick="window.switchView('logs')" id="nav-logs" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-solid fa-clipboard-check text-xl"></i></button>
-      <button onclick="window.switchView('triptexts')" id="nav-triptexts" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Trip Texts"><i class="fa-solid fa-route text-xl"></i></button>
-      <button onclick="window.switchView('notifications')" id="nav-notifications" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition relative" title="Notifications">
-        <i class="fa-solid fa-bell text-xl"></i>
-        <span id="notifBadge" class="hidden absolute top-1.5 right-2.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-900 animate-pulse">0</span>
+  <!-- Mobile sidebar overlay -->
+  <div id="sidebarOverlay" onclick="window.toggleSidebar()"></div>
+  <!-- Mobile menu button -->
+  <button id="mobileMenuBtn" onclick="window.toggleSidebar()" class="fixed top-3 left-3 z-[70] md:hidden bg-black text-white w-8 h-8 rounded-lg flex items-center justify-center shadow-lg">
+    <i class="fa-solid fa-bars text-xs"></i>
+  </button>
+
+  <nav id="sidebar" class="w-[220px] bg-black flex flex-col py-5 px-3 z-50 shrink-0 shadow-xl">
+    <!-- Logo -->
+    <div class="flex items-center gap-2.5 px-2 mb-7">
+      <div class="w-8 h-8 rounded-lg bg-white flex items-center justify-center shrink-0">
+        <i class="fa-solid fa-tower-broadcast text-black text-sm"></i>
+      </div>
+      <span class="text-white font-bold text-sm tracking-tight leading-tight">Dispatch<br>Command</span>
+    </div>
+
+    <!-- Nav items -->
+    <div class="flex flex-col gap-0.5 w-full">
+      <button onclick="window.switchView('inbox')" id="nav-inbox" class="nav-item active w-full h-10 px-3 flex items-center gap-3 text-sm font-medium text-left">
+        <i class="fa-solid fa-inbox w-4 text-center text-sm"></i>
+        <span>Inbox</span>
+      </button>
+      <button onclick="window.switchView('contacts')" id="nav-contacts" class="nav-item w-full h-10 px-3 text-gray-400 flex items-center gap-3 text-sm font-medium text-left">
+        <i class="fa-regular fa-address-book w-4 text-center text-sm"></i>
+        <span>Directory</span>
+      </button>
+      <button onclick="window.switchView('broadcast')" id="nav-broadcast" class="nav-item w-full h-10 px-3 text-gray-400 flex items-center gap-3 text-sm font-medium text-left">
+        <i class="fa-solid fa-bullhorn w-4 text-center text-sm"></i>
+        <span>Broadcast</span>
+      </button>
+      <button onclick="window.switchView('logs')" id="nav-logs" class="nav-item w-full h-10 px-3 text-gray-400 flex items-center gap-3 text-sm font-medium text-left">
+        <i class="fa-solid fa-clipboard-check w-4 text-center text-sm"></i>
+        <span>Shift Logs</span>
+      </button>
+      <button onclick="window.switchView('triptexts')" id="nav-triptexts" class="nav-item w-full h-10 px-3 text-gray-400 flex items-center gap-3 text-sm font-medium text-left">
+        <i class="fa-solid fa-route w-4 text-center text-sm"></i>
+        <span>Trip Texts</span>
+      </button>
+      <button onclick="window.switchView('notifications')" id="nav-notifications" class="nav-item w-full h-10 px-3 text-gray-400 flex items-center gap-3 text-sm font-medium text-left relative">
+        <i class="fa-solid fa-bell w-4 text-center text-sm"></i>
+        <span>Notifications</span>
+        <span id="notifBadge" class="hidden ml-auto w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full items-center justify-center">0</span>
       </button>
     </div>
+
     <div class="flex-1"></div>
-    <button onclick="window.openSettingsModal()" class="w-10 h-10 text-slate-500 hover:text-white transition mb-2"><i class="fa-solid fa-gear"></i></button>
+
+    <!-- Settings + User -->
+    <div class="border-t border-white/10 pt-3 space-y-0.5">
+      <button onclick="window.openSettingsModal()" class="nav-item w-full h-10 px-3 text-gray-400 flex items-center gap-3 text-sm font-medium text-left">
+        <i class="fa-solid fa-gear w-4 text-center text-sm"></i>
+        <span>Settings</span>
+      </button>
+      <div class="flex items-center gap-2.5 px-3 py-2">
+        <div class="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+          <i class="fa-solid fa-user text-[11px] text-white"></i>
+        </div>
+        <span class="text-gray-400 text-xs truncate">Admin</span>
+      </div>
+    </div>
   </nav>
 
   <div id="view-inbox" class="flex-1 flex min-w-0 h-full fade-in">
-    <aside class="w-[340px] bg-white border-r border-gray-200 flex flex-col shrink-0 z-20">
-      <div class="h-16 px-4 flex items-center border-b border-gray-100 gap-2 shrink-0">
+    <aside class="w-[300px] bg-white border-r border-gray-200 flex flex-col shrink-0 z-20">
+      <div class="h-14 px-3 flex items-center border-b border-gray-100 gap-2 shrink-0">
         <div class="relative flex-1">
             <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-xs"></i>
-            <input id="searchContacts" oninput="window.renderThreadList()" placeholder="Search messages..." class="w-full bg-slate-50 border border-slate-100 rounded-lg pl-8 pr-3 py-2 text-sm focus:bg-white focus:border-blue-300 outline-none transition">
+            <input id="searchContacts" oninput="window.renderThreadList()" placeholder="Search messages..." class="w-full bg-gray-50 border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm focus:bg-white focus:border-gray-400 outline-none transition">
         </div>
-        <button onclick="window.openNewMsgModal()" class="w-8 h-8 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center shadow-sm transition"><i class="fa-solid fa-plus"></i></button>
+        <button onclick="window.openNewMsgModal()" class="w-8 h-8 rounded-lg bg-black text-white hover:bg-gray-800 flex items-center justify-center shadow-sm transition"><i class="fa-solid fa-plus text-xs"></i></button>
       </div>
-      <div class="flex flex-col border-b border-gray-50 shrink-0">
-          <div class="px-4 py-2 flex gap-2">
-            <button onclick="window.toggleUnreadOnly()" id="filterUnread" class="px-3 py-1 rounded-md text-[10px] font-bold border border-gray-200 text-gray-500 hover:bg-gray-50 uppercase transition">Unread</button>
-            <button onclick="window.toggleUrgentOnly()" id="filterUrgent" class="px-3 py-1 rounded-md text-[10px] font-bold border border-gray-200 text-gray-500 hover:bg-gray-50 uppercase transition">Urgent</button>
+      <div class="flex flex-col border-b border-gray-100 shrink-0">
+          <div class="px-3 py-2 flex gap-1.5">
+            <button onclick="window.toggleUnreadOnly()" id="filterUnread" class="px-2.5 py-1 rounded text-[10px] font-bold border border-gray-200 text-gray-500 hover:bg-gray-50 uppercase transition">Unread</button>
+            <button onclick="window.toggleUrgentOnly()" id="filterUrgent" class="px-2.5 py-1 rounded text-[10px] font-bold border border-gray-200 text-gray-500 hover:bg-gray-50 uppercase transition">Urgent</button>
           </div>
-          <div id="tagFilterRow" class="px-4 pb-2 flex gap-2 overflow-x-auto scrollbar-hide empty:hidden"></div>
+          <div id="tagFilterRow" class="px-3 pb-2 flex gap-1.5 overflow-x-auto scrollbar-hide empty:hidden"></div>
       </div>
-      <div id="contactList" class="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-hide"></div>
+      <div id="contactList" class="flex-1 overflow-y-auto p-2 space-y-0.5 scrollbar-hide"></div>
     </aside>
 
-    <main class="flex-1 flex flex-col bg-slate-50/50 relative min-w-0">
-      <header class="h-16 bg-white/80 backdrop-blur border-b border-gray-200 px-6 flex items-center justify-between shrink-0 sticky top-0 z-10">
+    <main class="flex-1 flex flex-col bg-gray-50/30 relative min-w-0">
+      <header class="h-14 bg-white border-b border-gray-200 px-5 flex items-center justify-between shrink-0 sticky top-0 z-10">
          <div class="flex items-center gap-3 min-w-0">
-             <div id="activeContactAvatar" class="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs shrink-0 shadow-sm border border-slate-300">?</div>
+             <div id="activeContactAvatar" class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-bold text-xs shrink-0 border border-gray-200">?</div>
              <div class="min-w-0">
-                 <h2 id="activeContactName" class="font-bold text-slate-800 text-sm leading-tight truncate">Select a Chat</h2>
-                 <div id="activeContactPhone" class="text-xs text-slate-400 font-mono truncate">--</div>
+                 <h2 id="activeContactName" class="font-semibold text-gray-900 text-sm leading-tight truncate">Select a Chat</h2>
+                 <div id="activeContactPhone" class="text-xs text-gray-400 font-mono truncate">--</div>
              </div>
          </div>
-         <div class="flex items-center gap-2 text-slate-400">
-             <button onclick="window.deleteActiveThread()" class="w-8 h-8 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-600 transition" title="Delete Conversation"><i class="fa-regular fa-trash-can"></i></button>
-             <div class="h-4 w-px bg-slate-200 mx-1"></div>
-             <button onclick="window.toggleUrgentThread()" id="headerUrgentBtn" class="w-8 h-8 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-500 transition"><i class="fa-solid fa-bell"></i></button>
-             <div class="h-4 w-px bg-slate-200 mx-1"></div>
-             <button onclick="window.toggleInfoPanel()" class="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 hover:text-blue-600 transition"><i class="fa-solid fa-circle-info"></i></button>
+         <div class="flex items-center gap-1 text-gray-400">
+             <button onclick="window.deleteActiveThread()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-rose-50 hover:text-rose-600 transition" title="Delete Conversation"><i class="fa-regular fa-trash-can text-sm"></i></button>
+             <div class="h-4 w-px bg-gray-200 mx-1"></div>
+             <button onclick="window.toggleUrgentThread()" id="headerUrgentBtn" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-rose-50 hover:text-rose-500 transition"><i class="fa-solid fa-bell text-sm"></i></button>
+             <div class="h-4 w-px bg-gray-200 mx-1"></div>
+             <button onclick="window.toggleInfoPanel()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 hover:text-gray-700 transition"><i class="fa-solid fa-circle-info text-sm"></i></button>
          </div>
       </header>
       
@@ -92,37 +150,37 @@
          <div id="messageList" class="max-w-3xl mx-auto space-y-4"></div>
       </div>
 
-      <div class="p-4 bg-white border-t border-gray-200 z-20">
+      <div class="p-3 bg-white border-t border-gray-200 z-20">
         <div class="max-w-3xl mx-auto">
             <div id="mmsStrip" class="hidden flex gap-2 pb-2 overflow-x-auto"></div>
-            <div id="quickRepliesRow" class="flex gap-2 mb-2 overflow-x-auto scrollbar-hide"></div>
-            <div class="flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-2xl p-1.5 focus-within:ring-4 focus-within:ring-blue-50 focus-within:border-blue-300 transition shadow-sm">
-                <button onclick="document.getElementById('mmsFileInput').click()" class="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-white hover:text-blue-500 transition shrink-0"><i class="fa-solid fa-paperclip"></i></button>
+            <div id="quickRepliesRow" class="flex gap-1.5 mb-2 overflow-x-auto scrollbar-hide"></div>
+            <div class="flex items-end gap-2 bg-gray-50 border border-gray-200 rounded-2xl p-1.5 focus-within:ring-2 focus-within:ring-black/10 focus-within:border-gray-400 transition">
+                <button onclick="document.getElementById('mmsFileInput').click()" class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-white hover:text-gray-700 transition shrink-0"><i class="fa-solid fa-paperclip text-sm"></i></button>
                 <input type="file" id="mmsFileInput" class="hidden" multiple accept="image/*,video/*" onchange="window.handleMmsFiles(this)">
-                <textarea id="msgInput" rows="1" class="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2.5 px-2 max-h-32 resize-none text-slate-800 placeholder-slate-400" placeholder="Type a message..."></textarea>
+                <textarea id="msgInput" rows="1" class="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2 px-1 max-h-32 resize-none text-gray-800 placeholder-gray-400" placeholder="Type a message..."></textarea>
                 <div class="relative shrink-0">
                     <select id="templateSelect" onchange="window.insertTemplate()" class="absolute inset-0 opacity-0 cursor-pointer w-full"><option value="">T</option><option value="Please sign into your tablet.">Login</option><option value="Copy. Thank you.">Copy</option></select>
-                    <button class="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-white hover:text-blue-500 transition"><i class="fa-regular fa-file-lines"></i></button>
+                    <button class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-white hover:text-gray-700 transition"><i class="fa-regular fa-file-lines text-sm"></i></button>
                 </div>
-                <button onclick="window.sendMessage()" id="sendBtn" class="w-9 h-9 flex items-center justify-center rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition transform hover:scale-105 shrink-0"><i class="fa-solid fa-paper-plane text-xs"></i></button>
+                <button onclick="window.sendMessage()" id="sendBtn" class="w-8 h-8 flex items-center justify-center rounded-lg bg-black text-white hover:bg-gray-800 transition shrink-0"><i class="fa-solid fa-paper-plane text-xs"></i></button>
             </div>
         </div>
       </div>
     </main>
 
-    <aside id="infoPanel" class="w-72 bg-white border-l border-gray-200 hidden xl:flex flex-col shrink-0 overflow-y-auto shadow-[-4px_0_24px_rgba(0,0,0,0.01)] z-20">
-        <div class="p-8 text-center border-b border-gray-50 bg-white">
-            <div class="w-20 h-20 rounded-full bg-slate-50 mx-auto flex items-center justify-center text-2xl text-slate-300 font-bold mb-4 border border-slate-100 shadow-inner"><i class="fa-regular fa-user"></i></div>
-            <h3 id="detailsName" class="font-bold text-slate-800 select-all text-lg">--</h3>
-            <p id="detailsPhone" class="text-sm text-slate-400 font-mono mt-1 select-all mb-4">--</p>
+    <aside id="infoPanel" class="w-64 bg-white border-l border-gray-200 hidden xl:flex flex-col shrink-0 overflow-y-auto z-20">
+        <div class="p-6 text-center border-b border-gray-100">
+            <div class="w-16 h-16 rounded-full bg-gray-100 mx-auto flex items-center justify-center text-2xl text-gray-300 font-bold mb-3 border border-gray-200"><i class="fa-regular fa-user text-lg"></i></div>
+            <h3 id="detailsName" class="font-bold text-gray-900 select-all text-base">--</h3>
+            <p id="detailsPhone" class="text-xs text-gray-400 font-mono mt-1 select-all mb-4">--</p>
             <div class="flex gap-2">
-                <button onclick="window.callActivePhone()" class="flex-1 py-2 border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:border-blue-200 hover:text-blue-600 transition shadow-sm"><i class="fa-solid fa-phone mr-1"></i> Call</button>
-                <button onclick="window.copyActivePhone()" class="flex-1 py-2 border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:border-blue-200 hover:text-blue-600 transition shadow-sm"><i class="fa-solid fa-copy mr-1"></i> Copy</button>
+                <button onclick="window.callActivePhone()" class="flex-1 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition"><i class="fa-solid fa-phone mr-1"></i> Call</button>
+                <button onclick="window.copyActivePhone()" class="flex-1 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition"><i class="fa-solid fa-copy mr-1"></i> Copy</button>
             </div>
         </div>
-        <div class="p-5 space-y-6">
-            <div><div class="flex justify-between items-center mb-1"><label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tags</label><button onclick="window.saveDetailsTags()" class="text-[10px] text-blue-600 font-bold hover:underline">SAVE</button></div><input id="detailsTagsInput" class="w-full text-xs border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-100 focus:border-blue-300 outline-none bg-slate-50 transition" placeholder="e.g. Driver, VIP"></div>
-            <div><div class="flex justify-between items-center mb-1"><label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Notes</label><button onclick="window.saveDetailsNotes()" class="text-[10px] text-blue-600 font-bold hover:underline">SAVE</button></div><textarea id="detailsNotes" class="w-full text-xs bg-amber-50 border border-amber-100 rounded-lg p-3 h-24 resize-none focus:bg-white focus:ring-2 focus:ring-amber-100 outline-none transition text-slate-600 placeholder-amber-300" placeholder="Dispatch notes..."></textarea></div>
+        <div class="p-4 space-y-5">
+            <div><div class="flex justify-between items-center mb-1.5"><label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tags</label><button onclick="window.saveDetailsTags()" class="text-[10px] text-black font-bold hover:underline">SAVE</button></div><input id="detailsTagsInput" class="w-full text-xs border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-black/10 focus:border-gray-400 outline-none bg-gray-50 transition" placeholder="e.g. Driver, VIP"></div>
+            <div><div class="flex justify-between items-center mb-1.5"><label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Notes</label><button onclick="window.saveDetailsNotes()" class="text-[10px] text-black font-bold hover:underline">SAVE</button></div><textarea id="detailsNotes" class="w-full text-xs bg-amber-50 border border-amber-100 rounded-lg p-3 h-24 resize-none focus:bg-white focus:ring-2 focus:ring-amber-100 outline-none transition text-slate-600 placeholder-amber-300" placeholder="Dispatch notes..."></textarea></div>
             <div><label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Media</label><div id="detailsAttachments" class="grid grid-cols-3 gap-2"></div></div>
         </div>
     </aside>
@@ -130,63 +188,69 @@
 
   <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur text-white px-6 py-3 rounded-full shadow-2xl transition-all duration-300 translate-y-20 opacity-0 z-[100] flex items-center gap-3 font-medium text-sm border border-slate-700"><i id="toastIcon" class="fa-solid fa-check-circle text-emerald-400"></i><span id="toastMsg">Notification</span></div>
   <div id="newMsgModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
-    <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-      <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold">New Message</h3><button onclick="document.getElementById('newMsgModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div>
-      <input id="newContactPhone" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Phone">
-      <input id="newContactName" class="w-full bg-gray-50 border border-gray-200 p-3 mb-6 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Name">
-      <div class="flex gap-2"><button onclick="document.getElementById('newMsgModal').classList.add('hidden')" class="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-600">Cancel</button><button onclick="window.createThreadFromModal()" class="flex-1 py-3 bg-blue-600 rounded-xl font-bold text-sm text-white">Create</button></div>
+    <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-gray-200">
+      <div class="flex justify-between items-center mb-5"><h3 class="text-base font-bold text-gray-900">New Message</h3><button onclick="document.getElementById('newMsgModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-700 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 transition"><i class="fa-solid fa-xmark text-sm"></i></button></div>
+      <input id="newContactPhone" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-black/10 focus:border-gray-400 outline-none text-sm transition" placeholder="Phone number">
+      <input id="newContactName" class="w-full bg-gray-50 border border-gray-200 p-3 mb-5 rounded-xl focus:ring-2 focus:ring-black/10 focus:border-gray-400 outline-none text-sm transition" placeholder="Contact name">
+      <div class="flex gap-2"><button onclick="document.getElementById('newMsgModal').classList.add('hidden')" class="flex-1 py-2.5 bg-gray-100 rounded-xl font-semibold text-sm text-gray-700 hover:bg-gray-200 transition">Cancel</button><button onclick="window.createThreadFromModal()" class="flex-1 py-2.5 bg-black rounded-xl font-semibold text-sm text-white hover:bg-gray-800 transition">Create</button></div>
     </div>
   </div>
   <div id="settingsModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
-      <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
-        <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold">Settings</h3><button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div>
-        <div class="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between"><div><div class="font-bold text-sm text-blue-900">Notifications</div><div class="text-xs text-blue-600">Sound & Popups</div></div><button onclick="window.requestNotifPerm()" class="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700">Enable</button></div>
-        <textarea id="cannedRepliesInput" class="w-full border border-gray-200 p-3 mb-4 h-32 rounded-xl text-sm resize-none" placeholder="Canned Replies"></textarea>
-        <div class="flex gap-2"><button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-600">Close</button><button onclick="window.saveSettings()" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm">Save</button></div>
+      <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-gray-200">
+        <div class="flex justify-between items-center mb-5"><h3 class="text-base font-bold text-gray-900">Settings</h3><button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-700 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 transition"><i class="fa-solid fa-xmark text-sm"></i></button></div>
+        <div class="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-between"><div><div class="font-bold text-sm text-gray-900">Notifications</div><div class="text-xs text-gray-500">Sound &amp; Popups</div></div><button onclick="window.requestNotifPerm()" class="px-3 py-1.5 bg-black text-white text-xs font-bold rounded-lg hover:bg-gray-800 transition">Enable</button></div>
+        <textarea id="cannedRepliesInput" class="w-full border border-gray-200 p-3 mb-4 h-32 rounded-xl text-sm resize-none focus:ring-2 focus:ring-black/10 focus:border-gray-400 outline-none transition" placeholder="Canned Replies (one per line)"></textarea>
+        <div class="flex gap-2"><button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="flex-1 py-2.5 bg-gray-100 rounded-xl font-semibold text-sm text-gray-700 hover:bg-gray-200 transition">Close</button><button onclick="window.saveSettings()" class="flex-1 py-2.5 bg-black text-white rounded-xl font-semibold text-sm hover:bg-gray-800 transition">Save</button></div>
       </div>
   </div>
 
   <div id="view-contacts" class="hidden flex-1 h-full flex-col bg-white fade-in overflow-hidden">
-    <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
-        <div class="flex items-center gap-4">
-            <h2 class="text-lg font-bold text-slate-800">Directory</h2>
-            <div id="contactsTagRow" class="flex gap-2 overflow-x-auto scrollbar-hide max-w-lg"></div>
+    <div class="h-14 flex items-center px-6 justify-between border-b border-gray-200 bg-white sticky top-0 z-10 shrink-0">
+        <div class="flex items-center gap-3">
+            <h2 class="text-base font-bold text-gray-900">Directory</h2>
+            <div id="contactsTagRow" class="flex gap-1.5 overflow-x-auto scrollbar-hide max-w-lg"></div>
         </div>
-        <div class="flex gap-3"><input id="cmSearch" oninput="window.store.cmPage=1; window.renderContactsManagerTable()" placeholder="Search..." class="bg-slate-50 border border-slate-200 rounded-xl pl-4 py-2 text-sm w-64 outline-none"><button onclick="window.saveContactsManager()" class="px-5 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold">Save</button></div>
+        <div class="flex gap-2"><input id="cmSearch" oninput="window.store.cmPage=1; window.renderContactsManagerTable()" placeholder="Search contacts..." class="bg-gray-50 border border-gray-200 rounded-lg pl-4 py-2 text-sm w-56 outline-none focus:border-gray-400 focus:ring-2 focus:ring-black/5 transition"><button onclick="window.saveContactsManager()" class="px-4 py-2 bg-black text-white rounded-lg text-sm font-semibold hover:bg-gray-800 transition">Save</button></div>
     </div>
-    <div class="flex-1 overflow-y-auto bg-slate-50 p-6">
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 max-w-5xl mx-auto flex flex-col">
+    <div class="flex-1 overflow-y-auto bg-gray-50 p-5">
+        <div class="bg-white rounded-xl border border-gray-200 max-w-5xl mx-auto flex flex-col shadow-sm">
             <div class="overflow-x-auto">
               <table class="w-full text-left">
-                <thead class="bg-slate-50 text-xs uppercase text-slate-500 font-semibold border-b border-gray-200">
+                <thead class="bg-gray-50 text-xs uppercase text-gray-500 font-semibold border-b border-gray-200">
                   <tr><th class="p-4 pl-6">Name</th><th class="p-4">Phone</th><th class="p-4">Tags</th><th class="p-4 text-right">Last Active</th><th class="p-4"></th></tr>
                 </thead>
                 <tbody id="cmList" class="divide-y divide-gray-100"></tbody>
               </table>
             </div>
-            <div class="p-4 border-t border-gray-100 flex justify-between items-center bg-gray-50/50 rounded-b-2xl">
-                <button onclick="window.changeCmPage(-1)" class="px-3 py-1 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm">Previous</button>
+            <div class="p-4 border-t border-gray-100 flex justify-between items-center">
+                <button onclick="window.changeCmPage(-1)" class="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition">Previous</button>
                 <span id="cmPageInfo" class="text-xs font-mono text-gray-400">Page 1</span>
-                <button onclick="window.changeCmPage(1)" class="px-3 py-1 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm">Next</button>
+                <button onclick="window.changeCmPage(1)" class="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition">Next</button>
             </div>
         </div>
     </div>
   </div>
 
-  <div id="view-broadcast" class="hidden flex-1 h-full flex-col bg-slate-50 fade-in items-center justify-center p-6 overflow-hidden">
-      <div class="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-2xl overflow-hidden flex flex-col h-[600px]">
-          <div class="p-6 border-b border-gray-100 bg-white flex items-center gap-4"><div class="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-lg"><i class="fa-solid fa-bullhorn"></i></div><div><h2 class="text-xl font-bold">Mass Broadcast</h2></div></div>
-          <div class="flex-1 p-8 flex flex-col bg-slate-50/50">
+  <div id="view-broadcast" class="hidden flex-1 h-full flex-col bg-gray-50 fade-in items-center justify-center p-6 overflow-hidden">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 w-full max-w-2xl overflow-hidden flex flex-col h-[580px]">
+          <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-4">
+            <div class="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center"><i class="fa-solid fa-bullhorn text-sm"></i></div>
+            <div>
+              <h2 class="text-base font-bold text-gray-900">Mass Broadcast</h2>
+              <p class="text-xs text-gray-500">Send to all contacts at once</p>
+            </div>
+          </div>
+          <div class="flex-1 p-6 flex flex-col bg-gray-50/30">
               <div id="massComposeArea" class="flex flex-col h-full">
-                  <div class="bg-blue-50 text-blue-900 p-4 rounded-xl text-sm mb-6 border border-blue-100 flex gap-3"><i class="fa-solid fa-circle-info mt-0.5"></i><span>Targeting <strong id="massCountDisplay">0</strong> contacts.</span></div>
-                  <textarea id="massMsgInput" class="flex-1 bg-white border border-gray-200 rounded-xl p-4 resize-none outline-none text-sm" placeholder="Message..."></textarea>
-                  <div class="flex justify-end pt-6"><button onclick="window.startBroadcast()" class="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700">Send</button></div>
+                  <div class="bg-gray-50 text-gray-700 p-4 rounded-xl text-sm mb-5 border border-gray-200 flex gap-3"><i class="fa-solid fa-circle-info mt-0.5 text-gray-400"></i><span>Targeting <strong id="massCountDisplay">0</strong> contacts</span></div>
+                  <textarea id="massMsgInput" class="flex-1 bg-white border border-gray-200 rounded-xl p-4 resize-none outline-none text-sm focus:ring-2 focus:ring-black/10 focus:border-gray-400 transition" placeholder="Type your broadcast message..."></textarea>
+                  <div class="flex justify-end pt-4"><button onclick="window.startBroadcast()" class="px-7 py-2.5 bg-black text-white rounded-xl font-semibold text-sm hover:bg-gray-800 transition">Send Broadcast</button></div>
               </div>
               <div id="massProgressArea" class="hidden flex-col h-full justify-between">
-                  <div class="text-center mb-8 mt-4"><div class="text-5xl font-bold text-blue-600 mb-2"><span id="massSentCount">0</span>/<span id="massTotalCount">0</span></div></div>
-                  <div class="w-full bg-gray-200 rounded-full h-3 mb-6 overflow-hidden"><div id="massProgressBar" class="bg-blue-600 h-full w-0 transition-all duration-300"></div></div>
-                  <div id="massLogBox" class="h-48 bg-slate-900 rounded-xl p-4 font-mono text-[10px] text-emerald-400 overflow-y-auto mb-4"></div>
-                  <button onclick="window.cancelBroadcast()" class="w-full py-3 border-2 border-rose-100 text-rose-500 font-bold rounded-xl">Stop</button>
+                  <div class="text-center mb-6 mt-4"><div class="text-5xl font-bold text-gray-900 mb-2"><span id="massSentCount">0</span>/<span id="massTotalCount">0</span></div><p class="text-sm text-gray-500">Messages sent</p></div>
+                  <div class="w-full bg-gray-200 rounded-full h-2 mb-5 overflow-hidden"><div id="massProgressBar" class="bg-black h-full w-0 transition-all duration-300"></div></div>
+                  <div id="massLogBox" class="h-44 bg-gray-900 rounded-xl p-4 font-mono text-[10px] text-emerald-400 overflow-y-auto mb-4"></div>
+                  <button onclick="window.cancelBroadcast()" class="w-full py-2.5 border border-rose-200 text-rose-500 font-semibold rounded-xl text-sm hover:bg-rose-50 transition">Stop Broadcast</button>
               </div>
           </div>
       </div>
@@ -194,39 +258,39 @@
 
   <div id="view-logs" class="hidden flex-1 h-full flex flex-col bg-white fade-in min-w-0">
 
-      <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
-          <h2 class="text-lg font-bold text-slate-800 tracking-tight">Shift Logs</h2>
-          <div id="logTagRow" class="flex gap-2 overflow-x-auto scrollbar-hide max-w-xl"></div>
+      <div class="h-14 flex items-center px-6 justify-between border-b border-gray-200 bg-white sticky top-0 z-10 shrink-0">
+          <h2 class="text-base font-bold text-gray-900">Shift Logs</h2>
+          <div id="logTagRow" class="flex gap-1.5 overflow-x-auto scrollbar-hide max-w-xl"></div>
       </div>
-      <div class="flex-1 overflow-y-auto bg-slate-50 p-6 min-h-0">
-          <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-w-5xl mx-auto flex flex-col">
+      <div class="flex-1 overflow-y-auto bg-gray-50 p-5 min-h-0">
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden max-w-5xl mx-auto flex flex-col shadow-sm">
               <table class="w-full text-left">
-                  <thead class="bg-slate-50 text-xs uppercase text-slate-500 font-semibold border-b border-gray-200">
+                  <thead class="bg-gray-50 text-xs uppercase text-gray-500 font-semibold border-b border-gray-200">
                       <tr><th class="p-4 pl-6">Time</th><th class="p-4">Contact</th><th class="p-4">Event</th><th class="p-4 text-right pr-6">Action</th></tr>
                   </thead>
                   <tbody id="logbookList" class="divide-y divide-gray-100"></tbody>
               </table>
-              <div class="p-4 border-t border-gray-100 flex justify-between items-center bg-gray-50/50">
-                  <button onclick="window.changeLogPage(-1)" class="px-3 py-1 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm">Previous</button>
+              <div class="p-4 border-t border-gray-100 flex justify-between items-center">
+                  <button onclick="window.changeLogPage(-1)" class="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition">Previous</button>
                   <span id="logPageInfo" class="text-xs font-mono text-gray-400">Page 1</span>
-                  <button onclick="window.changeLogPage(1)" class="px-3 py-1 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm">Next</button>
+                  <button onclick="window.changeLogPage(1)" class="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition">Next</button>
               </div>
           </div>
       </div>
   </div>
 
   <!-- TRIP TEXTS VIEW -->
-  <div id="view-triptexts" class="hidden flex-1 h-full flex flex-col bg-slate-50 fade-in overflow-hidden">
-    <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
-      <div class="flex items-center gap-4">
-        <h2 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-route mr-2 text-blue-600"></i>Trip Texts</h2>
-        <span id="ttDateBadge" class="text-xs font-mono text-slate-400"></span>
+  <div id="view-triptexts" class="hidden flex-1 h-full flex flex-col bg-gray-50 fade-in overflow-hidden">
+    <div class="h-14 flex items-center px-6 justify-between border-b border-gray-200 bg-white sticky top-0 z-10 shrink-0">
+      <div class="flex items-center gap-3">
+        <h2 class="text-base font-bold text-gray-900">Trip Texts</h2>
+        <span id="ttDateBadge" class="text-xs font-mono text-gray-400"></span>
       </div>
-      <div class="flex gap-3 items-center">
-        <button onclick="window.openIcabbiSettings()" class="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition"><i class="fa-solid fa-gear mr-1"></i>Trip Settings</button>
-        <button onclick="window.handleTripSheetPaste()" class="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition" title="Copy cells from Google Sheets, then click here"><i class="fa-solid fa-paste mr-1"></i>Paste Sheet</button>
-        <label class="px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold cursor-pointer hover:bg-blue-700 transition shadow-sm">
-          <i class="fa-solid fa-file-excel mr-1"></i>Upload Sheet
+      <div class="flex gap-2 items-center">
+        <button onclick="window.openIcabbiSettings()" class="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition"><i class="fa-solid fa-gear mr-1.5 text-xs"></i>Settings</button>
+        <button onclick="window.handleTripSheetPaste()" class="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition" title="Copy cells from Google Sheets, then click here"><i class="fa-solid fa-paste mr-1.5 text-xs"></i>Paste Sheet</button>
+        <label class="px-4 py-2 bg-black text-white rounded-lg text-sm font-semibold cursor-pointer hover:bg-gray-800 transition">
+          <i class="fa-solid fa-file-arrow-up mr-1.5 text-xs"></i>Upload Sheet
           <input type="file" id="ttFileInput" accept=".xlsx,.xls,.csv,.tsv" class="hidden" onchange="window.handleTripSheetUpload(this)">
         </label>
       </div>
@@ -244,22 +308,22 @@
       <div id="ttResultsArea" class="hidden max-w-6xl mx-auto space-y-4">
         <!-- Summary bar -->
         <div class="flex gap-3 mb-4">
-          <div class="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
-            <i class="fa-solid fa-users text-blue-500"></i>
-            <div><div class="text-xs text-slate-400">Drivers Found</div><div id="ttDriverCount" class="text-lg font-bold text-slate-800">0</div></div>
+          <div class="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center"><i class="fa-solid fa-users text-gray-600 text-sm"></i></div>
+            <div><div class="text-xs text-gray-400">Drivers Found</div><div id="ttDriverCount" class="text-lg font-bold text-gray-900">0</div></div>
           </div>
-          <div class="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
-            <i class="fa-solid fa-address-book text-emerald-500"></i>
-            <div><div class="text-xs text-slate-400">Matched Contacts</div><div id="ttMatchedCount" class="text-lg font-bold text-emerald-600">0</div></div>
+          <div class="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center"><i class="fa-solid fa-address-book text-emerald-500 text-sm"></i></div>
+            <div><div class="text-xs text-gray-400">Matched Contacts</div><div id="ttMatchedCount" class="text-lg font-bold text-emerald-600">0</div></div>
           </div>
-          <div class="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
-            <i class="fa-solid fa-circle-xmark text-rose-400"></i>
-            <div><div class="text-xs text-slate-400">Unmatched</div><div id="ttUnmatchedCount" class="text-lg font-bold text-rose-500">0</div></div>
+          <div class="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center"><i class="fa-solid fa-circle-xmark text-rose-400 text-sm"></i></div>
+            <div><div class="text-xs text-gray-400">Unmatched</div><div id="ttUnmatchedCount" class="text-lg font-bold text-rose-500">0</div></div>
           </div>
           <div class="flex-1"></div>
           <div class="flex items-center gap-2 self-center">
-            <button onclick="window.fetchTripsForAllDrivers()" id="ttFetchTripsBtn" class="px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
-              <i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch Trips
+            <button onclick="window.fetchTripsForAllDrivers()" id="ttFetchTripsBtn" class="px-4 py-2 bg-black text-white rounded-lg text-sm font-semibold hover:bg-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed">
+              <i class="fa-solid fa-cloud-arrow-down mr-1.5 text-xs"></i>Fetch Trips
             </button>
             <div id="ttStepIndicators" class="hidden flex items-center gap-1.5">
               <div id="ttStep1" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all bg-slate-50 text-slate-400 border-slate-200">
@@ -268,8 +332,8 @@
               </div>
             </div>
           </div>
-          <button onclick="window.openTripReviewModal()" id="ttReviewBtn" class="px-5 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition shadow-sm self-center hidden">
-            <i class="fa-solid fa-paper-plane mr-1"></i>Review &amp; Send
+          <button onclick="window.openTripReviewModal()" id="ttReviewBtn" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition self-center hidden">
+            <i class="fa-solid fa-paper-plane mr-1.5 text-xs"></i>Review &amp; Send
           </button>
         </div>
 
@@ -281,34 +345,34 @@
 
   <!-- iCabbi Settings Modal -->
   <div id="icabbiSettingsModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
-    <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
-      <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold"><i class="fa-solid fa-taxi mr-2 text-amber-500"></i>Trip Settings</h3><button onclick="document.getElementById('icabbiSettingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div>
-      <p class="text-xs text-slate-500 mb-4">Trips are received via iCabbi webhooks and stored in Supabase for strong consistency. Configure your Supabase project below.</p>
-      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Worker URL <span class="text-slate-400 normal-case">(for webhook config)</span></label>
-      <input id="icabbiWorkerUrl" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="https://icabbi-trips.your-subdomain.workers.dev">
-      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Supabase URL</label>
-      <input id="icabbiSupabaseUrl" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="https://xxxxx.supabase.co">
-      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Supabase Anon Key</label>
-      <input id="icabbiSupabaseKey" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono" placeholder="eyJhbGciOi...">
-      <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Trip Date (for fetching)</label>
-      <input id="icabbiTripDate" type="date" class="w-full bg-gray-50 border border-gray-200 p-3 mb-4 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+    <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-gray-200">
+      <div class="flex justify-between items-center mb-5"><h3 class="text-base font-bold text-gray-900">Trip Settings</h3><button onclick="document.getElementById('icabbiSettingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-700 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 transition"><i class="fa-solid fa-xmark text-sm"></i></button></div>
+      <p class="text-xs text-gray-500 mb-4">Configure your Supabase and Worker URLs for trip management.</p>
+      <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Worker URL <span class="text-gray-400 normal-case font-normal">(for webhook config)</span></label>
+      <input id="icabbiWorkerUrl" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-black/10 focus:border-gray-400 outline-none text-sm font-mono transition" placeholder="https://icabbi-trips.your-subdomain.workers.dev">
+      <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Supabase URL</label>
+      <input id="icabbiSupabaseUrl" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-black/10 focus:border-gray-400 outline-none text-sm font-mono transition" placeholder="https://xxxxx.supabase.co">
+      <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Supabase Anon Key</label>
+      <input id="icabbiSupabaseKey" class="w-full bg-gray-50 border border-gray-200 p-3 mb-3 rounded-xl focus:ring-2 focus:ring-black/10 focus:border-gray-400 outline-none text-sm font-mono transition" placeholder="eyJhbGciOi...">
+      <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Trip Date (for fetching)</label>
+      <input id="icabbiTripDate" type="date" class="w-full bg-gray-50 border border-gray-200 p-3 mb-5 rounded-xl focus:ring-2 focus:ring-black/10 focus:border-gray-400 outline-none text-sm transition">
       <div class="flex gap-2">
-        <button onclick="document.getElementById('icabbiSettingsModal').classList.add('hidden')" class="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-600">Cancel</button>
-        <button onclick="window.saveIcabbiSettings()" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm">Save</button>
+        <button onclick="document.getElementById('icabbiSettingsModal').classList.add('hidden')" class="flex-1 py-2.5 bg-gray-100 rounded-xl font-semibold text-sm text-gray-700 hover:bg-gray-200 transition">Cancel</button>
+        <button onclick="window.saveIcabbiSettings()" class="flex-1 py-2.5 bg-black text-white rounded-xl font-semibold text-sm hover:bg-gray-800 transition">Save</button>
       </div>
     </div>
   </div>
 
   <!-- Manual Contact Match Modal -->
   <div id="manualMatchModal" class="fixed inset-0 bg-black/40 z-[95] hidden flex items-center justify-center backdrop-blur-sm p-4">
-    <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl flex flex-col max-h-[70vh]">
+    <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl border border-gray-200 flex flex-col max-h-[70vh]">
       <div class="p-5 border-b border-gray-100 shrink-0">
         <div class="flex justify-between items-center mb-3">
-          <h3 class="text-base font-bold">Match Contact</h3>
-          <button onclick="document.getElementById('manualMatchModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button>
+          <h3 class="text-base font-bold text-gray-900">Match Contact</h3>
+          <button onclick="document.getElementById('manualMatchModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-700 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 transition"><i class="fa-solid fa-xmark text-sm"></i></button>
         </div>
-        <div id="manualMatchDriver" class="text-xs text-slate-500 mb-3"></div>
-        <input id="manualMatchSearch" oninput="window.renderManualMatchList()" placeholder="Search contacts..." class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-3 py-2 text-sm focus:bg-white focus:border-blue-300 outline-none transition">
+        <div id="manualMatchDriver" class="text-xs text-gray-500 mb-3"></div>
+        <input id="manualMatchSearch" oninput="window.renderManualMatchList()" placeholder="Search contacts..." class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:bg-white focus:border-gray-400 outline-none transition">
       </div>
       <div id="manualMatchList" class="flex-1 overflow-y-auto p-2"></div>
     </div>
@@ -316,69 +380,69 @@
 
   <!-- Trip Review & Send Modal -->
   <div id="tripReviewModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
-    <div class="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden">
-      <div class="flex justify-between items-center px-5 py-3 border-b border-gray-100 shrink-0">
+    <div class="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl border border-gray-200 flex flex-col overflow-hidden">
+      <div class="flex justify-between items-center px-5 py-4 border-b border-gray-100 shrink-0">
         <div class="flex items-center gap-3">
-          <h3 class="text-sm font-bold"><i class="fa-solid fa-paper-plane mr-1 text-blue-600"></i>Review &amp; Send</h3>
-          <button onclick="window.selectAllMsgs(true)" class="text-[10px] text-blue-600 hover:underline font-semibold">All</button>
-          <button onclick="window.selectAllMsgs(false)" class="text-[10px] text-slate-400 hover:underline font-semibold">None</button>
+          <h3 class="text-sm font-bold text-gray-900">Review &amp; Send</h3>
+          <button onclick="window.selectAllMsgs(true)" class="text-[10px] text-black hover:underline font-semibold">All</button>
+          <button onclick="window.selectAllMsgs(false)" class="text-[10px] text-gray-400 hover:underline font-semibold">None</button>
         </div>
-        <button onclick="document.getElementById('tripReviewModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+        <button onclick="document.getElementById('tripReviewModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-700 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 transition"><i class="fa-solid fa-xmark text-sm"></i></button>
       </div>
       <div id="tripReviewList" class="flex-1 overflow-y-auto px-5 py-3"></div>
-      <div class="px-4 py-2.5 border-t border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
-        <div class="text-xs text-slate-500"><span id="tripReviewCount" class="font-bold text-slate-800">0</span> ready</div>
+      <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
+        <div class="text-xs text-gray-500"><span id="tripReviewCount" class="font-bold text-gray-900">0</span> ready to send</div>
         <div class="flex gap-2">
-          <button onclick="document.getElementById('tripReviewModal').classList.add('hidden')" class="px-4 py-2 bg-gray-100 rounded-lg font-bold text-xs text-gray-600">Cancel</button>
-          <button onclick="window.sendTripTexts()" id="ttSendBtn" class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold text-xs hover:bg-blue-700 transition">Send <span id="tripReviewCount2">0</span></button>
+          <button onclick="document.getElementById('tripReviewModal').classList.add('hidden')" class="px-4 py-2 bg-gray-100 rounded-lg font-semibold text-xs text-gray-700 hover:bg-gray-200 transition">Cancel</button>
+          <button onclick="window.sendTripTexts()" id="ttSendBtn" class="px-5 py-2 bg-black text-white rounded-lg font-semibold text-xs hover:bg-gray-800 transition">Send <span id="tripReviewCount2">0</span></button>
         </div>
       </div>
       <!-- Send progress (hidden until sending) -->
-      <div id="ttSendProgress" class="hidden p-6 border-t border-gray-100 bg-slate-50 shrink-0">
+      <div id="ttSendProgress" class="hidden p-5 border-t border-gray-100 bg-gray-50 shrink-0">
         <div class="flex items-center gap-4 mb-3">
-          <div class="text-sm font-bold text-slate-700"><span id="ttSendSentCount">0</span> / <span id="ttSendTotalCount">0</span> sent</div>
+          <div class="text-sm font-semibold text-gray-700"><span id="ttSendSentCount">0</span> / <span id="ttSendTotalCount">0</span> sent</div>
         </div>
-        <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden"><div id="ttSendProgressBar" class="bg-blue-600 h-full w-0 transition-all duration-300"></div></div>
+        <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden"><div id="ttSendProgressBar" class="bg-black h-full w-0 transition-all duration-300"></div></div>
       </div>
     </div>
   </div>
 
   <!-- NOTIFICATION CENTER VIEW -->
-  <div id="view-notifications" class="hidden flex-1 h-full flex flex-col bg-slate-50 fade-in overflow-hidden">
-    <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
-      <div class="flex items-center gap-4">
-        <h2 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-bell mr-2 text-amber-500"></i>Notification Center</h2>
-        <span id="notifCenterCount" class="text-xs font-mono bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">0 active</span>
+  <div id="view-notifications" class="hidden flex-1 h-full flex flex-col bg-gray-50 fade-in overflow-hidden">
+    <div class="h-14 flex items-center px-6 justify-between border-b border-gray-200 bg-white sticky top-0 z-10 shrink-0">
+      <div class="flex items-center gap-3">
+        <h2 class="text-base font-bold text-gray-900">Notification Center</h2>
+        <span id="notifCenterCount" class="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold border border-gray-200">0 active</span>
       </div>
-      <div class="flex gap-3 items-center">
-        <select id="notifFilterType" onchange="window.renderNotifications()" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 outline-none">
+      <div class="flex gap-2 items-center">
+        <select id="notifFilterType" onchange="window.renderNotifications()" class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 outline-none focus:border-gray-400 transition">
           <option value="all">All Types</option>
           <option value="vehicle_alert">Vehicle Alerts</option>
           <option value="fleetio_issue">Fleetio Issues</option>
           <option value="trip_created">Auto-Created Trips</option>
         </select>
-        <button onclick="window.markAllNotifsRead()" class="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition">
-          <i class="fa-solid fa-check-double mr-1"></i>Mark All Read
+        <button onclick="window.markAllNotifsRead()" class="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition">
+          <i class="fa-solid fa-check-double mr-1.5 text-xs"></i>Mark All Read
         </button>
-        <button onclick="window.openAutomationSettings()" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition shadow-sm">
-          <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Automation Settings
+        <button onclick="window.openAutomationSettings()" class="px-3 py-2 bg-black text-white rounded-lg text-sm font-semibold hover:bg-gray-800 transition">
+          <i class="fa-solid fa-wand-magic-sparkles mr-1.5 text-xs"></i>Automation
         </button>
       </div>
     </div>
-    <div class="flex-1 overflow-y-auto p-6">
-      <div id="notifActiveAlerts" class="max-w-5xl mx-auto mb-6 space-y-3"></div>
-      <div id="notifPipelineCards" class="max-w-5xl mx-auto grid grid-cols-3 gap-4 mb-6">
-        <div class="bg-white border border-slate-200 rounded-xl px-5 py-4 flex items-center gap-4 shadow-sm">
-          <div class="w-11 h-11 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-lg"><i class="fa-solid fa-triangle-exclamation"></i></div>
-          <div><div class="text-xs text-slate-400 font-semibold">Vehicle Alerts</div><div id="notifVehicleCount" class="text-2xl font-bold text-slate-800">0</div></div>
+    <div class="flex-1 overflow-y-auto p-5">
+      <div id="notifActiveAlerts" class="max-w-5xl mx-auto mb-5 space-y-3"></div>
+      <div id="notifPipelineCards" class="max-w-5xl mx-auto grid grid-cols-3 gap-4 mb-5">
+        <div class="bg-white border border-gray-200 rounded-xl px-5 py-4 flex items-center gap-4">
+          <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><i class="fa-solid fa-triangle-exclamation"></i></div>
+          <div><div class="text-xs text-gray-400 font-semibold">Vehicle Alerts</div><div id="notifVehicleCount" class="text-2xl font-bold text-gray-900">0</div></div>
         </div>
-        <div class="bg-white border border-slate-200 rounded-xl px-5 py-4 flex items-center gap-4 shadow-sm">
-          <div class="w-11 h-11 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-lg"><i class="fa-solid fa-wrench"></i></div>
-          <div><div class="text-xs text-slate-400 font-semibold">Fleetio Issues</div><div id="notifFleetioCount" class="text-2xl font-bold text-slate-800">0</div></div>
+        <div class="bg-white border border-gray-200 rounded-xl px-5 py-4 flex items-center gap-4">
+          <div class="w-10 h-10 rounded-xl bg-gray-100 text-gray-600 flex items-center justify-center"><i class="fa-solid fa-wrench"></i></div>
+          <div><div class="text-xs text-gray-400 font-semibold">Fleetio Issues</div><div id="notifFleetioCount" class="text-2xl font-bold text-gray-900">0</div></div>
         </div>
-        <div class="bg-white border border-slate-200 rounded-xl px-5 py-4 flex items-center gap-4 shadow-sm">
-          <div class="w-11 h-11 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg"><i class="fa-solid fa-route"></i></div>
-          <div><div class="text-xs text-slate-400 font-semibold">Auto Trips Created</div><div id="notifTripCount" class="text-2xl font-bold text-slate-800">0</div></div>
+        <div class="bg-white border border-gray-200 rounded-xl px-5 py-4 flex items-center gap-4">
+          <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fa-solid fa-route"></i></div>
+          <div><div class="text-xs text-gray-400 font-semibold">Auto Trips Created</div><div id="notifTripCount" class="text-2xl font-bold text-gray-900">0</div></div>
         </div>
       </div>
       <div id="notifFeed" class="max-w-5xl mx-auto space-y-3">
@@ -393,26 +457,26 @@
 
   <!-- Automation Settings Modal -->
   <div id="automationSettingsModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
-    <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
+    <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-gray-200 max-h-[85vh] flex flex-col overflow-hidden">
       <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100 shrink-0">
-        <h3 class="text-lg font-bold"><i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-500"></i>Automation Settings</h3>
-        <button onclick="document.getElementById('automationSettingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button>
+        <h3 class="text-base font-bold text-gray-900">Automation Settings</h3>
+        <button onclick="document.getElementById('automationSettingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-700 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 transition"><i class="fa-solid fa-xmark text-sm"></i></button>
       </div>
       <div class="flex-1 overflow-y-auto p-6 space-y-5">
-        <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
-          <h4 class="text-sm font-bold text-indigo-900 mb-3"><i class="fa-solid fa-plug mr-1"></i>Fleetio Connection</h4>
-          <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Fleetio Account Token</label>
-          <input id="autoFleetioToken" type="password" class="w-full bg-white border border-gray-200 p-2.5 mb-2 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-indigo-200" placeholder="Your Fleetio API token">
-          <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Fleetio API Key</label>
-          <input id="autoFleetioApiKey" type="password" class="w-full bg-white border border-gray-200 p-2.5 mb-2 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-indigo-200" placeholder="Your Fleetio API key">
-          <p class="text-[10px] text-indigo-600 mt-1">Fleetio sends webhooks to your worker at <code>/webhook/fleetio</code></p>
+        <div class="bg-gray-50 border border-gray-200 rounded-xl p-4">
+          <h4 class="text-sm font-bold text-gray-900 mb-3"><i class="fa-solid fa-plug mr-1 text-gray-500"></i>Fleetio Connection</h4>
+          <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Fleetio Account Token</label>
+          <input id="autoFleetioToken" type="password" class="w-full bg-white border border-gray-200 p-2.5 mb-2 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400 transition" placeholder="Your Fleetio API token">
+          <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Fleetio API Key</label>
+          <input id="autoFleetioApiKey" type="password" class="w-full bg-white border border-gray-200 p-2.5 mb-2 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400 transition" placeholder="Your Fleetio API key">
+          <p class="text-[10px] text-gray-500 mt-1">Fleetio sends webhooks to your worker at <code>/webhook/fleetio</code></p>
         </div>
-        <div class="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
-          <h4 class="text-sm font-bold text-emerald-900 mb-3"><i class="fa-solid fa-taxi mr-1"></i>iCabbi Trip Creation</h4>
-          <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">iCabbi API URL</label>
-          <input id="autoIcabbiApiUrl" class="w-full bg-white border border-gray-200 p-2.5 mb-2 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-emerald-200" placeholder="https://api.icabbi.com/v1">
-          <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">iCabbi API Key</label>
-          <input id="autoIcabbiApiKey" type="password" class="w-full bg-white border border-gray-200 p-2.5 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-emerald-200" placeholder="Your iCabbi API key">
+        <div class="bg-gray-50 border border-gray-200 rounded-xl p-4">
+          <h4 class="text-sm font-bold text-gray-900 mb-3"><i class="fa-solid fa-taxi mr-1 text-gray-500"></i>iCabbi Trip Creation</h4>
+          <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">iCabbi API URL</label>
+          <input id="autoIcabbiApiUrl" class="w-full bg-white border border-gray-200 p-2.5 mb-2 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400 transition" placeholder="https://api.icabbi.com/v1">
+          <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">iCabbi API Key</label>
+          <input id="autoIcabbiApiKey" type="password" class="w-full bg-white border border-gray-200 p-2.5 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400 transition" placeholder="Your iCabbi API key">
         </div>
         <div class="bg-amber-50 border border-amber-100 rounded-xl p-4">
           <h4 class="text-sm font-bold text-amber-900 mb-3"><i class="fa-solid fa-map-pin mr-1"></i>Repair Shop Mappings</h4>
@@ -420,16 +484,16 @@
           <div id="repairShopMappings" class="space-y-2 mb-3"></div>
           <button onclick="window.addRepairMapping()" class="text-xs text-amber-700 font-bold hover:underline"><i class="fa-solid fa-plus mr-1"></i>Add Mapping</button>
         </div>
-        <div class="bg-sky-50 border border-sky-100 rounded-xl p-4">
-          <h4 class="text-sm font-bold text-sky-900 mb-3"><i class="fa-solid fa-list-check mr-1"></i>Issue Type Mappings</h4>
-          <p class="text-xs text-sky-700 mb-3">Map Fleetio issue keywords to trip name prefixes. Example: "headlight" → "Headlight repair"</p>
+        <div class="bg-gray-50 border border-gray-200 rounded-xl p-4">
+          <h4 class="text-sm font-bold text-gray-900 mb-3"><i class="fa-solid fa-list-check mr-1 text-gray-500"></i>Issue Type Mappings</h4>
+          <p class="text-xs text-gray-600 mb-3">Map Fleetio issue keywords to trip name prefixes. Example: "headlight" → "Headlight repair"</p>
           <div id="issueTypeMappings" class="space-y-2 mb-3"></div>
           <button onclick="window.addIssueMapping()" class="text-xs text-sky-700 font-bold hover:underline"><i class="fa-solid fa-plus mr-1"></i>Add Mapping</button>
         </div>
       </div>
       <div class="px-6 py-4 border-t border-gray-100 flex gap-2 shrink-0">
-        <button onclick="document.getElementById('automationSettingsModal').classList.add('hidden')" class="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-600">Cancel</button>
-        <button onclick="window.saveAutomationSettings()" class="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700">Save</button>
+        <button onclick="document.getElementById('automationSettingsModal').classList.add('hidden')" class="flex-1 py-2.5 bg-gray-100 rounded-xl font-semibold text-sm text-gray-700 hover:bg-gray-200 transition">Cancel</button>
+        <button onclick="window.saveAutomationSettings()" class="flex-1 py-2.5 bg-black text-white rounded-xl font-semibold text-sm hover:bg-gray-800 transition">Save</button>
       </div>
     </div>
   </div>
@@ -549,6 +613,19 @@ const ymd = (ms) => {
       if(v === 'broadcast') document.getElementById('massCountDisplay').innerText = store.threads.filter(t=>t.phone && t.phone.length > 5).length;
       if(v === 'logs') { store.logPage = 1; window.renderLogbook(); }
       if(v === 'notifications') window.renderNotifications();
+      // Close sidebar on mobile after navigation
+      if(window.innerWidth < 768) window.closeSidebar();
+  };
+  window.toggleSidebar = () => {
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      const isOpen = sidebar.classList.contains('sidebar-open');
+      if(isOpen) { sidebar.classList.remove('sidebar-open'); overlay.classList.remove('sidebar-open'); }
+      else { sidebar.classList.add('sidebar-open'); overlay.classList.add('sidebar-open'); }
+  };
+  window.closeSidebar = () => {
+      document.getElementById('sidebar').classList.remove('sidebar-open');
+      document.getElementById('sidebarOverlay').classList.remove('sidebar-open');
   };
   window.toggleInfoPanel = () => document.getElementById("infoPanel").classList.toggle("hidden");
 
@@ -586,18 +663,18 @@ const ymd = (ms) => {
       const el = document.getElementById("contactList");
       const tagRow = document.getElementById("tagFilterRow");
       const s = (document.getElementById("searchContacts").value || "").toLowerCase();
-      document.getElementById("filterUnread").className = `px-3 py-1 rounded-md text-[10px] font-bold border uppercase transition ${store.onlyUnread?'bg-blue-600 text-white border-blue-600':'bg-white border-gray-200 text-gray-500'}`;
-      document.getElementById("filterUrgent").className = `px-3 py-1 rounded-md text-[10px] font-bold border uppercase transition ${store.onlyUrgent?'bg-rose-500 text-white border-rose-500':'bg-white border-gray-200 text-gray-500'}`;
+      document.getElementById("filterUnread").className = `px-2.5 py-1 rounded text-[10px] font-bold border uppercase transition ${store.onlyUnread?'bg-black text-white border-black':'bg-white border-gray-200 text-gray-500'}`;
+      document.getElementById("filterUrgent").className = `px-2.5 py-1 rounded text-[10px] font-bold border uppercase transition ${store.onlyUrgent?'bg-rose-500 text-white border-rose-500':'bg-white border-gray-200 text-gray-500'}`;
       
       const allTags = new Set(); store.threads.forEach(t => (t.tags||[]).forEach(tag => allTags.add(tag)));
       if(allTags.size > 0 || store.threads.length > 0) {
           tagRow.classList.remove("hidden");
-          let tagHtml = `<button onclick="window.clearTagFilter()" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter.size===0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200'}">ALL</button>`;
+          let tagHtml = `<button onclick="window.clearTagFilter()" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter.size===0 ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-200'}">ALL</button>`;
           const untaggedActive = store.tagFilter.has("__untagged__");
-          tagHtml += `<button onclick="window.toggleTagFilter('__untagged__')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${untaggedActive ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">Untagged</button>`;
+          tagHtml += `<button onclick="window.toggleTagFilter('__untagged__')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${untaggedActive ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-200'}">Untagged</button>`;
           Array.from(allTags).sort().forEach(tag => {
               const active = store.tagFilter.has(tag);
-              tagHtml += `<button onclick="window.toggleTagFilter('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">${tag}</button>`;
+              tagHtml += `<button onclick="window.toggleTagFilter('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-200'}">${tag}</button>`;
           });
           tagRow.innerHTML = tagHtml;
       } else { tagRow.classList.add("hidden"); }
@@ -620,20 +697,20 @@ const ymd = (ms) => {
       el.innerHTML = list.map(t => {
           const isActive = t.id === store.activeThreadId, isUnread = (t.unread||0) > 0;
           const isVehicleAlert = t.isUrgent && vehicleKeywords.some(k => (t.lastMessageText||'').toLowerCase().includes(k));
-          let cardClass = isActive ? 'bg-blue-50 border border-blue-100 shadow-sm' : 'hover:bg-slate-50 border border-transparent';
-          let iconClass = isActive ? 'bg-blue-600 text-white' : (isUnread ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500');
+          let cardClass = isActive ? 'bg-gray-100 border border-gray-200' : 'hover:bg-gray-50 border border-transparent';
+          let iconClass = isActive ? 'bg-black text-white' : (isUnread ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600');
           let urgentIcon = '';
 
           if (isVehicleAlert) {
               cardClass = isActive ? 'bg-amber-100 border-l-4 border-amber-500' : 'bg-amber-50 border-l-4 border-amber-400 hover:bg-amber-100';
-              urgentIcon = '<div class="absolute -top-1 -right-1 text-amber-600 animate-pulse"><i class="fa-solid fa-wrench"></i></div>';
+              urgentIcon = '<div class="absolute -top-1 -right-1 text-amber-600 animate-pulse"><i class="fa-solid fa-wrench text-[9px]"></i></div>';
           } else if (t.isUrgent) {
-              urgentIcon = '<div class="absolute -top-1 -right-1 text-rose-500 animate-pulse"><i class="fa-solid fa-bell"></i></div>';
+              urgentIcon = '<div class="absolute -top-1 -right-1 text-rose-500 animate-pulse"><i class="fa-solid fa-bell text-[9px]"></i></div>';
           }
 
-          return `<div onclick="window.loadThread('${t.id}')" class="p-3 rounded-xl cursor-pointer mb-1 transition flex items-center gap-3 ${cardClass}">
-            <div class="relative w-10 h-10 rounded-full ${iconClass} flex items-center justify-center font-bold text-xs shrink-0 transition-colors">${initials(t.name)}${isUnread ? '<div class="absolute top-0 right-0 w-3 h-3 bg-blue-500 rounded-full border-2 border-white"></div>':''}${urgentIcon}</div>
-            <div class="flex-1 min-w-0"><div class="flex justify-between items-baseline"><span class="font-bold text-sm ${isUnread?'text-gray-900':'text-gray-700'} truncate">${escapeHtml(t.name)}</span><span class="text-[10px] text-gray-400 whitespace-nowrap">${relativeTime(t.lastMessageAtMs)}</span></div><div class="text-xs text-gray-500 truncate h-4 leading-4 opacity-80">${escapeHtml(t.lastMessageText || "No messages")}</div>${t.tags && t.tags.length ? `<div class="flex gap-1 mt-1 overflow-hidden h-4">${t.tags.slice(0,3).map(g=>`<span class="px-1 bg-slate-100 text-slate-500 text-[9px] rounded border border-slate-200">${g}</span>`).join("")}</div>` : ''}</div>
+          return `<div onclick="window.loadThread('${t.id}')" class="p-2.5 rounded-lg cursor-pointer transition flex items-center gap-2.5 ${cardClass}">
+            <div class="relative w-9 h-9 rounded-full ${iconClass} flex items-center justify-center font-bold text-xs shrink-0 transition-colors">${initials(t.name)}${isUnread ? '<div class="absolute top-0 right-0 w-2.5 h-2.5 bg-black rounded-full border-2 border-white"></div>':''}${urgentIcon}</div>
+            <div class="flex-1 min-w-0"><div class="flex justify-between items-baseline"><span class="font-semibold text-sm ${isUnread?'text-gray-900':'text-gray-700'} truncate">${escapeHtml(t.name)}</span><span class="text-[10px] text-gray-400 whitespace-nowrap ml-1">${relativeTime(t.lastMessageAtMs)}</span></div><div class="text-xs text-gray-500 truncate leading-4 opacity-80">${escapeHtml(t.lastMessageText || "No messages")}</div>${t.tags && t.tags.length ? `<div class="flex gap-1 mt-1 overflow-hidden h-4">${t.tags.slice(0,3).map(g=>`<span class="px-1 bg-gray-100 text-gray-500 text-[9px] rounded border border-gray-200">${g}</span>`).join("")}</div>` : ''}</div>
           </div>`;
       }).join("");
   };
@@ -650,7 +727,7 @@ const ymd = (ms) => {
       document.getElementById("detailsName").innerText = store.activeThread?.name || id; document.getElementById("detailsPhone").innerText = store.activeThread?.phone;
       document.getElementById("detailsTagsInput").value = (store.activeThread?.tags||[]).join(", "); document.getElementById("detailsNotes").value = store.activeThread?.notes||"";
       document.getElementById("msgInput").value = store.drafts[id] || "";
-      document.getElementById("headerUrgentBtn").className = store.activeThread.isUrgent ? "w-8 h-8 flex items-center justify-center rounded bg-rose-100 text-rose-500" : "w-8 h-8 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-500 text-slate-400";
+      document.getElementById("headerUrgentBtn").className = store.activeThread.isUrgent ? "w-8 h-8 flex items-center justify-center rounded-lg bg-rose-100 text-rose-500" : "w-8 h-8 flex items-center justify-center rounded-lg hover:bg-rose-50 hover:text-rose-500 text-gray-400";
       try { await updateDoc(getThreadDoc(id), { unread: 0, lastReadAtMs: Date.now() }); } catch {}
       
       const q = query(getMsgsCol(id), orderBy("createdAt", "asc"));
@@ -768,12 +845,12 @@ s.forEach(d => {
       const tagRow = document.getElementById("contactsTagRow");
       if(tagRow) {
           const allTags = new Set(); store.threads.forEach(t => (t.tags||[]).forEach(tag => allTags.add(tag)));
-          let tagHtml = `<button onclick="window.clearTagFilter()" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter.size===0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}">ALL</button>`;
+          let tagHtml = `<button onclick="window.clearTagFilter()" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter.size===0 ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}">ALL</button>`;
           const untaggedActive = store.tagFilter.has("__untagged__");
-          tagHtml += `<button onclick="window.toggleTagFilter('__untagged__')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${untaggedActive ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">Untagged</button>`;
+          tagHtml += `<button onclick="window.toggleTagFilter('__untagged__')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${untaggedActive ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-200'}">Untagged</button>`;
           Array.from(allTags).sort().forEach(tag => {
               const active = store.tagFilter.has(tag);
-              tagHtml += `<button onclick="window.toggleTagFilter('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'}">${tag}</button>`;
+              tagHtml += `<button onclick="window.toggleTagFilter('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}">${tag}</button>`;
           });
           tagRow.innerHTML = tagHtml;
       }
@@ -800,7 +877,7 @@ s.forEach(d => {
       const start = (store.cmPage - 1) * store.itemsPerPage;
       const paginated = filtered.slice(start, start + store.itemsPerPage);
 
-      tbody.innerHTML = paginated.map(t => `<tr><td class="p-4 pl-6"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">${initials(t.name)}</div><input class="cm-name bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-sm font-bold w-full text-slate-700" data-id="${t.id}" value="${escapeHtml(t.name)}"></div></td><td class="p-4 text-xs font-mono text-slate-500">${t.phone}</td><td class="p-4"><input class="cm-tags bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-xs w-full text-slate-600" data-id="${t.id}" value="${(t.tags||[]).join(",")}" placeholder="Tags"></td><td class="p-4 pr-6 text-right text-xs text-slate-400">${relativeTime(t.lastMessageAtMs)}</td><td class="p-4 text-right"><button onclick="window.deleteContact('${t.id}')" class="text-slate-400 hover:text-rose-600 transition"><i class="fa-solid fa-trash"></i></button></td></tr>`).join("");
+      tbody.innerHTML = paginated.map(t => `<tr class="hover:bg-gray-50 transition"><td class="p-4 pl-6"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600">${initials(t.name)}</div><input class="cm-name bg-transparent border-b border-transparent focus:border-gray-400 outline-none text-sm font-semibold w-full text-gray-800" data-id="${t.id}" value="${escapeHtml(t.name)}"></div></td><td class="p-4 text-xs font-mono text-gray-500">${t.phone}</td><td class="p-4"><input class="cm-tags bg-transparent border-b border-transparent focus:border-gray-400 outline-none text-xs w-full text-gray-600" data-id="${t.id}" value="${(t.tags||[]).join(",")}" placeholder="Add tags..."></td><td class="p-4 pr-6 text-right text-xs text-gray-400">${relativeTime(t.lastMessageAtMs)}</td><td class="p-4 text-right"><button onclick="window.deleteContact('${t.id}')" class="text-gray-300 hover:text-rose-500 transition"><i class="fa-solid fa-trash text-xs"></i></button></td></tr>`).join("");
   };
 
   window.changeCmPage = (dir) => { store.cmPage += dir; window.renderContactsManagerTable(); };
@@ -820,12 +897,12 @@ s.forEach(d => {
       const tagRow = document.getElementById("logTagRow");
       if(tagRow) {
           const allTags = new Set(); store.threads.forEach(t => (t.tags||[]).forEach(tag => allTags.add(tag)));
-          let tagHtml = `<button onclick="window.clearTagFilter()" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter.size===0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}">ALL</button>`;
+          let tagHtml = `<button onclick="window.clearTagFilter()" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter.size===0 ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}">ALL</button>`;
           const untaggedActive = store.tagFilter.has("__untagged__");
-          tagHtml += `<button onclick="window.toggleTagFilter('__untagged__')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${untaggedActive ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">Untagged</button>`;
+          tagHtml += `<button onclick="window.toggleTagFilter('__untagged__')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${untaggedActive ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-200'}">Untagged</button>`;
           Array.from(allTags).sort().forEach(tag => {
               const active = store.tagFilter.has(tag);
-              tagHtml += `<button onclick="window.toggleTagFilter('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'}">${tag}</button>`;
+              tagHtml += `<button onclick="window.toggleTagFilter('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}">${tag}</button>`;
           });
           tagRow.innerHTML = tagHtml;
       }
@@ -872,7 +949,7 @@ s.forEach(d => {
                 <span class="font-bold uppercase text-slate-400 mr-2 text-[10px] tracking-wider border border-slate-200 px-1.5 py-0.5 rounded">${l.type}</span>
                 ${escapeHtml(l.message||"")}
             </td>
-            <td class="p-4 pr-6 text-right"><button onclick="window.switchView('inbox'); window.loadThread('${l.threadId}')" class="text-blue-600 font-bold text-xs hover:underline">View</button></td>
+            <td class="p-4 pr-6 text-right"><button onclick="window.switchView('inbox'); window.loadThread('${l.threadId}')" class="text-black font-semibold text-xs hover:underline">View</button></td>
           </tr>`;
       }).join("");
   };
@@ -894,7 +971,7 @@ s.forEach(d => {
   window.toggleUrgentOnly = () => { store.onlyUrgent = !store.onlyUrgent; window.renderThreadList(); };
   window.openSettingsModal = () => { document.getElementById("settingsModal").classList.remove("hidden"); document.getElementById("cannedRepliesInput").value = store.cannedReplies.join("\n"); };
   window.saveSettings = () => { store.cannedReplies = document.getElementById("cannedRepliesInput").value.split("\n").filter(Boolean); localStorage.setItem("canned", JSON.stringify(store.cannedReplies)); document.getElementById("settingsModal").classList.add("hidden"); window.renderQuickReplies(); };
-  window.renderQuickReplies = () => { const r = document.getElementById("quickRepliesRow"); r.innerHTML = (JSON.parse(localStorage.getItem("canned")||"[]")).map(t => `<button class="shrink-0 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs text-gray-600 whitespace-nowrap hover:border-blue-400 transition shadow-sm" onclick="document.getElementById('msgInput').value+='${escapeHtml(t).replace(/'/g,"\\&#39;")}';">${escapeHtml(t)}</button>`).join(""); };
+  window.renderQuickReplies = () => { const r = document.getElementById("quickRepliesRow"); r.innerHTML = (JSON.parse(localStorage.getItem("canned")||"[]")).map(t => `<button class="shrink-0 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs text-gray-600 whitespace-nowrap hover:border-gray-500 hover:text-gray-900 transition" onclick="document.getElementById('msgInput').value+='${escapeHtml(t).replace(/'/g,"\\&#39;")}';">${escapeHtml(t)}</button>`).join(""); };
   window.insertTemplate = () => { const v = document.getElementById("templateSelect").value; if(v) document.getElementById("msgInput").value += v; document.getElementById("templateSelect").value = ""; };
   window.saveDetailsTags = () => updateDoc(getThreadDoc(store.activeThreadId), { tags: document.getElementById("detailsTagsInput").value.split(",") });
   window.saveDetailsNotes = () => updateDoc(getThreadDoc(store.activeThreadId), { notes: document.getElementById("detailsNotes").value });
@@ -1193,13 +1270,13 @@ s.forEach(d => {
     }
 
     container.innerHTML = filtered.map(t => `
-      <button onclick="window.selectManualMatch('${t.id}')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-blue-50 transition text-left group">
-        <div class="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-blue-100 flex items-center justify-center text-xs font-bold text-slate-500 group-hover:text-blue-700 shrink-0">${initials(t.name)}</div>
+      <button onclick="window.selectManualMatch('${t.id}')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition text-left group">
+        <div class="w-8 h-8 rounded-full bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 shrink-0">${initials(t.name)}</div>
         <div class="min-w-0 flex-1">
-          <div class="text-sm font-bold text-slate-700 truncate">${escapeHtml(t.name || "Unknown")}</div>
-          <div class="text-[11px] text-slate-400 font-mono truncate">${escapeHtml(t.phone)}</div>
+          <div class="text-sm font-semibold text-gray-800 truncate">${escapeHtml(t.name || "Unknown")}</div>
+          <div class="text-[11px] text-gray-400 font-mono truncate">${escapeHtml(t.phone)}</div>
         </div>
-        <i class="fa-solid fa-chevron-right text-slate-300 text-xs group-hover:text-blue-400"></i>
+        <i class="fa-solid fa-chevron-right text-gray-300 text-xs group-hover:text-gray-500"></i>
       </button>
     `).join("");
   };
@@ -1238,13 +1315,13 @@ s.forEach(d => {
     container.innerHTML = Object.entries(byRegion).map(([region, drivers]) => {
       const matchedInRegion = drivers.filter(d => d.matched).length;
       return `
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          <div class="px-6 py-4 bg-slate-50 border-b border-gray-100 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <i class="fa-solid fa-map-marker-alt text-blue-500"></i>
-              <h3 class="font-bold text-slate-800">${escapeHtml(region)}</h3>
-              <span class="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">${drivers.length} drivers</span>
-              <span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">${matchedInRegion} matched</span>
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="px-5 py-3.5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <i class="fa-solid fa-map-marker-alt text-gray-500 text-sm"></i>
+              <h3 class="font-bold text-gray-900 text-sm">${escapeHtml(region)}</h3>
+              <span class="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full font-semibold">${drivers.length} drivers</span>
+              <span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">${matchedInRegion} matched</span>
             </div>
           </div>
           <div class="overflow-x-auto">
@@ -1267,14 +1344,14 @@ s.forEach(d => {
                     <td class="px-6 py-3 text-xs text-slate-500">${escapeHtml(d.origin || "-")}</td>
                     <td class="px-6 py-3 text-xs text-slate-500">${escapeHtml(d.tablet || "-")}</td>
                     <td class="px-6 py-3 text-xs">${d.matched
-                      ? `<span class="text-emerald-600 font-bold"><i class="fa-solid fa-check-circle mr-1"></i>${escapeHtml(d.matched.name)}</span> <button onclick="window.openManualMatch(${ttDrivers.indexOf(d)})" class="text-slate-400 hover:text-blue-600 ml-1 text-[10px] underline">change</button>`
-                      : `<span class="text-rose-400 mr-2"><i class="fa-solid fa-circle-xmark mr-1"></i>No match</span><button onclick="window.openManualMatch(${ttDrivers.indexOf(d)})" class="px-2 py-0.5 bg-blue-600 text-white rounded text-[10px] font-bold hover:bg-blue-700 transition">Match</button>`
+                      ? `<span class="text-emerald-600 font-semibold"><i class="fa-solid fa-check-circle mr-1"></i>${escapeHtml(d.matched.name)}</span> <button onclick="window.openManualMatch(${ttDrivers.indexOf(d)})" class="text-gray-400 hover:text-black ml-1 text-[10px] underline">change</button>`
+                      : `<span class="text-rose-400 mr-2"><i class="fa-solid fa-circle-xmark mr-1"></i>No match</span><button onclick="window.openManualMatch(${ttDrivers.indexOf(d)})" class="px-2 py-0.5 bg-black text-white rounded text-[10px] font-semibold hover:bg-gray-800 transition">Match</button>`
                     }</td>
                     <td class="px-6 py-3 text-xs">${d.trips.length
-                      ? `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">${d.trips.length} trips</span>`
+                      ? `<span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full font-semibold">${d.trips.length} trips</span>`
                       : d.tablet
-                        ? `<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">Scheduled @ ${escapeHtml(d.tablet)}</span>`
-                        : `<span class="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">No trips</span>`
+                        ? `<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold">Scheduled @ ${escapeHtml(d.tablet)}</span>`
+                        : `<span class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">No trips</span>`
                     }</td>
                   </tr>
                 `).join("")}
@@ -1296,7 +1373,7 @@ s.forEach(d => {
       el.classList.add("bg-slate-50", "text-slate-400", "border-slate-200");
       icon.className = "fa-solid fa-cloud-arrow-down text-[10px]";
     } else if (state === "active") {
-      el.classList.add("bg-indigo-50", "text-indigo-600", "border-indigo-300", "ring-2", "ring-indigo-200");
+      el.classList.add("bg-gray-50", "text-gray-700", "border-gray-300", "ring-2", "ring-gray-200");
       icon.className = "fa-solid fa-spinner fa-spin text-[10px]";
     } else if (state === "done") {
       el.classList.add("bg-emerald-50", "text-emerald-600", "border-emerald-300");
@@ -1595,7 +1672,7 @@ s.forEach(d => {
 
       html += `<div class="mb-4">`;
       html += `<div class="flex items-center gap-2 mb-2 sticky top-0 bg-white/95 backdrop-blur-sm py-2 z-10 border-b border-gray-100">
-        <input type="checkbox" ${noneEnabled ? "" : "checked"} onchange="window.toggleRegion('${escapeHtml(region)}')" class="w-4 h-4 accent-blue-600" title="Select/deselect all in ${escapeHtml(region)}">
+        <input type="checkbox" ${noneEnabled ? "" : "checked"} onchange="window.toggleRegion('${escapeHtml(region)}')" class="w-4 h-4 accent-black" title="Select/deselect all in ${escapeHtml(region)}">
         <span class="font-bold text-sm text-slate-700">${escapeHtml(region)}</span>
         <span class="text-xs text-slate-400">${regionEnabled}/${items.length} selected</span>
       </div>`;
@@ -1604,21 +1681,21 @@ s.forEach(d => {
       items.forEach(({ msg: m, idx: i }) => {
         const tripCount = m.driver.trips.length;
         const isExpanded = m._expanded;
-        html += `<div class="border ${m.enabled ? 'border-blue-200 bg-blue-50/20' : 'border-gray-200 bg-gray-50 opacity-50'} rounded-lg transition">
+        html += `<div class="border ${m.enabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50 opacity-50'} rounded-lg transition">
           <div class="flex items-center gap-0 px-0 py-0">
-            <label class="flex items-center justify-center px-3 py-2 cursor-pointer shrink-0 hover:bg-blue-50 rounded-l-lg" onclick="event.stopPropagation()">
-              <input type="checkbox" ${m.enabled ? "checked" : ""} onchange="window.toggleTripMsg(${i})" class="w-4 h-4 accent-blue-600">
+            <label class="flex items-center justify-center px-3 py-2 cursor-pointer shrink-0 hover:bg-gray-50 rounded-l-lg" onclick="event.stopPropagation()">
+              <input type="checkbox" ${m.enabled ? "checked" : ""} onchange="window.toggleTripMsg(${i})" class="w-4 h-4 accent-black">
             </label>
             <div class="flex items-center gap-2 px-2 py-2 cursor-pointer flex-1 min-w-0" onclick="window.toggleExpandMsg(${i})">
-              <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold shrink-0">${initials(m.contactName)}</div>
-              <span class="font-semibold text-xs text-slate-800 truncate">${escapeHtml(m.contactName)}</span>
-              <span class="text-[10px] text-slate-400 font-mono shrink-0">V${escapeHtml(m.driver.vehicle)}</span>
-              <span class="text-[10px] ${tripCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'} px-1.5 py-0.5 rounded-full font-bold shrink-0">${tripCount}</span>
-              <i class="fa-solid fa-chevron-${isExpanded ? 'up' : 'down'} text-[10px] text-slate-400 ml-auto shrink-0"></i>
+              <div class="w-6 h-6 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center text-[10px] font-bold shrink-0">${initials(m.contactName)}</div>
+              <span class="font-semibold text-xs text-gray-800 truncate">${escapeHtml(m.contactName)}</span>
+              <span class="text-[10px] text-gray-400 font-mono shrink-0">V${escapeHtml(m.driver.vehicle)}</span>
+              <span class="text-[10px] ${tripCount > 0 ? 'bg-gray-100 text-gray-700' : 'bg-amber-100 text-amber-700'} px-1.5 py-0.5 rounded-full font-semibold shrink-0">${tripCount}</span>
+              <i class="fa-solid fa-chevron-${isExpanded ? 'up' : 'down'} text-[10px] text-gray-400 ml-auto shrink-0"></i>
             </div>
           </div>
           ${isExpanded ? `<div class="px-3 pb-2">
-            <textarea id="ttMsg${i}" rows="5" class="w-full bg-white border border-gray-200 rounded-lg p-2 text-[11px] font-mono text-slate-700 resize-none outline-none focus:ring-2 focus:ring-blue-300" ${m.enabled ? "" : "disabled"}>${escapeHtml(m.message)}</textarea>
+            <textarea id="ttMsg${i}" rows="5" class="w-full bg-white border border-gray-200 rounded-lg p-2 text-[11px] font-mono text-gray-700 resize-none outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400" ${m.enabled ? "" : "disabled"}>${escapeHtml(m.message)}</textarea>
           </div>` : ""}
         </div>`;
       });
@@ -1813,7 +1890,7 @@ s.forEach(d => {
           typeConfig = { icon: "fa-route", iconBg: "bg-emerald-100 text-emerald-600", badge: "bg-emerald-100 text-emerald-700 border-emerald-200", label: "TRIP CREATED", cardBorder: n.read ? "" : "border-l-4 border-l-emerald-400" };
           break;
         default:
-          typeConfig = { icon: "fa-bell", iconBg: "bg-blue-100 text-blue-600", badge: "bg-blue-100 text-blue-700 border-blue-200", label: n.type?.toUpperCase() || "ALERT", cardBorder: n.read ? "" : "border-l-4 border-l-blue-400" };
+          typeConfig = { icon: "fa-bell", iconBg: "bg-gray-100 text-gray-600", badge: "bg-gray-100 text-gray-700 border-gray-200", label: n.type?.toUpperCase() || "ALERT", cardBorder: n.read ? "" : "border-l-4 border-l-gray-400" };
       }
       const readClass = n.read ? "opacity-60" : "";
       return `<div class="bg-white border border-slate-200 rounded-xl p-4 flex items-start gap-4 shadow-sm ${typeConfig.cardBorder} ${readClass} transition hover:shadow-md">
@@ -1829,23 +1906,23 @@ s.forEach(d => {
           <div class="text-xs text-slate-600 mt-1">${escapeHtml(n.message || "")}</div>
           <div class="flex flex-wrap gap-1.5 mt-2">
             ${n.vehicleRef ? `<span class="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-bold text-slate-500"><i class="fa-solid fa-van-shuttle mr-1"></i>${escapeHtml(n.vehicleRef)}</span>` : ""}
-            ${n.siteRef ? `<span class="px-2 py-0.5 bg-indigo-50 border border-indigo-200 rounded text-[10px] font-bold text-indigo-600"><i class="fa-solid fa-location-dot mr-1"></i>${escapeHtml(n.siteRef)}</span>` : ""}
+            ${n.siteRef ? `<span class="px-2 py-0.5 bg-gray-50 border border-gray-200 rounded text-[10px] font-bold text-gray-600"><i class="fa-solid fa-location-dot mr-1"></i>${escapeHtml(n.siteRef)}</span>` : ""}
             ${n.tripName ? `<span class="px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded text-[10px] font-bold text-emerald-600"><i class="fa-solid fa-route mr-1"></i>${escapeHtml(n.tripName)}</span>` : ""}
             ${n.repairShop ? `<span class="px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-[10px] font-bold text-amber-600"><i class="fa-solid fa-shop mr-1"></i>${escapeHtml(n.repairShop)}</span>` : ""}
             ${n.driverName ? `<span class="px-2 py-0.5 bg-sky-50 border border-sky-200 rounded text-[10px] font-bold text-sky-600"><i class="fa-solid fa-user mr-1"></i>${escapeHtml(n.driverName)}</span>` : ""}
           </div>
           ${n.pipelineSteps ? `<div class="mt-3 flex items-center gap-1">${n.pipelineSteps.map((s, i) => {
-            const stepClass = s.status === "done" ? "bg-emerald-500 text-white" : s.status === "active" ? "bg-blue-500 text-white animate-pulse" : "bg-slate-200 text-slate-400";
+            const stepClass = s.status === "done" ? "bg-emerald-500 text-white" : s.status === "active" ? "bg-black text-white animate-pulse" : "bg-gray-200 text-gray-400";
             return `<div class="flex items-center gap-1">
               <div class="w-6 h-6 rounded-full ${stepClass} flex items-center justify-center text-[10px] font-bold">${i+1}</div>
-              <span class="text-[10px] font-semibold ${s.status === 'done' ? 'text-emerald-600' : s.status === 'active' ? 'text-blue-600' : 'text-slate-400'}">${escapeHtml(s.label)}</span>
+              <span class="text-[10px] font-semibold ${s.status === 'done' ? 'text-emerald-600' : s.status === 'active' ? 'text-black' : 'text-gray-400'}">${escapeHtml(s.label)}</span>
               ${i < n.pipelineSteps.length - 1 ? '<div class="w-4 h-px bg-slate-300 mx-0.5"></div>' : ''}
             </div>`;
           }).join("")}</div>` : ""}
         </div>
         <div class="flex flex-col gap-1 shrink-0">
-          ${!n.read ? `<button onclick="window.dismissNotif('${n._id}')" class="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center" title="Mark Read"><i class="fa-solid fa-check text-xs"></i></button>` : ""}
-          ${n.threadId ? `<button onclick="window.switchView('inbox'); window.loadThread('${n.threadId}')" class="w-7 h-7 rounded-lg hover:bg-blue-50 text-blue-500 flex items-center justify-center" title="View Thread"><i class="fa-solid fa-message text-xs"></i></button>` : ""}
+          ${!n.read ? `<button onclick="window.dismissNotif('${n._id}')" class="w-7 h-7 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 flex items-center justify-center" title="Mark Read"><i class="fa-solid fa-check text-xs"></i></button>` : ""}
+          ${n.threadId ? `<button onclick="window.switchView('inbox'); window.loadThread('${n.threadId}')" class="w-7 h-7 rounded-lg hover:bg-gray-100 text-gray-500 flex items-center justify-center" title="View Thread"><i class="fa-solid fa-message text-xs"></i></button>` : ""}
         </div>
       </div>`;
     }).join("");
