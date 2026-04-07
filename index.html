@@ -32,7 +32,7 @@
 
   <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3"></audio>
   
-  <audio id="notifTripSound" src="https://assets.mixkit.co/active_storage/sfx/2866/2866-preview.mp3"></audio>
+  <audio id="notifTripSound" src="https://residence-lescale.fr/wp-content/plugins/youzify/includes/public/assets/youzify-notification-sound.ogg"></audio>
 
   <nav class="w-[64px] bg-slate-900 flex flex-col items-center py-4 z-50 shrink-0 shadow-xl">
     <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg mb-6 shadow-lg shadow-blue-900/50">D</div>
@@ -1517,7 +1517,7 @@
     if (isReturn) {
       // Return trip — use dropoff city, fall back to pickup
       const city = extractCity(trip.dropoff) || extractCity(trip.pickup) || "Unknown";
-      return `${time} return to ${city}${lastName ? ` (${lastName})` : ""}`;
+      return `${time} return from ${city}${lastName ? ` (${lastName})` : ""}`;
     } else {
       // First trip for this passenger — use pickup city, fall back to dropoff
       const city = extractCity(trip.pickup) || extractCity(trip.dropoff) || "Unknown";
