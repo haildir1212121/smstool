@@ -28,7 +28,11 @@
 
 <body class="h-screen w-full flex text-slate-800 bg-slate-50">
 
+  <body class="h-screen w-full flex text-slate-800 bg-slate-50">
+
   <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3"></audio>
+  
+  <audio id="notifTripSound" src="https://assets.mixkit.co/active_storage/sfx/2866/2866-preview.mp3"></audio>
 
   <nav class="w-[64px] bg-slate-900 flex flex-col items-center py-4 z-50 shrink-0 shadow-xl">
     <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg mb-6 shadow-lg shadow-blue-900/50">D</div>
@@ -216,7 +220,6 @@
       </div>
   </div>
 
-  <!-- TRIP TEXTS VIEW -->
   <div id="view-triptexts" class="hidden flex-1 h-full flex flex-col bg-slate-50 fade-in overflow-hidden">
     <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
       <div class="flex items-center gap-4">
@@ -234,16 +237,13 @@
     </div>
 
     <div class="flex-1 overflow-y-auto p-6">
-      <!-- Empty state -->
       <div id="ttEmptyState" class="flex flex-col items-center justify-center h-full text-slate-300">
         <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-slate-100"><i class="fa-solid fa-file-excel text-3xl opacity-50"></i></div>
         <p class="font-medium text-sm mb-1">Upload a Driver Messaging Template</p>
         <p class="text-xs text-slate-400">Upload .xlsx or .csv, or copy cells from Google Sheets and click Paste Sheet</p>
       </div>
 
-      <!-- Results area (hidden until sheet uploaded) -->
       <div id="ttResultsArea" class="hidden max-w-6xl mx-auto space-y-4">
-        <!-- Summary bar -->
         <div class="flex gap-3 mb-4">
           <div class="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
             <i class="fa-solid fa-users text-blue-500"></i>
@@ -274,13 +274,11 @@
           </button>
         </div>
 
-        <!-- Region sections -->
         <div id="ttRegionList" class="space-y-4"></div>
       </div>
     </div>
   </div>
 
-  <!-- iCabbi Settings Modal -->
   <div id="icabbiSettingsModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
       <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold"><i class="fa-solid fa-taxi mr-2 text-amber-500"></i>Trip Settings</h3><button onclick="document.getElementById('icabbiSettingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div>
@@ -300,7 +298,6 @@
     </div>
   </div>
 
-  <!-- Manual Contact Match Modal -->
   <div id="manualMatchModal" class="fixed inset-0 bg-black/40 z-[95] hidden flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl flex flex-col max-h-[70vh]">
       <div class="p-5 border-b border-gray-100 shrink-0">
@@ -315,7 +312,6 @@
     </div>
   </div>
 
-  <!-- Trip Review & Send Modal -->
   <div id="tripReviewModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden">
       <div class="flex justify-between items-center px-5 py-3 border-b border-gray-100 shrink-0">
@@ -334,7 +330,6 @@
           <button onclick="window.sendTripTexts()" id="ttSendBtn" class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold text-xs hover:bg-blue-700 transition">Send <span id="tripReviewCount2">0</span></button>
         </div>
       </div>
-      <!-- Send progress (hidden until sending) -->
       <div id="ttSendProgress" class="hidden p-6 border-t border-gray-100 bg-slate-50 shrink-0">
         <div class="flex items-center gap-4 mb-3">
           <div class="text-sm font-bold text-slate-700"><span id="ttSendSentCount">0</span> / <span id="ttSendTotalCount">0</span> sent</div>
@@ -344,7 +339,6 @@
     </div>
   </div>
 
-  <!-- NOTIFICATION CENTER VIEW -->
   <div id="view-notifications" class="hidden flex-1 h-full flex flex-col bg-slate-50 fade-in overflow-hidden">
     <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
       <div class="flex items-center gap-4">
@@ -392,7 +386,6 @@
     </div>
   </div>
 
-  <!-- TRIP DATA VIEWER -->
   <div id="view-tripdata" class="hidden flex-1 h-full flex flex-col bg-slate-50 fade-in overflow-hidden">
     <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
       <div class="flex items-center gap-4">
@@ -433,7 +426,6 @@
     </div>
   </div>
 
-  <!-- Trip Detail Debug Modal -->
   <div id="tdDetailModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-white rounded-2xl w-full max-w-xl shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
       <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100 shrink-0">
@@ -446,7 +438,6 @@
     </div>
   </div>
 
-  <!-- Automation Settings Modal -->
   <div id="automationSettingsModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
       <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100 shrink-0">
@@ -517,17 +508,18 @@
   const escapeHtml = (t) => { const d = document.createElement("div"); d.textContent = t ?? ""; return d.innerHTML; };
   const initials = (s) => (s || "?").trim().slice(0, 2).toUpperCase() || "?";
   const formatTime = (ms) => (!ms) ? "" : new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-const formatDate = (ms) => (!ms) ? "" : new Date(ms).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
-const formatDateLong = (ms) => (!ms) ? "" : new Date(ms).toLocaleDateString([], { weekday: "short", year: "numeric", month: "long", day: "numeric" });
+  const formatDate = (ms) => (!ms) ? "" : new Date(ms).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+  const formatDateLong = (ms) => (!ms) ? "" : new Date(ms).toLocaleDateString([], { weekday: "short", year: "numeric", month: "long", day: "numeric" });
 
-const ymd = (ms) => {
-  if (!ms) return "";
-  const d = new Date(ms);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const da = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${da}`;
-};
+  const ymd = (ms) => {
+    if (!ms) return "";
+    const d = new Date(ms);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const da = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${da}`;
+  };
+
   function relativeTime(ms) { if (!ms) return ""; const diff = Date.now() - ms; const min = 60000; if (diff < min) return "now"; if (diff < 60*min) return Math.floor(diff/min) + "m"; if (diff < 24*60*min) return Math.floor(diff/(60*min)) + "h"; return Math.floor(diff/(24*60*min)) + "d"; }
   window.showToast = (msg, type) => { const t = document.getElementById("toast"); document.getElementById("toastMsg").innerText=msg; document.getElementById("toastIcon").className = type==="error"?"fa-solid fa-circle-exclamation text-rose-400":"fa-solid fa-check-circle text-emerald-400"; t.classList.remove("translate-y-20","opacity-0"); setTimeout(()=>t.classList.add("translate-y-20","opacity-0"), 2500); };
   
@@ -716,50 +708,50 @@ const ymd = (ms) => {
           let lastDay = null;
           let html = "";
 
-s.forEach(d => {
-  const m = d.data();
-  const isMe = m.direction === "sent";
+        s.forEach(d => {
+          const m = d.data();
+          const isMe = m.direction === "sent";
 
-  if (m.mediaUrls) m.mediaUrls.forEach(u => atts.push(u));
+          if (m.mediaUrls) m.mediaUrls.forEach(u => atts.push(u));
 
-  const ts = m.createdAt?.toMillis?.() || null;
-  const dayKey = ymd(ts);
+          const ts = m.createdAt?.toMillis?.() || null;
+          const dayKey = ymd(ts);
 
-  // Date divider when day changes
-  if (dayKey && dayKey !== lastDay) {
-    lastDay = dayKey;
-    html += `
-      <div class="flex justify-center my-3">
-        <div class="px-3 py-1 rounded-full text-[11px] font-bold text-slate-500 bg-white border border-slate-200 shadow-sm">
-          ${escapeHtml(formatDateLong(ts))}
-        </div>
-      </div>
-    `;
-  }
+          // Date divider when day changes
+          if (dayKey && dayKey !== lastDay) {
+            lastDay = dayKey;
+            html += `
+              <div class="flex justify-center my-3">
+                <div class="px-3 py-1 rounded-full text-[11px] font-bold text-slate-500 bg-white border border-slate-200 shadow-sm">
+                  ${escapeHtml(formatDateLong(ts))}
+                </div>
+              </div>
+            `;
+          }
 
-  let mediaHtml = "";
-  if (m.mediaUrls && m.mediaUrls.length) {
-    mediaHtml =
-      `<div class="flex flex-col gap-2 mt-2">` +
-      m.mediaUrls
-        .map(u => `<a href="${u}" target="_blank"><img src="${u}" class="rounded-lg max-h-48 border bg-white object-cover"></a>`)
-        .join("") +
-      `</div>`;
-  }
+          let mediaHtml = "";
+          if (m.mediaUrls && m.mediaUrls.length) {
+            mediaHtml =
+              `<div class="flex flex-col gap-2 mt-2">` +
+              m.mediaUrls
+                .map(u => `<a href="${u}" target="_blank"><img src="${u}" class="rounded-lg max-h-48 border bg-white object-cover"></a>`)
+                .join("") +
+              `</div>`;
+          }
 
-  html += `
-    <div class="flex w-full ${isMe ? "justify-end" : "justify-start"} fade-in">
-      <div class="max-w-[85%] lg:max-w-[70%]">
-        <div class="px-4 py-2.5 text-sm shadow-sm ${isMe ? "msg-sent" : "msg-received"}">
-          ${escapeHtml(m.body)}${mediaHtml}
-        </div>
-        <div class="text-[10px] text-gray-400 mt-1 ${isMe ? "text-right" : ""} opacity-75">
-          ${ts ? `${escapeHtml(formatDate(ts))} • ${escapeHtml(formatTime(ts))}` : ""}
-        </div>
-      </div>
-    </div>
-  `;
-});
+          html += `
+            <div class="flex w-full ${isMe ? "justify-end" : "justify-start"} fade-in">
+              <div class="max-w-[85%] lg:max-w-[70%]">
+                <div class="px-4 py-2.5 text-sm shadow-sm ${isMe ? "msg-sent" : "msg-received"}">
+                  ${escapeHtml(m.body)}${mediaHtml}
+                </div>
+                <div class="text-[10px] text-gray-400 mt-1 ${isMe ? "text-right" : ""} opacity-75">
+                  ${ts ? `${escapeHtml(formatDate(ts))} • ${escapeHtml(formatTime(ts))}` : ""}
+                </div>
+              </div>
+            </div>
+          `;
+        });
           div.innerHTML = html;
           div.scrollTop = div.scrollHeight; document.getElementById("chatContainer").scrollTop = document.getElementById("chatContainer").scrollHeight;
           document.getElementById("detailsAttachments").innerHTML = atts.slice(0,9).map(u => `<a href="${u}" target="_blank" class="block h-20 rounded-lg bg-slate-50 border bg-cover bg-center" style="background-image:url('${u}')"></a>`).join("");
@@ -780,14 +772,14 @@ s.forEach(d => {
         }
         let mediaUrls = [];
         if (store.pendingMedia.length) {
-  mediaUrls = await Promise.all(
-    store.pendingMedia.map(async (file, i) => {
-      const ref = storageRef(storage, `mms/${SHARED_ORG_ID}/${store.activeThreadId}/${Date.now()}_${i}`);
-      const snap = await uploadBytes(ref, file);
-      return await getDownloadURL(snap.ref);
-    })
-  );
-}
+          mediaUrls = await Promise.all(
+            store.pendingMedia.map(async (file, i) => {
+              const ref = storageRef(storage, `mms/${SHARED_ORG_ID}/${store.activeThreadId}/${Date.now()}_${i}`);
+              const snap = await uploadBytes(ref, file);
+              return await getDownloadURL(snap.ref);
+            })
+          );
+        }
         const res = await fetch(TWILIO_SEND_URL, { method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: store.activeThread.phone, body: txt, mediaUrls }) });
         if(!res.ok) throw new Error("API Fail");
         const sid = `loc-${Date.now()}`;
@@ -2014,40 +2006,6 @@ s.forEach(d => {
     window.showToast("Automation settings saved");
   };
 
-  (async function init() {
-      await signInAnonymously(auth);
-      onAuthStateChanged(auth, u => {
-          if(!u) return;
-          onSnapshot(query(getThreadsCol()), s => {
-              store.threads = s.docs.map(d => { const data = d.data(); if (!data.id) data.id = d.id; return data; });
-              if(store.activeThreadId) store.activeThread = store.threads.find(t=>t.id===store.activeThreadId);
-              window.renderThreadList();
-              if(store.activeThreadId && store.activeThread) document.getElementById("activeContactName").innerText = store.activeThread.name; 
-          });
-          setupNotificationListener();
-          setInterval(poll, 8000);
-      });
-      store.cannedReplies = JSON.parse(localStorage.getItem("canned")||"[]"); window.renderQuickReplies();
-      document.addEventListener("visibilitychange", async () => {
-          if (document.visibilityState === "visible" && store.activeThreadId) {
-              const t = store.threads.find(x => x.id === store.activeThreadId);
-              if(t) { t.unread = 0; window.renderThreadList(); }
-              await updateDoc(getThreadDoc(store.activeThreadId), { unread: 0, lastReadAtMs: Date.now() });
-          }
-      });
-      
-      const msgInput = document.getElementById("msgInput");
-      msgInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; });
-      msgInput.addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.sendMessage(); } });
-
-      const tagRow = document.getElementById("tagFilterRow");
-      const logTagRow = document.getElementById("logTagRow");
-      const contactTagRow = document.getElementById("contactsTagRow");
-      const handleScroll = (evt) => { evt.preventDefault(); evt.currentTarget.scrollLeft += evt.deltaY; };
-      if(tagRow) tagRow.addEventListener("wheel", handleScroll);
-      if(logTagRow) logTagRow.addEventListener("wheel", handleScroll);
-      if(contactTagRow) contactTagRow.addEventListener("wheel", handleScroll);
-
   // ── TRIP DATA VIEWER ──────────────────────────────────────────────────────
   let tdRows = [];
   let tdFilter = "all";
@@ -2060,6 +2018,7 @@ s.forEach(d => {
       document.getElementById("tdDateFrom").value = today.toISOString().split("T")[0];
       document.getElementById("tdDateTo").value = tomorrow.toISOString().split("T")[0];
     }
+    window.fetchTripData(true);
   };
 
   window.setTdFilter = (f) => {
@@ -2071,14 +2030,16 @@ s.forEach(d => {
     window.renderTripData();
   };
 
-  window.fetchTripData = async () => {
+  window.fetchTripData = async (silent = false) => {
     const from = document.getElementById("tdDateFrom").value;
     const to = document.getElementById("tdDateTo").value || from;
-    if (!from) { window.showToast("Select a date", "error"); return; }
+    if (!from) { if (!silent) window.showToast("Select a date", "error"); return; }
 
     const btn = document.getElementById("tdFetchBtn");
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Fetching...';
+    if (!silent) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Fetching...';
+    }
 
     try {
       let query = supabase.from("trips").select("*").gte("date", from).lte("date", to).order("received_at", { ascending: false });
@@ -2092,17 +2053,78 @@ s.forEach(d => {
       const prev = sel.value;
       sel.innerHTML = '<option value="">All Sites</option>' + sites.map(s => `<option value="${s}">${s}</option>`).join("");
       sel.value = prev && sites.includes(prev) ? prev : "";
-      window.showToast(`Loaded ${tdRows.length} trips from Supabase`);
+      if (!silent) window.showToast(`Loaded ${tdRows.length} trips from Supabase`);
       window.renderTripData();
     } catch (e) {
       console.error("Trip data fetch error:", e);
-      window.showToast("Fetch failed: " + e.message, "error");
+      if (!silent) window.showToast("Fetch failed: " + e.message, "error");
     } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch';
+      if (!silent) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch';
+      }
     }
   };
 
+// --- Supabase Realtime Live Logging (Diagnostic Version) ---
+ let tripsChannel = null;
+
+  window.setupLiveTrips = () => {
+    if (tripsChannel) return; // Prevent duplicate listeners
+    
+    console.log("🔌 Attempting to connect to Supabase Realtime...");
+
+    tripsChannel = supabase
+      .channel('public:trips')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trips' }, payload => {
+        const newTrip = payload.new;
+
+        // 1. Bulletproof Local "Today" Calculation (YYYY-MM-DD)
+        const tzOffset = (new Date()).getTimezoneOffset() * 60000;
+        const todayStr = new Date(Date.now() - tzOffset).toISOString().split('T')[0];
+
+        // 2. HARD STOP: If the trip is today or in the past, completely ignore it.
+        if (!newTrip.date || newTrip.date <= todayStr) {
+            console.log(`📅 Ignored live trip for ${newTrip.date} (Not a future trip)`);
+            return; 
+        }
+
+        // 3. Process Future Trips Only
+        console.log("🟢 NEW FUTURE TRIP INSERTED VIA WEBHOOK:", newTrip);
+        
+        // --- NEW: Play the distinct trip sound ---
+        document.getElementById("notifTripSound")?.play().catch(e => {
+            console.warn("🔇 Browser blocked audio autoplay. You must click somewhere on the page first.", e);
+        });
+        
+        window.showToast(`Live update: Future trip logged for ${newTrip.date}`);
+
+        // Silently refresh the UI if the user is currently looking at the Trip Data page
+        if (!document.getElementById("view-tripdata").classList.contains("hidden")) {
+            window.fetchTripData(true);
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'trips' }, payload => {
+         const updatedTrip = payload.new;
+         
+         const tzOffset = (new Date()).getTimezoneOffset() * 60000;
+         const todayStr = new Date(Date.now() - tzOffset).toISOString().split('T')[0];
+
+         // Only refresh the table if a FUTURE trip is updated
+         if (!updatedTrip.date || updatedTrip.date <= todayStr) return;
+
+         if (!document.getElementById("view-tripdata").classList.contains("hidden")) {
+            window.fetchTripData(true);
+        }
+      })
+      .subscribe((status, err) => {
+         if (status === 'SUBSCRIBED') {
+            console.log("✅ Connected to Supabase Realtime (Listening for Future Trips only)");
+         } else {
+            console.error("❌ Realtime connection status:", status, err);
+         }
+      });
+  };
   function isTripTagged(row) {
     const vRef = String(row.vehicle_ref || "").trim();
     if (!vRef) return false;
@@ -2254,6 +2276,43 @@ s.forEach(d => {
     document.getElementById("tdDetailModal").classList.remove("hidden");
   };
 
+  (async function init() {
+      await signInAnonymously(auth);
+      
+      // Start listening to Supabase live
+      window.setupLiveTrips();
+
+      onAuthStateChanged(auth, u => {
+          if(!u) return;
+          onSnapshot(query(getThreadsCol()), s => {
+              store.threads = s.docs.map(d => { const data = d.data(); if (!data.id) data.id = d.id; return data; });
+              if(store.activeThreadId) store.activeThread = store.threads.find(t=>t.id===store.activeThreadId);
+              window.renderThreadList();
+              if(store.activeThreadId && store.activeThread) document.getElementById("activeContactName").innerText = store.activeThread.name; 
+          });
+          setupNotificationListener();
+          setInterval(poll, 8000);
+      });
+      store.cannedReplies = JSON.parse(localStorage.getItem("canned")||"[]"); window.renderQuickReplies();
+      document.addEventListener("visibilitychange", async () => {
+          if (document.visibilityState === "visible" && store.activeThreadId) {
+              const t = store.threads.find(x => x.id === store.activeThreadId);
+              if(t) { t.unread = 0; window.renderThreadList(); }
+              await updateDoc(getThreadDoc(store.activeThreadId), { unread: 0, lastReadAtMs: Date.now() });
+          }
+      });
+      
+      const msgInput = document.getElementById("msgInput");
+      msgInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; });
+      msgInput.addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.sendMessage(); } });
+
+      const tagRow = document.getElementById("tagFilterRow");
+      const logTagRow = document.getElementById("logTagRow");
+      const contactTagRow = document.getElementById("contactsTagRow");
+      const handleScroll = (evt) => { evt.preventDefault(); evt.currentTarget.scrollLeft += evt.deltaY; };
+      if(tagRow) tagRow.addEventListener("wheel", handleScroll);
+      if(logTagRow) logTagRow.addEventListener("wheel", handleScroll);
+      if(contactTagRow) contactTagRow.addEventListener("wheel", handleScroll);
   })();
 </script>
 </body>
