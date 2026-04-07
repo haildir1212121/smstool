@@ -42,6 +42,7 @@
         <i class="fa-solid fa-bell text-xl"></i>
         <span id="notifBadge" class="hidden absolute top-1.5 right-2.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-900 animate-pulse">0</span>
       </button>
+      <button onclick="window.switchView('tripdata')" id="nav-tripdata" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Trip Data Viewer"><i class="fa-solid fa-database text-xl"></i></button>
     </div>
     <div class="flex-1"></div>
     <button onclick="window.openSettingsModal()" class="w-10 h-10 text-slate-500 hover:text-white transition mb-2"><i class="fa-solid fa-gear"></i></button>
@@ -391,6 +392,60 @@
     </div>
   </div>
 
+  <!-- TRIP DATA VIEWER -->
+  <div id="view-tripdata" class="hidden flex-1 h-full flex flex-col bg-slate-50 fade-in overflow-hidden">
+    <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
+      <div class="flex items-center gap-4">
+        <h2 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-database mr-2 text-violet-600"></i>Trip Data Viewer</h2>
+        <span id="tdTotalCount" class="text-xs font-mono bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-bold">0 rows</span>
+      </div>
+      <div class="flex gap-3 items-center">
+        <input id="tdDateFrom" type="date" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 outline-none">
+        <span class="text-xs text-slate-400 font-bold">to</span>
+        <input id="tdDateTo" type="date" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 outline-none">
+        <button onclick="window.fetchTripData()" id="tdFetchBtn" class="px-5 py-2 bg-violet-600 text-white rounded-xl text-sm font-bold hover:bg-violet-700 transition shadow-sm">
+          <i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch
+        </button>
+      </div>
+    </div>
+    <div class="flex items-center gap-3 px-8 py-3 border-b border-gray-100 bg-white/60 shrink-0">
+      <div class="flex gap-2" id="tdFilterBtns">
+        <button onclick="window.setTdFilter('all')" data-filter="all" class="px-3 py-1.5 rounded-lg text-xs font-bold border transition bg-violet-100 text-violet-700 border-violet-200">All</button>
+        <button onclick="window.setTdFilter('tagged')" data-filter="tagged" class="px-3 py-1.5 rounded-lg text-xs font-bold border transition bg-white text-slate-500 border-slate-200">Tagged</button>
+        <button onclick="window.setTdFilter('untagged')" data-filter="untagged" class="px-3 py-1.5 rounded-lg text-xs font-bold border transition bg-white text-slate-500 border-slate-200">Untagged</button>
+        <button onclick="window.setTdFilter('auto')" data-filter="auto" class="px-3 py-1.5 rounded-lg text-xs font-bold border transition bg-white text-slate-500 border-slate-200">Auto-Created</button>
+      </div>
+      <select id="tdSiteFilter" onchange="window.renderTripData()" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-600 outline-none">
+        <option value="">All Sites</option>
+      </select>
+      <div class="flex-1"></div>
+      <input id="tdSearch" oninput="window.renderTripData()" placeholder="Search trips..." class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs w-56 outline-none focus:ring-2 focus:ring-violet-200">
+      <span id="tdFilteredCount" class="text-xs text-slate-400 font-mono"></span>
+    </div>
+    <div class="flex-1 overflow-y-auto p-6">
+      <div id="tdContent" class="max-w-7xl mx-auto">
+        <div class="flex flex-col items-center justify-center py-16 text-slate-300">
+          <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-slate-100"><i class="fa-solid fa-database text-2xl opacity-50"></i></div>
+          <p class="font-medium text-sm">No trip data loaded</p>
+          <p class="text-xs text-slate-400 mt-1">Select a date range and click Fetch to query Supabase directly</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trip Detail Debug Modal -->
+  <div id="tdDetailModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-white rounded-2xl w-full max-w-xl shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
+      <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100 shrink-0">
+        <h3 class="text-lg font-bold"><i class="fa-solid fa-bug mr-2 text-violet-500"></i>Raw Trip Data</h3>
+        <button onclick="document.getElementById('tdDetailModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6">
+        <pre id="tdDetailJson" class="text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl p-4 whitespace-pre-wrap break-all"></pre>
+      </div>
+    </div>
+  </div>
+
   <!-- Automation Settings Modal -->
   <div id="automationSettingsModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
@@ -541,7 +596,7 @@ const ymd = (ms) => {
   }
 
   window.switchView = (v) => {
-      ['inbox', 'contacts', 'broadcast', 'logs', 'triptexts', 'notifications'].forEach(x => document.getElementById(`view-${x}`).classList.add('hidden'));
+      ['inbox', 'contacts', 'broadcast', 'logs', 'triptexts', 'notifications', 'tripdata'].forEach(x => document.getElementById(`view-${x}`).classList.add('hidden'));
       document.getElementById(`view-${v}`).classList.remove('hidden');
       document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
       document.getElementById(`nav-${v}`).classList.add('active');
@@ -549,6 +604,7 @@ const ymd = (ms) => {
       if(v === 'broadcast') document.getElementById('massCountDisplay').innerText = store.threads.filter(t=>t.phone && t.phone.length > 5).length;
       if(v === 'logs') { store.logPage = 1; window.renderLogbook(); }
       if(v === 'notifications') window.renderNotifications();
+      if(v === 'tripdata') window.initTripDataView();
   };
   window.toggleInfoPanel = () => document.getElementById("infoPanel").classList.toggle("hidden");
 
@@ -1991,6 +2047,213 @@ s.forEach(d => {
       if(tagRow) tagRow.addEventListener("wheel", handleScroll);
       if(logTagRow) logTagRow.addEventListener("wheel", handleScroll);
       if(contactTagRow) contactTagRow.addEventListener("wheel", handleScroll);
+
+  // ── TRIP DATA VIEWER ──────────────────────────────────────────────────────
+  let tdRows = [];
+  let tdFilter = "all";
+  let tdFiltered = [];
+
+  window.initTripDataView = () => {
+    const tomorrow = new Date(Date.now() + 86400000);
+    const today = new Date();
+    if (!document.getElementById("tdDateFrom").value) {
+      document.getElementById("tdDateFrom").value = today.toISOString().split("T")[0];
+      document.getElementById("tdDateTo").value = tomorrow.toISOString().split("T")[0];
+    }
+  };
+
+  window.setTdFilter = (f) => {
+    tdFilter = f;
+    document.querySelectorAll("#tdFilterBtns button").forEach(b => {
+      const active = b.dataset.filter === f;
+      b.className = `px-3 py-1.5 rounded-lg text-xs font-bold border transition ${active ? 'bg-violet-100 text-violet-700 border-violet-200' : 'bg-white text-slate-500 border-slate-200'}`;
+    });
+    window.renderTripData();
+  };
+
+  window.fetchTripData = async () => {
+    const from = document.getElementById("tdDateFrom").value;
+    const to = document.getElementById("tdDateTo").value || from;
+    if (!from) { window.showToast("Select a date", "error"); return; }
+
+    const btn = document.getElementById("tdFetchBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Fetching...';
+
+    try {
+      let query = supabase.from("trips").select("*").gte("date", from).lte("date", to).order("received_at", { ascending: false });
+      const { data: rows, error } = await query;
+      if (error) throw new Error(error.message);
+      tdRows = rows || [];
+      document.getElementById("tdTotalCount").textContent = `${tdRows.length} rows`;
+      // Populate site_ref dropdown
+      const sites = [...new Set(tdRows.map(r => (r.site_ref || "").trim()).filter(Boolean))].sort();
+      const sel = document.getElementById("tdSiteFilter");
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">All Sites</option>' + sites.map(s => `<option value="${s}">${s}</option>`).join("");
+      sel.value = prev && sites.includes(prev) ? prev : "";
+      window.showToast(`Loaded ${tdRows.length} trips from Supabase`);
+      window.renderTripData();
+    } catch (e) {
+      console.error("Trip data fetch error:", e);
+      window.showToast("Fetch failed: " + e.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch';
+    }
+  };
+
+  function isTripTagged(row) {
+    const vRef = String(row.vehicle_ref || "").trim();
+    if (!vRef) return false;
+    return ttDrivers.some(d => d.vehicle === vRef);
+  }
+
+  function isTripAuto(row) {
+    return row.status === "auto_created" || row.status === "pending_manual" || String(row.id || "").startsWith("fleetio_");
+  }
+
+  window.renderTripData = () => {
+    const search = (document.getElementById("tdSearch").value || "").toLowerCase();
+    const siteFilter = document.getElementById("tdSiteFilter").value;
+    const vehicleRefSet = new Set(ttDrivers.map(d => d.vehicle));
+
+    let filtered = tdRows.filter(row => {
+      if (tdFilter === "tagged" && !isTripTagged(row)) return false;
+      if (tdFilter === "untagged" && isTripTagged(row)) return false;
+      if (tdFilter === "auto" && !isTripAuto(row)) return false;
+      if (siteFilter && (row.site_ref || "").trim() !== siteFilter) return false;
+      if (search) {
+        const haystack = [row.id, row.date, row.time, row.vehicle_ref, row.site_ref, row.pickup, row.dropoff, row.passenger, row.driver_name, row.notes, row.status].join(" ").toLowerCase();
+        if (!haystack.includes(search)) return false;
+      }
+      return true;
+    });
+    tdFiltered = filtered;
+
+    document.getElementById("tdFilteredCount").textContent = filtered.length !== tdRows.length ? `${filtered.length} of ${tdRows.length}` : "";
+
+    if (filtered.length === 0) {
+      document.getElementById("tdContent").innerHTML = `
+        <div class="flex flex-col items-center justify-center py-16 text-slate-300">
+          <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-slate-100"><i class="fa-solid fa-filter-circle-xmark text-2xl opacity-50"></i></div>
+          <p class="font-medium text-sm">${tdRows.length === 0 ? 'No trip data loaded' : 'No trips match filters'}</p>
+        </div>`;
+      return;
+    }
+
+    // Stats row
+    const taggedCount = filtered.filter(r => isTripTagged(r)).length;
+    const untaggedCount = filtered.filter(r => !isTripTagged(r)).length;
+    const autoCount = filtered.filter(r => isTripAuto(r)).length;
+    const uniqueVehicles = new Set(filtered.map(r => r.vehicle_ref).filter(Boolean)).size;
+    const uniqueDates = new Set(filtered.map(r => r.date).filter(Boolean)).size;
+    const uniqueSites = [...new Set(filtered.map(r => (r.site_ref || "").trim()).filter(Boolean))];
+
+    let html = `
+      <div class="grid grid-cols-6 gap-3 mb-5">
+        <div class="bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
+          <div class="text-[10px] text-slate-400 font-bold uppercase">Total</div>
+          <div class="text-xl font-bold text-slate-800">${filtered.length}</div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
+          <div class="text-[10px] text-emerald-500 font-bold uppercase">Tagged</div>
+          <div class="text-xl font-bold text-emerald-600">${taggedCount}</div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
+          <div class="text-[10px] text-amber-500 font-bold uppercase">Untagged</div>
+          <div class="text-xl font-bold text-amber-600">${untaggedCount}</div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
+          <div class="text-[10px] text-blue-500 font-bold uppercase">Auto-Created</div>
+          <div class="text-xl font-bold text-blue-600">${autoCount}</div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
+          <div class="text-[10px] text-violet-500 font-bold uppercase">Sites</div>
+          <div class="text-xl font-bold text-violet-600">${uniqueSites.length}</div>
+          <div class="text-[9px] text-slate-400 truncate">${uniqueSites.join(', ') || 'none'}</div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
+          <div class="text-[10px] text-slate-400 font-bold uppercase">Vehicles / Days</div>
+          <div class="text-xl font-bold text-slate-800">${uniqueVehicles} <span class="text-xs text-slate-400">/ ${uniqueDates}d</span></div>
+        </div>
+      </div>`;
+
+    html += `<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <table class="w-full text-xs">
+        <thead class="bg-slate-50 border-b border-slate-200">
+          <tr>
+            <th class="px-3 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wide text-[10px]">Status</th>
+            <th class="px-3 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wide text-[10px]">Site</th>
+            <th class="px-3 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wide text-[10px]">Date</th>
+            <th class="px-3 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wide text-[10px]">Time</th>
+            <th class="px-3 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wide text-[10px]">Vehicle</th>
+            <th class="px-3 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wide text-[10px]">Driver</th>
+            <th class="px-3 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wide text-[10px]">Passenger</th>
+            <th class="px-3 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wide text-[10px]">Pickup</th>
+            <th class="px-3 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wide text-[10px]">Dropoff</th>
+            <th class="px-3 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wide text-[10px]">ID</th>
+            <th class="px-3 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wide text-[10px]">Received</th>
+            <th class="px-3 py-2.5 text-center font-bold text-slate-500 uppercase tracking-wide text-[10px]">Debug</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">`;
+
+    for (const row of filtered) {
+      const tagged = isTripTagged(row);
+      const auto = isTripAuto(row);
+      const matchedDriver = ttDrivers.find(d => d.vehicle === String(row.vehicle_ref || "").trim());
+      const statusBadge = tagged
+        ? `<span class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-bold text-[10px]"><i class="fa-solid fa-circle-check text-[8px]"></i>Tagged</span>`
+        : auto
+          ? `<span class="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold text-[10px]"><i class="fa-solid fa-wand-magic-sparkles text-[8px]"></i>Auto</span>`
+          : `<span class="inline-flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-bold text-[10px]"><i class="fa-solid fa-circle-question text-[8px]"></i>Untagged</span>`;
+      const vRefClass = tagged ? "text-emerald-700 font-bold" : "text-slate-600";
+      const driverLabel = matchedDriver ? `<span class="text-emerald-700 font-bold">${matchedDriver.name}</span>` : `<span class="text-slate-400">${row.driver_name || '—'}</span>`;
+      const escapedRow = filtered.indexOf(row);
+
+      html += `<tr class="hover:bg-violet-50/30 transition">
+        <td class="px-3 py-2">${statusBadge}</td>
+        <td class="px-3 py-2"><span class="inline-flex items-center bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono text-[10px] font-bold">${row.site_ref || '—'}</span></td>
+        <td class="px-3 py-2 font-mono text-slate-600">${row.date || '—'}</td>
+        <td class="px-3 py-2 font-mono text-slate-600">${row.time || '—'}</td>
+        <td class="px-3 py-2 font-mono ${vRefClass}">${row.vehicle_ref || '—'}</td>
+        <td class="px-3 py-2">${driverLabel}</td>
+        <td class="px-3 py-2 text-slate-700 max-w-[120px] truncate" title="${(row.passenger||'').replace(/"/g,'&quot;')}">${row.passenger || '—'}</td>
+        <td class="px-3 py-2 text-slate-500 max-w-[140px] truncate" title="${(row.pickup||'').replace(/"/g,'&quot;')}">${row.pickup || '—'}</td>
+        <td class="px-3 py-2 text-slate-500 max-w-[140px] truncate" title="${(row.dropoff||'').replace(/"/g,'&quot;')}">${row.dropoff || '—'}</td>
+        <td class="px-3 py-2 font-mono text-slate-400 max-w-[100px] truncate" title="${(row.id||'').replace(/"/g,'&quot;')}">${(row.id || '—').slice(0, 12)}${(row.id||'').length > 12 ? '…' : ''}</td>
+        <td class="px-3 py-2 font-mono text-slate-400 text-[10px]">${row.received_at ? new Date(row.received_at).toLocaleString('en-US', {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '—'}</td>
+        <td class="px-3 py-2 text-center"><button onclick="window.showTdDetail(${escapedRow})" class="w-7 h-7 rounded-lg hover:bg-violet-100 text-violet-500 transition"><i class="fa-solid fa-bug text-[10px]"></i></button></td>
+      </tr>`;
+    }
+
+    html += `</tbody></table></div>`;
+    document.getElementById("tdContent").innerHTML = html;
+  };
+
+  window.showTdDetail = (idx) => {
+    const row = tdFiltered[idx];
+    if (!row) return;
+    const tagged = isTripTagged(row);
+    const matchedDriver = ttDrivers.find(d => d.vehicle === String(row.vehicle_ref || "").trim());
+
+    const debug = {
+      _debug: {
+        is_tagged: tagged,
+        matched_driver: matchedDriver ? matchedDriver.name : null,
+        matched_vehicle_in_sheet: matchedDriver ? matchedDriver.vehicle : null,
+        tag_reason: !row.vehicle_ref ? "NO vehicle_ref on trip" : !matchedDriver ? `vehicle_ref "${row.vehicle_ref}" not found in driver sheet (loaded ${ttDrivers.length} drivers)` : "Matched",
+        is_auto_created: isTripAuto(row),
+        received_at: row.received_at || "N/A"
+      },
+      ...row
+    };
+
+    document.getElementById("tdDetailJson").textContent = JSON.stringify(debug, null, 2);
+    document.getElementById("tdDetailModal").classList.remove("hidden");
+  };
+
   })();
 </script>
 </body>
