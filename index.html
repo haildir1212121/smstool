@@ -148,11 +148,34 @@
   <div id="settingsModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
       <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div class="flex justify-between items-center mb-4"><h3 class="text-lg font-bold">Settings</h3><button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button></div>
-        <div class="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between"><div><div class="font-bold text-sm text-blue-900">Notifications</div><div class="text-xs text-blue-600">Sound & Popups</div></div><button onclick="window.requestNotifPerm()" class="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700">Enable</button></div>
+        
+        <div class="mb-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+          <div class="flex items-center justify-between mb-4">
+            <div><div class="font-bold text-sm text-slate-800">Desktop Popups</div><div class="text-[10px] text-slate-500">Browser notifications</div></div>
+            <button onclick="window.requestNotifPerm()" class="px-3 py-1 bg-blue-600 text-white text-[10px] font-bold rounded hover:bg-blue-700 transition">Enable</button>
+          </div>
+          <div class="border-t border-slate-200 my-3"></div>
+          <div class="flex items-center justify-between mb-3">
+            <div><div class="font-bold text-sm text-slate-800">Message Sounds</div><div class="text-[10px] text-slate-500">New SMS & Alerts</div></div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="soundToggleMsgs" class="sr-only peer" onchange="window.toggleSound('msgs')">
+              <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+          <div class="flex items-center justify-between">
+            <div><div class="font-bold text-sm text-slate-800">Trip Sounds</div><div class="text-[10px] text-slate-500">Live Trip Assignments</div></div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="soundToggleTrips" class="sr-only peer" onchange="window.toggleSound('trips')">
+              <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+        </div>
+
         <textarea id="cannedRepliesInput" class="w-full border border-gray-200 p-3 mb-4 h-32 rounded-xl text-sm resize-none" placeholder="Canned Replies"></textarea>
         <div class="flex gap-2"><button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-600">Close</button><button onclick="window.saveSettings()" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm">Save</button></div>
       </div>
   </div>
+Step 3: Add the Javascript Logic
 
   <div id="view-contacts" class="hidden flex-1 h-full flex-col bg-white fade-in overflow-hidden">
     <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
@@ -945,7 +968,67 @@
   window.toggleUrgentThread = async () => { if(store.activeThreadId) await updateDoc(getThreadDoc(store.activeThreadId), { isUrgent: !store.activeThread.isUrgent }); };
   window.toggleUnreadOnly = () => { store.onlyUnread = !store.onlyUnread; window.renderThreadList(); };
   window.toggleUrgentOnly = () => { store.onlyUrgent = !store.onlyUrgent; window.renderThreadList(); };
-  window.openSettingsModal = () => { document.getElementById("settingsModal").classList.remove("hidden"); document.getElementById("cannedRepliesInput").value = store.cannedReplies.join("\n"); };
+let soundPrefs = JSON.parse(localStorage.getItem('sound_prefs') || '{"msgs":true,"trips":true}');
+
+  window.toggleSound = (type) => {
+    soundPrefs[type] = document.getElementById(type === 'msgs' ? 'soundToggleMsgs' : 'soundToggleTrips').checked;
+    localStorage.setItem('sound_prefs', JSON.stringify(soundPrefs));
+    window.applySoundPrefs();
+  };
+
+  window.toggleMasterMute = () => {
+    const isCurrentlyMuted = soundPrefs.msgs === false && soundPrefs.trips === false;
+    
+    if (isCurrentlyMuted) {
+      soundPrefs.msgs = true; soundPrefs.trips = true;
+      window.showToast("All sounds enabled");
+    } else {
+      soundPrefs.msgs = false; soundPrefs.trips = false;
+      window.showToast("All sounds muted");
+    }
+    
+    localStorage.setItem('sound_prefs', JSON.stringify(soundPrefs));
+    window.applySoundPrefs();
+    
+    // Visually update the toggle switches if the modal happens to be open
+    const toggleMsgs = document.getElementById("soundToggleMsgs");
+    const toggleTrips = document.getElementById("soundToggleTrips");
+    if (toggleMsgs) toggleMsgs.checked = soundPrefs.msgs;
+    if (toggleTrips) toggleTrips.checked = soundPrefs.trips;
+  };
+
+  window.applySoundPrefs = () => {
+    // 1. Physically mute/unmute the HTML audio elements
+    const s1 = document.getElementById('notifSound');
+    const s2 = document.getElementById('notifTripSound');
+    if (s1) s1.muted = !soundPrefs.msgs;
+    if (s2) s2.muted = !soundPrefs.trips;
+
+    // 2. Change the sidebar icon to reflect the master state
+    const icon = document.getElementById('nav-mute-icon');
+    const btn = document.getElementById('nav-mute-btn');
+    if (icon && btn) {
+      if (!soundPrefs.msgs && !soundPrefs.trips) {
+        icon.className = "fa-solid fa-volume-xmark";
+        btn.classList.add("text-rose-400");
+        btn.classList.remove("text-slate-500");
+        btn.title = "Unmute Sounds";
+      } else {
+        icon.className = "fa-solid fa-volume-high";
+        btn.classList.remove("text-rose-400");
+        btn.classList.add("text-slate-500");
+        btn.title = "Mute All Sounds";
+      }
+    }
+  };
+
+  window.openSettingsModal = () => { 
+      document.getElementById("settingsModal").classList.remove("hidden"); 
+      document.getElementById("cannedRepliesInput").value = store.cannedReplies.join("\n"); 
+      // Set the toggle switches to match current state
+      document.getElementById("soundToggleMsgs").checked = soundPrefs.msgs;
+      document.getElementById("soundToggleTrips").checked = soundPrefs.trips;
+  };
   window.saveSettings = () => { store.cannedReplies = document.getElementById("cannedRepliesInput").value.split("\n").filter(Boolean); localStorage.setItem("canned", JSON.stringify(store.cannedReplies)); document.getElementById("settingsModal").classList.add("hidden"); window.renderQuickReplies(); };
   window.renderQuickReplies = () => { const r = document.getElementById("quickRepliesRow"); r.innerHTML = (JSON.parse(localStorage.getItem("canned")||"[]")).map(t => `<button class="shrink-0 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs text-gray-600 whitespace-nowrap hover:border-blue-400 transition shadow-sm" onclick="document.getElementById('msgInput').value+='${escapeHtml(t).replace(/'/g,"\\&#39;")}';">${escapeHtml(t)}</button>`).join(""); };
   window.insertTemplate = () => { const v = document.getElementById("templateSelect").value; if(v) document.getElementById("msgInput").value += v; document.getElementById("templateSelect").value = ""; };
