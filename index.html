@@ -47,8 +47,11 @@
         <span id="notifBadge" class="hidden absolute top-1.5 right-2.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-900 animate-pulse">0</span>
       </button>
       <button onclick="window.switchView('tripdata')" id="nav-tripdata" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Trip Data Viewer"><i class="fa-solid fa-database text-xl"></i></button>
-    </div>
+   </div>
     <div class="flex-1"></div>
+    <button onclick="window.toggleMasterMute()" id="nav-mute-btn" class="w-10 h-10 text-slate-500 hover:text-white transition mb-1" title="Mute All Sounds">
+      <i id="nav-mute-icon" class="fa-solid fa-volume-high"></i>
+    </button>
     <button onclick="window.openSettingsModal()" class="w-10 h-10 text-slate-500 hover:text-white transition mb-2"><i class="fa-solid fa-gear"></i></button>
   </nav>
 
