@@ -985,55 +985,52 @@ async function handleDriverSignIn(request, env) {
   const signedInAt = new Date(event.timestamp);
   const signedInMin = signedInAt.getHours() * 60 + signedInAt.getMinutes();
 
-  // Look up today's trips to find the scheduled sign-in time
-  const trips = await supabaseGetDriverTripsForDate(env, event.driverName, event.date);
+  // Best-effort trip lookup — never block the sign-in write if this fails
   let scheduledSignin = "";
   let scheduledStop = "";
-
-  if (trips.length > 0) {
-    // Earliest trip time = scheduled sign-in; notes may contain scheduled stop
-    const earliest = trips.reduce((a, b) => (a.time < b.time ? a : b));
-    scheduledSignin = earliest.time || "";
-    // Look for stop time in notes (e.g. "STOP TIME IS 5:00 PM")
-    const stopMatch = (earliest.notes || "").match(/stop(?:\s+time(?:\s+is)?)?\s+(\d{1,2}:\d{2}(?:\s*[APap][Mm])?)/i);
-    if (stopMatch) scheduledStop = stopMatch[1];
+  try {
+    const trips = await supabaseGetDriverTripsForDate(env, event.driverName, event.date);
+    if (trips.length > 0) {
+      const earliest = trips.reduce((a, b) => (a.time < b.time ? a : b));
+      scheduledSignin = earliest.time || "";
+      const stopMatch = (earliest.notes || "").match(/stop(?:\s+time(?:\s+is)?)?\s+(\d{1,2}:\d{2}(?:\s*[APap][Mm])?)/i);
+      if (stopMatch) scheduledStop = stopMatch[1];
+    }
+  } catch (e) {
+    console.warn("[SIGNIN] Trip lookup failed (non-fatal):", e.message);
   }
 
   const gracePeriodMin = parseInt(env.LATE_GRACE_MINUTES || "15", 10);
   const scheduledMin = parseTimeToMinutes(scheduledSignin);
   let isLate = false;
   let lateByMin = 0;
-
   if (scheduledMin !== null) {
     const diff = signedInMin - scheduledMin;
-    if (diff > gracePeriodMin) {
-      isLate = true;
-      lateByMin = diff;
-    }
+    if (diff > gracePeriodMin) { isLate = true; lateByMin = diff; }
   }
 
   const shiftId = `shift_${event.date}_${event.driverName.replace(/\s+/g, "_").toLowerCase()}`;
 
+  // Omit null fields — let DB defaults handle signed_out_at / total_hours_min
   const shift = {
     id: shiftId,
     driver_name: event.driverName,
-    driver_phone: event.driverPhone,
-    vehicle_ref: event.vehicleRef,
+    driver_phone: event.driverPhone || "",
+    vehicle_ref: event.vehicleRef || "",
     date: event.date,
     scheduled_signin: scheduledSignin,
     scheduled_stop: scheduledStop,
     signed_in_at: event.timestamp,
-    signed_out_at: null,
-    total_hours_min: null,
     is_late: isLate,
     late_by_min: lateByMin,
     status: "signed_in",
     go_home_sent: false,
-    created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
 
-  await supabaseUpsertShift(env, shift);
+  console.log("[SIGNIN] Writing shift:", JSON.stringify(shift));
+  const ok = await supabaseUpsertShift(env, shift);
+  console.log("[SIGNIN] Upsert result:", ok);
 
   if (isLate) {
     await writeNotificationToFirestore(env, {
@@ -1048,7 +1045,7 @@ async function handleDriverSignIn(request, env) {
     }).catch((e) => console.error("Firestore late_signin notification error:", e));
   }
 
-  return jsonResponse({ ok: true, shiftId, isLate, lateByMin, scheduledSignin, driverName: event.driverName });
+  return jsonResponse({ ok: true, written: ok, shiftId, isLate, lateByMin, scheduledSignin, hasTrips: !!scheduledSignin, driverName: event.driverName });
 }
 
 async function handleDriverSignOut(request, env) {
@@ -1070,8 +1067,13 @@ async function handleDriverSignOut(request, env) {
 
   const signedOutAt = new Date(event.timestamp);
 
-  // Find the open shift for this driver
-  const openShift = await supabaseGetOpenShift(env, event.driverName, event.date);
+  // Best-effort open-shift lookup — never block the sign-out write if this fails
+  let openShift = null;
+  try {
+    openShift = await supabaseGetOpenShift(env, event.driverName, event.date);
+  } catch (e) {
+    console.warn("[SIGNOUT] Open-shift lookup failed (non-fatal):", e.message);
+  }
 
   let totalHoursMin = null;
   let shiftId;
@@ -1082,31 +1084,30 @@ async function handleDriverSignOut(request, env) {
       const signedInAt = new Date(openShift.signed_in_at);
       totalHoursMin = Math.round((signedOutAt - signedInAt) / 60000);
     }
+    console.log("[SIGNOUT] Updating existing shift:", shiftId, "totalHoursMin:", totalHoursMin);
     await supabaseUpdateShift(env, shiftId, {
       signed_out_at: event.timestamp,
-      total_hours_min: totalHoursMin,
+      ...(totalHoursMin !== null ? { total_hours_min: totalHoursMin } : {}),
       status: "signed_out",
       updated_at: new Date().toISOString(),
     });
   } else {
-    // No open shift found — create a sign-out-only record
+    // No open shift found — create a sign-out-only record (driver signed in without webhook)
     shiftId = `shift_${event.date}_${event.driverName.replace(/\s+/g, "_").toLowerCase()}`;
+    console.log("[SIGNOUT] No open shift found, creating sign-out-only record:", shiftId);
     await supabaseUpsertShift(env, {
       id: shiftId,
       driver_name: event.driverName,
-      driver_phone: event.driverPhone,
-      vehicle_ref: event.vehicleRef,
+      driver_phone: event.driverPhone || "",
+      vehicle_ref: event.vehicleRef || "",
       date: event.date,
       scheduled_signin: "",
       scheduled_stop: "",
-      signed_in_at: null,
       signed_out_at: event.timestamp,
-      total_hours_min: null,
       is_late: false,
       late_by_min: 0,
       status: "signed_out",
       go_home_sent: false,
-      created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     });
   }
