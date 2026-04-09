@@ -921,8 +921,10 @@ async function handleBookingCreated(request, env) {
 // ── Driver Sign-In / Sign-Out Handlers ───────────────────────────────────────
 
 function normalizeDriverEvent(payload) {
-  // iCabbi may nest under data, booking, driver, event, or send flat
-  const b = payload.data || payload.booking || payload.driver || payload.event || payload;
+  // iCabbi may nest under data, booking, or driver — only use payload.event if it's
+  // an object (not the event-type string e.g. "driver_sign_in")
+  const eventObj = payload.event && typeof payload.event === "object" ? payload.event : null;
+  const b = payload.data || payload.booking || payload.driver || eventObj || payload;
 
   // Try every known field name iCabbi uses for driver name
   const firstName = b.driver_first_name || b.driver_first || b.first_name || "";
