@@ -2564,7 +2564,7 @@ let activeReviewRegion = null;
     const date = document.getElementById("shiftDateInput").value;
     if (!date) return;
 
-    const workerUrl = (localStorage.getItem("icabbiWorkerUrl") || "").trim().replace(/\/+$/, "");
+    const workerUrl = (JSON.parse(localStorage.getItem("icabbi_settings") || "{}").workerUrl || "").trim().replace(/\/+$/, "");
     if (!workerUrl) {
       document.getElementById("shiftTableBody").innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400 text-sm"><i class="fa-solid fa-triangle-exclamation mr-2 text-amber-400"></i>Set your Worker URL in Trip Settings first.</td></tr>`;
       document.getElementById("shiftEmptyState").classList.add("hidden");
