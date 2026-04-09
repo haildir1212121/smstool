@@ -921,15 +921,19 @@ async function handleBookingCreated(request, env) {
 // ── Driver Sign-In / Sign-Out Handlers ───────────────────────────────────────
 
 function normalizeDriverEvent(payload) {
-  const b = payload.data || payload.booking || payload.driver || payload;
+  // iCabbi may nest under data, booking, driver, event, or send flat
+  const b = payload.data || payload.booking || payload.driver || payload.event || payload;
 
-  const driverName = [
-    b.driver_first_name || b.driver_first,
-    b.driver_last_name  || b.driver_last,
-  ].filter(Boolean).join(" ").trim()
-    || String(b.driver_name || b.name || "").trim();
+  // Try every known field name iCabbi uses for driver name
+  const firstName = b.driver_first_name || b.driver_first || b.first_name || "";
+  const lastName  = b.driver_last_name  || b.driver_last  || b.last_name  || "";
+  const fullName  = [firstName, lastName].filter(Boolean).join(" ").trim();
+  const driverName = fullName
+    || String(b.driver_name || b.driver || b.full_name || b.name || "").trim();
 
-  const rawTimestamp = b.timestamp || b.event_time || b.signed_in_at || b.signed_out_at || new Date().toISOString();
+  // Try every known timestamp field
+  const rawTimestamp = b.timestamp || b.event_time || b.login_time || b.logout_time
+    || b.signed_in_at || b.signed_out_at || b.created_at || new Date().toISOString();
   const ts = new Date(rawTimestamp);
   const date = !isNaN(ts.getTime())
     ? ts.toISOString().split("T")[0]
@@ -937,8 +941,8 @@ function normalizeDriverEvent(payload) {
 
   return {
     driverName,
-    driverPhone: String(b.driver_phone || b.phone || "").trim(),
-    vehicleRef: String(b.vehicle_number || b.vehicle_ref || b.vehicle || "").trim(),
+    driverPhone: String(b.driver_phone || b.mobile || b.phone || "").trim(),
+    vehicleRef: String(b.vehicle_number || b.vehicle_ref || b.vehicle_id || b.vehicle || "").trim(),
     date,
     timestamp: !isNaN(ts.getTime()) ? ts.toISOString() : new Date().toISOString(),
   };
@@ -968,10 +972,14 @@ async function handleDriverSignIn(request, env) {
   }
 
   const payload = await request.json();
+  console.log("[SIGNIN] Raw payload:", JSON.stringify(payload));
+
   const event = normalizeDriverEvent(payload);
+  console.log("[SIGNIN] Parsed event:", JSON.stringify(event));
 
   if (!event.driverName) {
-    return jsonResponse({ ok: false, reason: "no_driver_name" });
+    console.warn("[SIGNIN] Could not extract driver name from payload keys:", Object.keys(payload.data || payload.booking || payload.driver || payload.event || payload).join(", "));
+    return jsonResponse({ ok: false, reason: "no_driver_name", parsedEvent: event, rawKeys: Object.keys(payload) });
   }
 
   const signedInAt = new Date(event.timestamp);
@@ -1040,7 +1048,7 @@ async function handleDriverSignIn(request, env) {
     }).catch((e) => console.error("Firestore late_signin notification error:", e));
   }
 
-  return jsonResponse({ ok: true, shiftId, isLate, lateByMin, scheduledSignin });
+  return jsonResponse({ ok: true, shiftId, isLate, lateByMin, scheduledSignin, driverName: event.driverName });
 }
 
 async function handleDriverSignOut(request, env) {
@@ -1050,10 +1058,14 @@ async function handleDriverSignOut(request, env) {
   }
 
   const payload = await request.json();
+  console.log("[SIGNOUT] Raw payload:", JSON.stringify(payload));
+
   const event = normalizeDriverEvent(payload);
+  console.log("[SIGNOUT] Parsed event:", JSON.stringify(event));
 
   if (!event.driverName) {
-    return jsonResponse({ ok: false, reason: "no_driver_name" });
+    console.warn("[SIGNOUT] Could not extract driver name from payload keys:", Object.keys(payload.data || payload.booking || payload.driver || payload.event || payload).join(", "));
+    return jsonResponse({ ok: false, reason: "no_driver_name", parsedEvent: event, rawKeys: Object.keys(payload) });
   }
 
   const signedOutAt = new Date(event.timestamp);
