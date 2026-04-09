@@ -151,6 +151,71 @@ async function supabaseGetTrips(env, from, to) {
   return await res.json();
 }
 
+// ── Driver Shift Supabase helpers ────────────────────────────────────────────
+
+async function supabaseUpsertShift(env, shift) {
+  const res = await supabaseRequest(env, "driver_shifts", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify(shift),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Supabase upsert shift failed for ${shift.id}:`, errText);
+    return false;
+  }
+  console.log(`Supabase: upserted shift ${shift.id}`);
+  return true;
+}
+
+async function supabaseUpdateShift(env, id, updates) {
+  const res = await supabaseRequest(env, `driver_shifts?id=eq.${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal", "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Supabase update shift failed for ${id}:`, errText);
+    return false;
+  }
+  return true;
+}
+
+async function supabaseGetShifts(env, from, to) {
+  const res = await supabaseRequest(env, `driver_shifts?date=gte.${from}&date=lte.${to}&order=date,driver_name`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Supabase get shifts failed:`, errText);
+    return [];
+  }
+  return await res.json();
+}
+
+async function supabaseGetOpenShift(env, driverName, date) {
+  const res = await supabaseRequest(
+    env,
+    `driver_shifts?driver_name=ilike.${encodeURIComponent(driverName)}&date=eq.${date}&signed_out_at=is.null&order=created_at.desc&limit=1`,
+    { method: "GET", headers: { Accept: "application/json" } }
+  );
+  if (!res.ok) return null;
+  const rows = await res.json();
+  return rows[0] || null;
+}
+
+async function supabaseGetDriverTripsForDate(env, driverName, date) {
+  const res = await supabaseRequest(
+    env,
+    `trips?driver_name=ilike.${encodeURIComponent(driverName)}&date=eq.${date}&order=time`,
+    { method: "GET", headers: { Accept: "application/json" } }
+  );
+  if (!res.ok) return [];
+  return await res.json();
+}
+
 // ── Firestore REST API helpers ───────────────────────────────────────────────
 
 let cachedAuthToken = null;
@@ -288,6 +353,15 @@ export default {
       }
       if (url.pathname === "/trips/stats" && request.method === "GET") {
         return await handleTripStats(request, env);
+      }
+      if (url.pathname === "/webhook/driver/signin" && request.method === "POST") {
+        return await handleDriverSignIn(request, env);
+      }
+      if (url.pathname === "/webhook/driver/signout" && request.method === "POST") {
+        return await handleDriverSignOut(request, env);
+      }
+      if (url.pathname === "/shifts" && request.method === "GET") {
+        return await handleGetShifts(request, env);
       }
 
       return jsonResponse({ error: "Not found" }, 404);
@@ -842,4 +916,212 @@ async function handleBookingCreated(request, env) {
   }
 
   return jsonResponse({ ok: true, processed, skipped });
+}
+
+// ── Driver Sign-In / Sign-Out Handlers ───────────────────────────────────────
+
+function normalizeDriverEvent(payload) {
+  const b = payload.data || payload.booking || payload.driver || payload;
+
+  const driverName = [
+    b.driver_first_name || b.driver_first,
+    b.driver_last_name  || b.driver_last,
+  ].filter(Boolean).join(" ").trim()
+    || String(b.driver_name || b.name || "").trim();
+
+  const rawTimestamp = b.timestamp || b.event_time || b.signed_in_at || b.signed_out_at || new Date().toISOString();
+  const ts = new Date(rawTimestamp);
+  const date = !isNaN(ts.getTime())
+    ? ts.toISOString().split("T")[0]
+    : (extractDate(b.job_date || b.date || "") || new Date().toISOString().split("T")[0]);
+
+  return {
+    driverName,
+    driverPhone: String(b.driver_phone || b.phone || "").trim(),
+    vehicleRef: String(b.vehicle_number || b.vehicle_ref || b.vehicle || "").trim(),
+    date,
+    timestamp: !isNaN(ts.getTime()) ? ts.toISOString() : new Date().toISOString(),
+  };
+}
+
+// Parse "HH:MM" or "H:MM AM/PM" into minutes since midnight
+function parseTimeToMinutes(timeStr) {
+  if (!timeStr) return null;
+  const clean = timeStr.trim().toUpperCase();
+  const ampm = /(\d{1,2}):(\d{2})\s*(AM|PM)/.exec(clean);
+  if (ampm) {
+    let h = parseInt(ampm[1], 10);
+    const m = parseInt(ampm[2], 10);
+    if (ampm[3] === "PM" && h !== 12) h += 12;
+    if (ampm[3] === "AM" && h === 12) h = 0;
+    return h * 60 + m;
+  }
+  const plain = /^(\d{1,2}):(\d{2})/.exec(clean);
+  if (plain) return parseInt(plain[1], 10) * 60 + parseInt(plain[2], 10);
+  return null;
+}
+
+async function handleDriverSignIn(request, env) {
+  const secret = request.headers.get("X-Webhook-Secret") || "";
+  if (!env.WEBHOOK_SECRET || secret !== env.WEBHOOK_SECRET) {
+    return jsonResponse({ error: "Unauthorized" }, 401);
+  }
+
+  const payload = await request.json();
+  const event = normalizeDriverEvent(payload);
+
+  if (!event.driverName) {
+    return jsonResponse({ ok: false, reason: "no_driver_name" });
+  }
+
+  const signedInAt = new Date(event.timestamp);
+  const signedInMin = signedInAt.getHours() * 60 + signedInAt.getMinutes();
+
+  // Look up today's trips to find the scheduled sign-in time
+  const trips = await supabaseGetDriverTripsForDate(env, event.driverName, event.date);
+  let scheduledSignin = "";
+  let scheduledStop = "";
+
+  if (trips.length > 0) {
+    // Earliest trip time = scheduled sign-in; notes may contain scheduled stop
+    const earliest = trips.reduce((a, b) => (a.time < b.time ? a : b));
+    scheduledSignin = earliest.time || "";
+    // Look for stop time in notes (e.g. "STOP TIME IS 5:00 PM")
+    const stopMatch = (earliest.notes || "").match(/stop(?:\s+time(?:\s+is)?)?\s+(\d{1,2}:\d{2}(?:\s*[APap][Mm])?)/i);
+    if (stopMatch) scheduledStop = stopMatch[1];
+  }
+
+  const gracePeriodMin = parseInt(env.LATE_GRACE_MINUTES || "15", 10);
+  const scheduledMin = parseTimeToMinutes(scheduledSignin);
+  let isLate = false;
+  let lateByMin = 0;
+
+  if (scheduledMin !== null) {
+    const diff = signedInMin - scheduledMin;
+    if (diff > gracePeriodMin) {
+      isLate = true;
+      lateByMin = diff;
+    }
+  }
+
+  const shiftId = `shift_${event.date}_${event.driverName.replace(/\s+/g, "_").toLowerCase()}`;
+
+  const shift = {
+    id: shiftId,
+    driver_name: event.driverName,
+    driver_phone: event.driverPhone,
+    vehicle_ref: event.vehicleRef,
+    date: event.date,
+    scheduled_signin: scheduledSignin,
+    scheduled_stop: scheduledStop,
+    signed_in_at: event.timestamp,
+    signed_out_at: null,
+    total_hours_min: null,
+    is_late: isLate,
+    late_by_min: lateByMin,
+    status: "signed_in",
+    go_home_sent: false,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  await supabaseUpsertShift(env, shift);
+
+  if (isLate) {
+    await writeNotificationToFirestore(env, {
+      type: "late_signin",
+      title: `Late Sign-In: ${event.driverName}`,
+      message: `${event.driverName} signed in ${lateByMin} minute(s) late (scheduled ${scheduledSignin || "unknown"}, signed in at ${signedInAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}).`,
+      driverName: event.driverName,
+      driverPhone: event.driverPhone,
+      vehicleRef: event.vehicleRef,
+      shiftId,
+      lateByMin: String(lateByMin),
+    }).catch((e) => console.error("Firestore late_signin notification error:", e));
+  }
+
+  return jsonResponse({ ok: true, shiftId, isLate, lateByMin, scheduledSignin });
+}
+
+async function handleDriverSignOut(request, env) {
+  const secret = request.headers.get("X-Webhook-Secret") || "";
+  if (!env.WEBHOOK_SECRET || secret !== env.WEBHOOK_SECRET) {
+    return jsonResponse({ error: "Unauthorized" }, 401);
+  }
+
+  const payload = await request.json();
+  const event = normalizeDriverEvent(payload);
+
+  if (!event.driverName) {
+    return jsonResponse({ ok: false, reason: "no_driver_name" });
+  }
+
+  const signedOutAt = new Date(event.timestamp);
+
+  // Find the open shift for this driver
+  const openShift = await supabaseGetOpenShift(env, event.driverName, event.date);
+
+  let totalHoursMin = null;
+  let shiftId;
+
+  if (openShift) {
+    shiftId = openShift.id;
+    if (openShift.signed_in_at) {
+      const signedInAt = new Date(openShift.signed_in_at);
+      totalHoursMin = Math.round((signedOutAt - signedInAt) / 60000);
+    }
+    await supabaseUpdateShift(env, shiftId, {
+      signed_out_at: event.timestamp,
+      total_hours_min: totalHoursMin,
+      status: "signed_out",
+      updated_at: new Date().toISOString(),
+    });
+  } else {
+    // No open shift found — create a sign-out-only record
+    shiftId = `shift_${event.date}_${event.driverName.replace(/\s+/g, "_").toLowerCase()}`;
+    await supabaseUpsertShift(env, {
+      id: shiftId,
+      driver_name: event.driverName,
+      driver_phone: event.driverPhone,
+      vehicle_ref: event.vehicleRef,
+      date: event.date,
+      scheduled_signin: "",
+      scheduled_stop: "",
+      signed_in_at: null,
+      signed_out_at: event.timestamp,
+      total_hours_min: null,
+      is_late: false,
+      late_by_min: 0,
+      status: "signed_out",
+      go_home_sent: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  const maxHoursMin = parseInt(env.MAX_SHIFT_HOURS || "10", 10) * 60;
+  if (totalHoursMin !== null && totalHoursMin >= maxHoursMin) {
+    const hoursWorked = (totalHoursMin / 60).toFixed(1);
+    await writeNotificationToFirestore(env, {
+      type: "long_shift",
+      title: `Long Shift: ${event.driverName}`,
+      message: `${event.driverName} worked ${hoursWorked} hours today (vehicle ${event.vehicleRef || "N/A"}).`,
+      driverName: event.driverName,
+      driverPhone: event.driverPhone,
+      vehicleRef: event.vehicleRef,
+      shiftId,
+      totalHoursMin: String(totalHoursMin),
+    }).catch((e) => console.error("Firestore long_shift notification error:", e));
+  }
+
+  return jsonResponse({ ok: true, shiftId, totalHoursMin, signedOutAt: event.timestamp });
+}
+
+async function handleGetShifts(request, env) {
+  const url = new URL(request.url);
+  const from = url.searchParams.get("from");
+  const to = url.searchParams.get("to") || from;
+  if (!from) return jsonResponse({ error: "Missing from param" }, 400);
+  const rows = await supabaseGetShifts(env, from, to);
+  return jsonResponse({ from, to, shifts: rows });
 }
