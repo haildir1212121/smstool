@@ -39,6 +39,7 @@ function tripToRow(trip) {
     passenger: trip.passenger || "",
     passenger_phone: trip.passengerPhone || "",
     driver_name: trip.driverName || "",
+    site_ref: trip.siteRef || "", // ✅ ADD THIS
     driver_phone: trip.driverPhone || "",
     notes: trip.notes || "",
     status: trip.status || "",
@@ -57,6 +58,7 @@ function rowToTrip(row) {
     passenger: row.passenger || "",
     passengerPhone: row.passenger_phone || "",
     driverName: row.driver_name || "",
+    siteRef: row.site_ref || "", // ✅ ADD THIS
     driverPhone: row.driver_phone || "",
     notes: row.notes || "",
     status: row.status || "",
@@ -278,6 +280,9 @@ export default {
       if (url.pathname === "/webhook/fleetio" && request.method === "POST") {
         return await handleFleetioWebhook(request, env);
       }
+      if (url.pathname === "/webhook/created" && request.method === "POST") {
+  return await handleBookingCreated(request, env);
+}
       if (url.pathname === "/trips" && request.method === "GET") {
         return await handleGetTrips(request, env);
       }
@@ -294,54 +299,24 @@ export default {
 };
 
 // ── Webhook Handler ──────────────────────────────────────────────────────────
-
 async function handleWebhook(request, env) {
-  const secret = request.headers.get("X-Webhook-Secret") || "";
-  if (!env.WEBHOOK_SECRET || secret !== env.WEBHOOK_SECRET) {
-    return jsonResponse({ error: "Unauthorized" }, 401);
-  }
-
-  const payload = await request.json();
-  const bookings = Array.isArray(payload) ? payload : [payload];
-
-  let stored = 0;
-  for (const booking of bookings) {
-    const trip = normalizeTrip(booking);
-    if (!trip || !trip.date) continue;
-
-
-    const ok = await supabaseUpsertTrip(env, trip);
-    if (ok) stored++;
-    firestoreWriteTrip(env, trip).catch((e) => console.error("Firestore write error:", e));
-  }
-
-  return jsonResponse({ ok: true, stored });
+  // iCabbi "Pre-booking: Driver Designated"
+  return await processTripEvent(request, env, "designate");
 }
 
 async function handleUpdate(request, env) {
-  const secret = request.headers.get("X-Webhook-Secret") || "";
-  if (!env.WEBHOOK_SECRET || secret !== env.WEBHOOK_SECRET) {
-    return jsonResponse({ error: "Unauthorized" }, 401);
-  }
-
-  const payload = await request.json();
-  const bookings = Array.isArray(payload) ? payload : [payload];
-
-  let updated = 0;
-  for (const booking of bookings) {
-    const trip = normalizeTrip(booking);
-    if (!trip || !trip.date) continue;
-
-
-    const ok = await supabaseUpsertTrip(env, trip);
-    if (ok) updated++;
-    firestoreWriteTrip(env, trip).catch((e) => console.error("Firestore write error:", e));
-  }
-
-  return jsonResponse({ ok: true, updated });
+  // iCabbi "Pre-booking: Update"
+  return await processTripEvent(request, env, "update");
 }
 
 async function handleUndesignate(request, env) {
+  // iCabbi "Driver Undesignate"
+  return await processTripEvent(request, env, "undesignate");
+}
+
+// ── Unified Processing Logic ──────────────────────────────────────────────────
+
+async function processTripEvent(request, env, eventType) {
   const secret = request.headers.get("X-Webhook-Secret") || "";
   if (!env.WEBHOOK_SECRET || secret !== env.WEBHOOK_SECRET) {
     return jsonResponse({ error: "Unauthorized" }, 401);
@@ -350,22 +325,33 @@ async function handleUndesignate(request, env) {
   const payload = await request.json();
   const bookings = Array.isArray(payload) ? payload : [payload];
 
-  let removed = 0;
-  for (const raw of bookings) {
-    const booking = raw.booking || raw.data || raw;
-    const id = String(booking.perma_id || booking.id || booking.booking_id || "").trim();
-    const vehicleRef = String(booking.vehicle_number || booking.driver?.vehicle?.ref || booking.vehicle_ref || "").trim();
-    const passenger = booking.client_name || booking.name || booking.passenger_name || "";
+  let processedCount = 0;
+  
+  for (const booking of bookings) {
+    // 1. Normalize the trip using the deterministic ID logic so we ALWAYS target the exact same row
+    const trip = normalizeTrip(booking);
+    if (!trip || !trip.date) continue;
 
-    if (!id && !passenger) continue;
+    // 2. Is this an explicit removal, or an update with a cleared driver?
+    if (eventType === "undesignate" || !trip.vehicleRef) {
+      console.log(`[${eventType.toUpperCase()}] Removing trip ${trip.id} from database (Unassigned).`);
+      
+      const result = await removeTripFromSupabase(env, trip.id, trip.vehicleRef, trip.passenger, trip.date);
+      if (result && result.deleted) processedCount++;
+      continue;
+    }
 
-    const rawDate = booking.job_date || booking.pickup_date || booking.date || "";
-    const date = extractDate(rawDate);
-    const result = await removeTripFromSupabase(env, id, vehicleRef, passenger, date);
-    if (result.deleted) removed += result.count;
+    // 3. If it has a driver/vehicle, we UPSERT. 
+    // This perfectly handles: No Driver -> Driver, AND Driver -> New Driver
+    console.log(`[${eventType.toUpperCase()}] Upserting trip ${trip.id} (Vehicle: ${trip.vehicleRef}).`);
+    const ok = await supabaseUpsertTrip(env, trip);
+    if (ok) processedCount++;
+    
+    // Backup to Firestore
+    firestoreWriteTrip(env, trip).catch((e) => console.error("Firestore write error:", e));
   }
 
-  return jsonResponse({ ok: true, removed });
+  return jsonResponse({ ok: true, processed: processedCount });
 }
 
 async function removeTripFromSupabase(env, tripId, vehicleRef, passenger, date) {
@@ -748,7 +734,7 @@ function normalizeTrip(raw) {
   const b = raw.booking || raw.data || raw;
 
   const pickup =
-    b.city || // restore this
+    b.city || 
     b.pickup_address ||
     b.pickup_name ||
     b.pickup?.formatted ||
@@ -769,8 +755,9 @@ function normalizeTrip(raw) {
     b.to ||
     "";
 
-  const baseId = String(b.perma_id || b.id || "").trim();
-  const leg = b.leg_number || b.leg || b.sequence || "";
+  // Add booking_id to catch iCabbi's primary ID field
+  const baseId = String(b.booking_id || b.perma_id || b.id || "").trim();
+  const leg = String(b.leg_number || b.leg || b.sequence || "").trim();
 
   let id = baseId;
 
@@ -779,14 +766,13 @@ function normalizeTrip(raw) {
   }
 
   if (!id) {
-    id =
-      String(b.perma_id || "") +
-      "_" +
-      (b.job_time || "") +
-      "_" +
-      (b.pickup_address || b.pickup_area || "") +
-      "_" +
-      Math.random().toString(36).slice(2, 6);
+    // DETERMINISTIC FALLBACK: NO RANDOM NUMBERS.
+    // Generates the exact same ID for the same trip updates.
+    const safeTime = String(b.job_time || b.time || "notime").trim();
+    const safePass = String(b.client_name || b.name || "nopass").trim().replace(/[^a-zA-Z0-9]/g, '');
+    const safeDate = extractDate(b.job_date || b.date || "");
+    
+    id = `auto_${safeDate}_${safeTime}_${safePass}`;
   }
 
   return {
@@ -798,6 +784,7 @@ function normalizeTrip(raw) {
     dropoff,
     passenger: b.client_name || b.name || "",
     passengerPhone: b.phone || "",
+    siteRef: String(b.site_ref || "").trim(), 
     driverName: [b.driver_first, b.driver_last].filter(Boolean).join(" "),
     driverPhone: b.driver_phone || "",
     notes: b.notes || b.driver_notes || "",
@@ -818,4 +805,41 @@ function getDateRange(from, to) {
 
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", ...CORS_HEADERS } });
+}
+
+async function handleBookingCreated(request, env) {
+  const secret = request.headers.get("X-Webhook-Secret") || "";
+  if (!env.WEBHOOK_SECRET || secret !== env.WEBHOOK_SECRET) {
+    return jsonResponse({ error: "Unauthorized" }, 401);
+  }
+
+  const payload = await request.json();
+  const bookings = Array.isArray(payload) ? payload : [payload];
+
+  let processed = 0;
+  let skipped = 0;
+
+  for (const booking of bookings) {
+    const b = booking.booking || booking.data || booking;
+    const siteRef = String(b.site_ref || "").trim().toUpperCase();
+
+    if (siteRef === "ORTX") {
+      skipped++;
+      console.log(`[CREATED] Skipping ORTX booking`);
+      continue;
+    }
+
+    const trip = normalizeTrip(booking);
+    if (!trip || !trip.date) continue;
+
+    trip.status = trip.status || "booked";
+
+    console.log(`[CREATED] Upserting baseline trip ${trip.id} (site: ${siteRef})`);
+    const ok = await supabaseUpsertTrip(env, trip);
+    if (ok) processed++;
+
+    firestoreWriteTrip(env, trip).catch((e) => console.error("Firestore write error:", e));
+  }
+
+  return jsonResponse({ ok: true, processed, skipped });
 }
