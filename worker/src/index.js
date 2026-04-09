@@ -162,10 +162,10 @@ async function supabaseUpsertShift(env, shift) {
   if (!res.ok) {
     const errText = await res.text();
     console.error(`Supabase upsert shift failed for ${shift.id}:`, errText);
-    return false;
+    return { ok: false, error: errText };
   }
   console.log(`Supabase: upserted shift ${shift.id}`);
-  return true;
+  return { ok: true };
 }
 
 async function supabaseUpdateShift(env, id, updates) {
@@ -920,31 +920,50 @@ async function handleBookingCreated(request, env) {
 
 // ── Driver Sign-In / Sign-Out Handlers ───────────────────────────────────────
 
+function isObj(v) { return v !== null && typeof v === "object" && !Array.isArray(v); }
+
 function normalizeDriverEvent(payload) {
-  // iCabbi may nest under data, booking, or driver — only use payload.event if it's
-  // an object (not the event-type string e.g. "driver_sign_in")
-  const eventObj = payload.event && typeof payload.event === "object" ? payload.event : null;
-  const b = payload.data || payload.booking || payload.driver || eventObj || payload;
+  // Only use a nested key as the data source if it is actually an object.
+  // iCabbi sometimes sends driver: "John Smith" or event: "driver_sign_in" as strings.
+  const b = (isObj(payload.data)    && payload.data)
+         || (isObj(payload.booking) && payload.booking)
+         || (isObj(payload.driver)  && payload.driver)
+         || (isObj(payload.event)   && payload.event)
+         || payload;
 
-  // Try every known field name iCabbi uses for driver name
-  const firstName = b.driver_first_name || b.driver_first || b.first_name || "";
-  const lastName  = b.driver_last_name  || b.driver_last  || b.last_name  || "";
+  // Collect every candidate name value from both the nested object AND the
+  // top-level payload (in case iCabbi sends names directly on the root).
+  const candidates = [b, payload].flatMap(src => [
+    src.driver_first_name, src.driver_first, src.first_name,
+    src.driver_last_name,  src.driver_last,  src.last_name,
+  ]);
+  const firstName = candidates.slice(0, 3).find(v => v) || "";
+  const lastName  = candidates.slice(3).find(v => v) || "";
   const fullName  = [firstName, lastName].filter(Boolean).join(" ").trim();
-  const driverName = fullName
-    || String(b.driver_name || b.driver || b.full_name || b.name || "").trim();
 
-  // Try every known timestamp field
-  const rawTimestamp = b.timestamp || b.event_time || b.login_time || b.logout_time
-    || b.signed_in_at || b.signed_out_at || b.created_at || new Date().toISOString();
+  const nameFallbacks = [b, payload].flatMap(src => [
+    src.driver_name, src.driver_full_name, src.full_name, src.driver, src.name,
+  ]);
+  const driverName = fullName || String(nameFallbacks.find(v => v) || "").trim();
+
+  // Timestamp: try nested object first, then top-level payload
+  const tsFields = [b, payload].flatMap(src => [
+    src.timestamp, src.event_time, src.login_time, src.logout_time,
+    src.signed_in_at, src.signed_out_at, src.created_at,
+  ]);
+  const rawTimestamp = tsFields.find(v => v) || new Date().toISOString();
   const ts = new Date(rawTimestamp);
   const date = !isNaN(ts.getTime())
     ? ts.toISOString().split("T")[0]
-    : (extractDate(b.job_date || b.date || "") || new Date().toISOString().split("T")[0]);
+    : (extractDate([b, payload].flatMap(s => [s.job_date, s.date]).find(v => v) || "") || new Date().toISOString().split("T")[0]);
+
+  const phoneFallbacks  = [b, payload].flatMap(s => [s.driver_phone, s.mobile, s.phone]);
+  const vehicleFallbacks = [b, payload].flatMap(s => [s.vehicle_number, s.vehicle_ref, s.vehicle_id, s.vehicle]);
 
   return {
     driverName,
-    driverPhone: String(b.driver_phone || b.mobile || b.phone || "").trim(),
-    vehicleRef: String(b.vehicle_number || b.vehicle_ref || b.vehicle_id || b.vehicle || "").trim(),
+    driverPhone: String(phoneFallbacks.find(v => v) || "").trim(),
+    vehicleRef:  String(vehicleFallbacks.find(v => v) || "").trim(),
     date,
     timestamp: !isNaN(ts.getTime()) ? ts.toISOString() : new Date().toISOString(),
   };
@@ -1031,8 +1050,8 @@ async function handleDriverSignIn(request, env) {
   };
 
   console.log("[SIGNIN] Writing shift:", JSON.stringify(shift));
-  const ok = await supabaseUpsertShift(env, shift);
-  console.log("[SIGNIN] Upsert result:", ok);
+  const result = await supabaseUpsertShift(env, shift);
+  console.log("[SIGNIN] Upsert result:", JSON.stringify(result));
 
   if (isLate) {
     await writeNotificationToFirestore(env, {
@@ -1047,7 +1066,7 @@ async function handleDriverSignIn(request, env) {
     }).catch((e) => console.error("Firestore late_signin notification error:", e));
   }
 
-  return jsonResponse({ ok: true, written: ok, shiftId, isLate, lateByMin, scheduledSignin, hasTrips: !!scheduledSignin, driverName: event.driverName });
+  return jsonResponse({ ok: result.ok, supabaseError: result.error || null, shiftId, isLate, lateByMin, scheduledSignin, hasTrips: !!scheduledSignin, driverName: event.driverName });
 }
 
 async function handleDriverSignOut(request, env) {
