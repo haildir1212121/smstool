@@ -461,7 +461,7 @@
     <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
       <div class="flex items-center gap-4">
         <h2 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-user-clock mr-2 text-amber-500"></i>Driver Shift History</h2>
-        <span id="shiftRowCount" class="text-xs font-mono bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold hidden">0 trips</span>
+        <span id="shiftRowCount" class="text-xs font-mono bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold hidden">0 shifts</span>
       </div>
       <div class="flex gap-3 items-center">
         <input id="shiftDateFrom" type="date" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 outline-none">
@@ -482,7 +482,9 @@
               <th class="p-4 pl-6">Vehicle</th>
               <th class="p-4">Driver</th>
               <th class="p-4">Date</th>
-              <th class="p-4 pr-6">Time</th>
+              <th class="p-4">Clock In</th>
+              <th class="p-4">Clock Out</th>
+              <th class="p-4 w-64 pr-6">Hours on Shift</th>
             </tr>
           </thead>
           <tbody id="shiftTableBody" class="divide-y divide-gray-100"></tbody>
@@ -490,7 +492,7 @@
         <div id="shiftEmptyState" class="flex flex-col items-center justify-center py-16 text-slate-300">
           <i class="fa-solid fa-user-clock text-4xl mb-3 opacity-40"></i>
           <p class="font-medium text-sm">Select a date range and click Fetch</p>
-          <p class="text-xs text-slate-400 mt-1">Pulls from trip data</p>
+          <p class="text-xs text-slate-400 mt-1">Shows clock-in / clock-out times recorded via iCabbi</p>
         </div>
       </div>
     </div>
@@ -2487,14 +2489,42 @@ let activeReviewRegion = null;
   // ── Driver Shift History ──────────────────────────────────────────────────
 
   let shiftData = [];
+  let shiftLiveTimer = null;
+
+  const shiftFmtDate = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+
+  const shiftFmtTime = (iso) => {
+    if (!iso) return null;
+    try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch { return null; }
+  };
+
+  // Returns { minutes, barPct, barColor, label, labelColor, isLive }
+  const shiftCalc = (row) => {
+    if (!row.signed_in_at) return null;
+    const inAt  = new Date(row.signed_in_at);
+    const outAt = row.signed_out_at ? new Date(row.signed_out_at) : new Date();
+    const mins  = Math.max(0, Math.round((outAt - inAt) / 60000));
+    const hrs   = mins / 60;
+    const MAX_H = 12; // bar saturates at 12h
+    const pct   = Math.min(100, (hrs / MAX_H) * 100);
+
+    let barColor, labelColor, label;
+    if (hrs < 6)       { barColor = "bg-emerald-400"; labelColor = "text-emerald-700"; label = "Normal"; }
+    else if (hrs < 8)  { barColor = "bg-yellow-400";  labelColor = "text-yellow-700";  label = "6h+"; }
+    else if (hrs < 10) { barColor = "bg-orange-400";  labelColor = "text-orange-700";  label = "8h+"; }
+    else if (hrs < 12) { barColor = "bg-red-400";     labelColor = "text-red-700";     label = "10h+"; }
+    else               { barColor = "bg-rose-700";    labelColor = "text-rose-800";    label = "12h+"; }
+
+    const h = Math.floor(mins / 60), m = mins % 60;
+    const timeStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+    return { mins, pct, barColor, labelColor, label, timeStr, isLive: !row.signed_out_at };
+  };
 
   window.loadShiftView = () => {
-    const pad = (n) => String(n).padStart(2, "0");
-    const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
     const today = new Date();
-    const from = new Date(today); from.setDate(from.getDate() - 6);
-    if (!document.getElementById("shiftDateFrom").value) document.getElementById("shiftDateFrom").value = fmt(from);
-    if (!document.getElementById("shiftDateTo").value)   document.getElementById("shiftDateTo").value   = fmt(today);
+    const from  = new Date(today); from.setDate(from.getDate() - 6);
+    if (!document.getElementById("shiftDateFrom").value) document.getElementById("shiftDateFrom").value = shiftFmtDate(from);
+    if (!document.getElementById("shiftDateTo").value)   document.getElementById("shiftDateTo").value   = shiftFmtDate(today);
   };
 
   window.loadShifts = async () => {
@@ -2505,40 +2535,51 @@ let activeReviewRegion = null;
     const btn = document.getElementById("shiftFetchBtn");
     btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>Loading`;
 
+    if (shiftLiveTimer) { clearInterval(shiftLiveTimer); shiftLiveTimer = null; }
+
     try {
       const { data: rows, error } = await supabase
-        .from("trips")
-        .select("vehicle_ref, driver_name, date, time")
+        .from("driver_shifts")
+        .select("id, vehicle_ref, driver_name, date, signed_in_at, signed_out_at, total_hours_min, is_late, late_by_min, scheduled_signin")
         .gte("date", from)
         .lte("date", to)
-        .not("driver_name", "is", null)
-        .neq("driver_name", "")
         .order("date", { ascending: false })
-        .order("time", { ascending: true });
+        .order("signed_in_at", { ascending: true });
 
       if (error) throw new Error(error.message);
       shiftData = rows || [];
     } catch (e) {
       shiftData = [];
-      window.showToast("Could not load data: " + e.message, "error");
+      window.showToast("Could not load shift data: " + e.message, "error");
     } finally {
       btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch`;
     }
 
     window.renderShiftTable();
+
+    // Tick every minute to update live rows
+    const hasLive = shiftData.some(r => r.signed_in_at && !r.signed_out_at);
+    if (hasLive) {
+      shiftLiveTimer = setInterval(() => {
+        if (document.getElementById("view-shifts").classList.contains("hidden")) {
+          clearInterval(shiftLiveTimer); shiftLiveTimer = null; return;
+        }
+        window.renderShiftTable();
+      }, 60000);
+    }
   };
 
   window.renderShiftTable = () => {
-    const search = (document.getElementById("shiftDriverSearch").value || "").toLowerCase().trim();
-    const tbody  = document.getElementById("shiftTableBody");
-    const empty  = document.getElementById("shiftEmptyState");
-    const badge  = document.getElementById("shiftRowCount");
+    const search  = (document.getElementById("shiftDriverSearch").value || "").toLowerCase().trim();
+    const tbody   = document.getElementById("shiftTableBody");
+    const empty   = document.getElementById("shiftEmptyState");
+    const badge   = document.getElementById("shiftRowCount");
 
     const filtered = search
       ? shiftData.filter(r => (r.driver_name || "").toLowerCase().includes(search))
       : shiftData;
 
-    badge.textContent = `${filtered.length} trip${filtered.length !== 1 ? "s" : ""}`;
+    badge.textContent = `${filtered.length} shift${filtered.length !== 1 ? "s" : ""}`;
     badge.classList.toggle("hidden", filtered.length === 0);
 
     if (filtered.length === 0) {
@@ -2548,12 +2589,50 @@ let activeReviewRegion = null;
     }
     empty.classList.add("hidden");
 
-    tbody.innerHTML = filtered.map(r => `<tr class="hover:bg-slate-50 transition">
-      <td class="p-4 pl-6 font-mono font-semibold text-slate-700 text-sm">${escapeHtml(r.vehicle_ref || "—")}</td>
-      <td class="p-4 text-slate-800 font-medium text-sm">${escapeHtml(r.driver_name || "—")}</td>
-      <td class="p-4 text-slate-500 text-xs font-mono whitespace-nowrap">${escapeHtml(r.date || "—")}</td>
-      <td class="p-4 pr-6 text-slate-500 text-xs font-mono">${escapeHtml(r.time || "—")}</td>
-    </tr>`).join("");
+    tbody.innerHTML = filtered.map(r => {
+      const calc   = shiftCalc(r);
+      const inStr  = shiftFmtTime(r.signed_in_at)  || "—";
+      const outStr = shiftFmtTime(r.signed_out_at) || "—";
+
+      const lateTag = r.is_late && r.late_by_min
+        ? `<span class="ml-1.5 inline-flex items-center gap-0.5 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded text-[9px] font-bold"><i class="fa-solid fa-clock text-[7px]"></i>+${r.late_by_min}m late</span>`
+        : "";
+
+      let progressCell;
+      if (!calc) {
+        progressCell = `<span class="text-slate-300 text-xs">No clock-in recorded</span>`;
+      } else {
+        const liveTag = calc.isLive
+          ? `<span class="inline-flex items-center gap-1 text-[9px] font-bold text-blue-600 animate-pulse"><i class="fa-solid fa-circle text-[6px]"></i>Live</span>`
+          : "";
+        const barAnim = calc.isLive ? "transition-all duration-[60s]" : "";
+        progressCell = `
+          <div class="flex items-center gap-2">
+            <div class="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+              <div class="${calc.barColor} ${barAnim} h-full rounded-full" style="width:${calc.pct.toFixed(1)}%"></div>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0 min-w-[90px]">
+              <span class="text-xs font-bold ${calc.labelColor}">${calc.timeStr}</span>
+              <span class="text-[9px] font-semibold ${calc.labelColor} opacity-70">${calc.label}</span>
+              ${liveTag}
+            </div>
+          </div>
+          <div class="flex gap-2 mt-1 text-[9px] text-slate-300 font-mono">
+            <span>6h</span><span class="flex-1 text-center">8h</span><span>12h</span>
+          </div>`;
+      }
+
+      return `<tr class="hover:bg-slate-50 transition">
+        <td class="p-4 pl-6 font-mono font-semibold text-slate-700 text-sm">${escapeHtml(r.vehicle_ref || "—")}</td>
+        <td class="p-4 text-slate-800 font-medium text-sm">${escapeHtml(r.driver_name || "—")}</td>
+        <td class="p-4 text-slate-500 text-xs font-mono whitespace-nowrap">${escapeHtml(r.date || "—")}</td>
+        <td class="p-4 text-slate-600 text-xs font-mono whitespace-nowrap">
+          ${escapeHtml(inStr)}${lateTag}
+        </td>
+        <td class="p-4 text-slate-600 text-xs font-mono whitespace-nowrap">${escapeHtml(outStr)}</td>
+        <td class="p-4 pr-6">${progressCell}</td>
+      </tr>`;
+    }).join("");
   };
 </script>
 </body>
