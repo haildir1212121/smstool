@@ -298,9 +298,6 @@
           <button onclick="window.openTripReviewModal()" id="ttReviewBtn" class="px-5 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition shadow-sm self-center hidden">
             <i class="fa-solid fa-paper-plane mr-1"></i>Review &amp; Send
           </button>
-          <button onclick="window.seedTodayShifts()" id="btnSeedShifts" class="px-5 py-2 bg-amber-500 text-white rounded-xl text-sm font-bold hover:bg-amber-600 transition shadow-sm self-center hidden" title="Create expected shift rows for today's drivers">
-            <i class="fa-solid fa-user-clock mr-1"></i>Create Shifts
-          </button>
         </div>
 
         <div id="ttRegionList" class="space-y-4"></div>
@@ -1226,6 +1223,16 @@ let soundPrefs = JSON.parse(localStorage.getItem('sound_prefs') || '{"msgs":true
     // Match against contacts (loads saved matches from Firestore)
     await matchDriversToContacts();
     renderTripTextsView();
+
+    // Auto-seed driver_shifts with scheduled times from this template
+    const autoDate = getIcabbiSettings().tripDate || (() => {
+      // Parse sheetDate ("M/D/YYYY") to YYYY-MM-DD as fallback
+      if (!sheetDate) return "";
+      const parts = sheetDate.split("/");
+      if (parts.length !== 3) return "";
+      return `${parts[2]}-${parts[0].padStart(2,"0")}-${parts[1].padStart(2,"0")}`;
+    })();
+    if (autoDate) autoSeedShifts(autoDate).catch(e => console.warn("[autoSeed] failed:", e.message));
   }
 
   function detectRegions(ws) {
@@ -1574,9 +1581,7 @@ let soundPrefs = JSON.parse(localStorage.getItem('sound_prefs') || '{"msgs":true
       setStepState(1, "done", `${totalTrips} trips`);
       window.showToast(`Fetched ${totalTrips} trips for ${Object.keys(ttTrips).length} vehicles${dayLabel}`);
 
-      // Show review button and create shifts button
       document.getElementById("ttReviewBtn").classList.remove("hidden");
-      document.getElementById("btnSeedShifts").classList.remove("hidden");
       renderTripTextsView();
 
     } catch (e) {
@@ -1936,25 +1941,17 @@ let activeReviewRegion = null;
     }, 2000);
   };
 
-  // --- Seed Today's Shifts ---
-  window.seedTodayShifts = async () => {
-    const settings = getIcabbiSettings();
-    const date = settings.tripDate || window.ttTripDate;
-    if (!date) {
-      window.showToast("No date set — fetch trips first", "error");
-      return;
-    }
-
-    // Build shift rows and deduplicate by id — duplicate vehicle_ref across
-    // regions would cause "ON CONFLICT DO UPDATE command cannot affect row a second time"
+  // Auto-seed driver_shifts rows from the loaded template — called after parseDriverSheet.
+  // Silently upserts expected rows so sign-in webhooks can match them by vehicle_ref+date.
+  async function autoSeedShifts(date) {
     const seenIds = new Map();
-    for (const d of (ttDrivers || [])) {
+    for (const d of ttDrivers) {
       if (!d.name || !d.vehicle) continue;
       const id = `shift_${date}_${String(d.vehicle).replace(/\s+/g, "_")}`;
       seenIds.set(id, {
         id,
         driver_name: d.name,
-        driver_ref: d.driverRef || "",
+        driver_ref: "",
         driver_phone: "",
         vehicle_ref: String(d.vehicle),
         date,
@@ -1965,32 +1962,12 @@ let activeReviewRegion = null;
         updated_at: new Date().toISOString(),
       });
     }
-    const shiftsToSeed = [...seenIds.values()];
-
-    if (shiftsToSeed.length === 0) {
-      const withVehicle = ttDrivers.filter(d => d.vehicle).length;
-      window.showToast(`No shifts built — ${ttDrivers.length} drivers loaded, ${withVehicle} have vehicle (check console)`, "error");
-      console.warn("[SeedShifts] ttDrivers sample:", ttDrivers.slice(0, 3));
-      return;
-    }
-
-    const btn = document.getElementById("btnSeedShifts");
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Creating...';
-
-    const { error } = await supabase
-      .from("driver_shifts")
-      .upsert(shiftsToSeed, { onConflict: "id" });
-
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-user-clock mr-1"></i>Create Shifts';
-
-    if (error) {
-      window.showToast("Failed to create shifts: " + error.message, "error");
-    } else {
-      window.showToast(`Created ${shiftsToSeed.length} driver shifts for ${date}`);
-    }
-  };
+    const rows = [...seenIds.values()];
+    if (rows.length === 0) return;
+    const { error } = await supabase.from("driver_shifts").upsert(rows, { onConflict: "id" });
+    if (error) console.warn("[autoSeed] Supabase upsert error:", error.message);
+    else console.log(`[autoSeed] Seeded ${rows.length} shift rows for ${date}`);
+  }
 
   // ==========================================
   // NOTIFICATION CENTER
@@ -2589,7 +2566,28 @@ let activeReviewRegion = null;
     const from  = new Date(today); from.setDate(from.getDate() - 6);
     if (!document.getElementById("shiftDateFrom").value) document.getElementById("shiftDateFrom").value = shiftFmtDate(from);
     if (!document.getElementById("shiftDateTo").value)   document.getElementById("shiftDateTo").value   = shiftFmtDate(today);
+    window.loadShifts();
   };
+
+  // Silent background re-fetch (no button state change) for auto-refresh
+  async function silentRefreshShifts() {
+    if (document.getElementById("view-shifts").classList.contains("hidden")) {
+      clearInterval(shiftLiveTimer); shiftLiveTimer = null; return;
+    }
+    const from = document.getElementById("shiftDateFrom").value;
+    const to   = document.getElementById("shiftDateTo").value;
+    if (!from || !to) return;
+    try {
+      const { data: rows, error } = await supabase
+        .from("driver_shifts")
+        .select("id, vehicle_ref, driver_name, date, signed_in_at, signed_out_at, total_hours_min, is_late, late_by_min, scheduled_signin")
+        .gte("date", from)
+        .lte("date", to)
+        .order("date", { ascending: true })
+        .order("signed_in_at", { ascending: true });
+      if (!error) { shiftData = rows || []; window.renderShiftTable(); }
+    } catch (e) { /* silent */ }
+  }
 
   window.loadShifts = async () => {
     const from = document.getElementById("shiftDateFrom").value;
@@ -2607,7 +2605,7 @@ let activeReviewRegion = null;
         .select("id, vehicle_ref, driver_name, date, signed_in_at, signed_out_at, total_hours_min, is_late, late_by_min, scheduled_signin")
         .gte("date", from)
         .lte("date", to)
-        .order("date", { ascending: false })
+        .order("date", { ascending: true })
         .order("signed_in_at", { ascending: true });
 
       if (error) throw new Error(error.message);
@@ -2621,16 +2619,8 @@ let activeReviewRegion = null;
 
     window.renderShiftTable();
 
-    // Tick every minute to update live rows
-    const hasLive = shiftData.some(r => r.signed_in_at && !r.signed_out_at);
-    if (hasLive) {
-      shiftLiveTimer = setInterval(() => {
-        if (document.getElementById("view-shifts").classList.contains("hidden")) {
-          clearInterval(shiftLiveTimer); shiftLiveTimer = null; return;
-        }
-        window.renderShiftTable();
-      }, 60000);
-    }
+    // Re-fetch from Supabase every 60s while view is open
+    shiftLiveTimer = setInterval(silentRefreshShifts, 60000);
   };
 
   window.renderShiftTable = () => {
