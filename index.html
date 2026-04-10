@@ -1968,7 +1968,9 @@ let activeReviewRegion = null;
     const shiftsToSeed = [...seenIds.values()];
 
     if (shiftsToSeed.length === 0) {
-      window.showToast("No drivers loaded — upload a template first", "error");
+      const withVehicle = ttDrivers.filter(d => d.vehicle).length;
+      window.showToast(`No shifts built — ${ttDrivers.length} drivers loaded, ${withVehicle} have vehicle (check console)`, "error");
+      console.warn("[SeedShifts] ttDrivers sample:", ttDrivers.slice(0, 3));
       return;
     }
 
