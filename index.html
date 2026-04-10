@@ -298,6 +298,9 @@
           <button onclick="window.openTripReviewModal()" id="ttReviewBtn" class="px-5 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition shadow-sm self-center hidden">
             <i class="fa-solid fa-paper-plane mr-1"></i>Review &amp; Send
           </button>
+          <button onclick="window.seedTodayShifts()" id="btnSeedShifts" class="px-5 py-2 bg-amber-500 text-white rounded-xl text-sm font-bold hover:bg-amber-600 transition shadow-sm self-center hidden" title="Create expected shift rows for today's drivers">
+            <i class="fa-solid fa-user-clock mr-1"></i>Create Shifts
+          </button>
         </div>
 
         <div id="ttRegionList" class="space-y-4"></div>
@@ -1545,16 +1548,20 @@ let soundPrefs = JSON.parse(localStorage.getItem('sound_prefs') || '{"msgs":true
           passenger: row.passenger || "",
           passengerPhone: row.passenger_phone || "",
           notes: row.notes || "",
-          status: row.status || ""
+          status: row.status || "",
+          driverRef: row.driver_ref || ""
         });
       }
 
       // Sort each vehicle's trips by time
       Object.values(ttTrips).forEach(arr => arr.sort((a, b) => (a.time || "").localeCompare(b.time || "")));
 
-      // Assign trips to drivers
+      // Assign trips to drivers; capture driver_ref from the first matched trip if available
       ttDrivers.forEach(d => {
         d.trips = ttTrips[d.vehicle] || [];
+        if (d.trips.length > 0 && d.trips[0].driverRef) {
+          d.driverRef = d.trips[0].driverRef;
+        }
       });
 
       // Store multi-day flag for message generation
@@ -1567,8 +1574,9 @@ let soundPrefs = JSON.parse(localStorage.getItem('sound_prefs') || '{"msgs":true
       setStepState(1, "done", `${totalTrips} trips`);
       window.showToast(`Fetched ${totalTrips} trips for ${Object.keys(ttTrips).length} vehicles${dayLabel}`);
 
-      // Show review button
+      // Show review button and create shifts button
       document.getElementById("ttReviewBtn").classList.remove("hidden");
+      document.getElementById("btnSeedShifts").classList.remove("hidden");
       renderTripTextsView();
 
     } catch (e) {
@@ -1926,6 +1934,54 @@ let activeReviewRegion = null;
       document.getElementById("tripReviewModal").classList.add("hidden");
       document.getElementById("ttSendProgress").classList.add("hidden");
     }, 2000);
+  };
+
+  // --- Seed Today's Shifts ---
+  window.seedTodayShifts = async () => {
+    const settings = getIcabbiSettings();
+    const date = settings.tripDate || window.ttTripDate;
+    if (!date) {
+      window.showToast("No date set — fetch trips first", "error");
+      return;
+    }
+
+    const shiftsToSeed = (window.ttDrivers || [])
+      .filter(d => d.name && d.vehicle)
+      .map(d => ({
+        id: `shift_${date}_${String(d.vehicle).replace(/\s+/g, "_")}`,
+        driver_name: d.name,
+        driver_ref: d.driverRef || "",
+        driver_phone: "",
+        vehicle_ref: String(d.vehicle),
+        date,
+        scheduled_signin: d.tablet || "",
+        scheduled_stop: d.stop || "",
+        status: "expected",
+        go_home_sent: false,
+        updated_at: new Date().toISOString(),
+      }));
+
+    if (shiftsToSeed.length === 0) {
+      window.showToast("No drivers loaded — upload a template first", "error");
+      return;
+    }
+
+    const btn = document.getElementById("btnSeedShifts");
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Creating...';
+
+    const { error } = await supabase
+      .from("driver_shifts")
+      .upsert(shiftsToSeed, { onConflict: "id" });
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-user-clock mr-1"></i>Create Shifts';
+
+    if (error) {
+      window.showToast("Failed to create shifts: " + error.message, "error");
+    } else {
+      window.showToast(`Created ${shiftsToSeed.length} driver shifts for ${date}`);
+    }
   };
 
   // ==========================================
