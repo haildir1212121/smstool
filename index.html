@@ -1945,10 +1945,14 @@ let activeReviewRegion = null;
       return;
     }
 
-    const shiftsToSeed = (ttDrivers || [])
-      .filter(d => d.name && d.vehicle)
-      .map(d => ({
-        id: `shift_${date}_${String(d.vehicle).replace(/\s+/g, "_")}`,
+    // Build shift rows and deduplicate by id — duplicate vehicle_ref across
+    // regions would cause "ON CONFLICT DO UPDATE command cannot affect row a second time"
+    const seenIds = new Map();
+    for (const d of (ttDrivers || [])) {
+      if (!d.name || !d.vehicle) continue;
+      const id = `shift_${date}_${String(d.vehicle).replace(/\s+/g, "_")}`;
+      seenIds.set(id, {
+        id,
         driver_name: d.name,
         driver_ref: d.driverRef || "",
         driver_phone: "",
@@ -1959,7 +1963,9 @@ let activeReviewRegion = null;
         status: "expected",
         go_home_sent: false,
         updated_at: new Date().toISOString(),
-      }));
+      });
+    }
+    const shiftsToSeed = [...seenIds.values()];
 
     if (shiftsToSeed.length === 0) {
       window.showToast("No drivers loaded — upload a template first", "error");
