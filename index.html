@@ -39,8 +39,6 @@
     <div class="flex flex-col gap-2 w-full">
       <button onclick="window.switchView('inbox')" id="nav-inbox" class="nav-item active w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-solid fa-inbox text-xl"></i></button>
       <button onclick="window.switchView('contacts')" id="nav-contacts" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-regular fa-address-book text-xl"></i></button>
-      <button onclick="window.switchView('broadcast')" id="nav-broadcast" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-solid fa-bullhorn text-xl"></i></button>
-      <button onclick="window.switchView('logs')" id="nav-logs" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-solid fa-clipboard-check text-xl"></i></button>
       <button onclick="window.switchView('triptexts')" id="nav-triptexts" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Trip Texts"><i class="fa-solid fa-route text-xl"></i></button>
       <button onclick="window.switchView('notifications')" id="nav-notifications" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition relative" title="Notifications">
         <i class="fa-solid fa-bell text-xl"></i>
@@ -202,48 +200,6 @@
             </div>
         </div>
     </div>
-  </div>
-
-  <div id="view-broadcast" class="hidden flex-1 h-full flex-col bg-slate-50 fade-in items-center justify-center p-6 overflow-hidden">
-      <div class="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-2xl overflow-hidden flex flex-col h-[600px]">
-          <div class="p-6 border-b border-gray-100 bg-white flex items-center gap-4"><div class="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-lg"><i class="fa-solid fa-bullhorn"></i></div><div><h2 class="text-xl font-bold">Mass Broadcast</h2></div></div>
-          <div class="flex-1 p-8 flex flex-col bg-slate-50/50">
-              <div id="massComposeArea" class="flex flex-col h-full">
-                  <div class="bg-blue-50 text-blue-900 p-4 rounded-xl text-sm mb-6 border border-blue-100 flex gap-3"><i class="fa-solid fa-circle-info mt-0.5"></i><span>Targeting <strong id="massCountDisplay">0</strong> contacts.</span></div>
-                  <textarea id="massMsgInput" class="flex-1 bg-white border border-gray-200 rounded-xl p-4 resize-none outline-none text-sm" placeholder="Message..."></textarea>
-                  <div class="flex justify-end pt-6"><button onclick="window.startBroadcast()" class="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700">Send</button></div>
-              </div>
-              <div id="massProgressArea" class="hidden flex-col h-full justify-between">
-                  <div class="text-center mb-8 mt-4"><div class="text-5xl font-bold text-blue-600 mb-2"><span id="massSentCount">0</span>/<span id="massTotalCount">0</span></div></div>
-                  <div class="w-full bg-gray-200 rounded-full h-3 mb-6 overflow-hidden"><div id="massProgressBar" class="bg-blue-600 h-full w-0 transition-all duration-300"></div></div>
-                  <div id="massLogBox" class="h-48 bg-slate-900 rounded-xl p-4 font-mono text-[10px] text-emerald-400 overflow-y-auto mb-4"></div>
-                  <button onclick="window.cancelBroadcast()" class="w-full py-3 border-2 border-rose-100 text-rose-500 font-bold rounded-xl">Stop</button>
-              </div>
-          </div>
-      </div>
-  </div>
-
-  <div id="view-logs" class="hidden flex-1 h-full flex flex-col bg-white fade-in min-w-0">
-
-      <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
-          <h2 class="text-lg font-bold text-slate-800 tracking-tight">Shift Logs</h2>
-          <div id="logTagRow" class="flex gap-2 overflow-x-auto scrollbar-hide max-w-xl"></div>
-      </div>
-      <div class="flex-1 overflow-y-auto bg-slate-50 p-6 min-h-0">
-          <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-w-5xl mx-auto flex flex-col">
-              <table class="w-full text-left">
-                  <thead class="bg-slate-50 text-xs uppercase text-slate-500 font-semibold border-b border-gray-200">
-                      <tr><th class="p-4 pl-6">Time</th><th class="p-4">Contact</th><th class="p-4">Event</th><th class="p-4 text-right pr-6">Action</th></tr>
-                  </thead>
-                  <tbody id="logbookList" class="divide-y divide-gray-100"></tbody>
-              </table>
-              <div class="p-4 border-t border-gray-100 flex justify-between items-center bg-gray-50/50">
-                  <button onclick="window.changeLogPage(-1)" class="px-3 py-1 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm">Previous</button>
-                  <span id="logPageInfo" class="text-xs font-mono text-gray-400">Page 1</span>
-                  <button onclick="window.changeLogPage(1)" class="px-3 py-1 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm">Next</button>
-              </div>
-          </div>
-      </div>
   </div>
 
   <div id="view-triptexts" class="hidden flex-1 h-full flex flex-col bg-slate-50 fade-in overflow-hidden">
@@ -660,7 +616,7 @@
   }
 
   window.switchView = (v) => {
-      ['inbox', 'contacts', 'broadcast', 'logs', 'triptexts', 'notifications', 'tripdata', 'shifts'].forEach(x => document.getElementById(`view-${x}`).classList.add('hidden'));
+      ['inbox', 'contacts', 'triptexts', 'notifications', 'tripdata', 'shifts'].forEach(x => document.getElementById(`view-${x}`).classList.add('hidden'));
       document.getElementById(`view-${v}`).classList.remove('hidden');
       if (v === 'shifts') window.loadShiftView();
       document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -864,25 +820,6 @@
     } catch(e) { console.error(e); window.showToast("Send failed", "error"); } finally { btn.disabled = false; }
   };
   
-  let broadcastActive = false;
-  window.startBroadcast = async () => {
-      const txt = document.getElementById("massMsgInput").value.trim(); const contacts = store.threads.filter(t => t.phone && t.phone.length > 5);
-      if(!txt || !contacts.length || !confirm(`Send to ${contacts.length} people?`)) return;
-      broadcastActive = true; document.getElementById("massComposeArea").classList.add("hidden"); document.getElementById("massProgressArea").classList.remove("hidden"); document.getElementById("massProgressArea").classList.add("flex");
-      const log = document.getElementById("massLogBox"); const pBar = document.getElementById("massProgressBar");
-      document.getElementById("massTotalCount").innerText = contacts.length; let sent = 0;
-      await addDoc(collection(db, "organizations", SHARED_ORG_ID, "logs"), { type:"broadcast_start", count: contacts.length, message:txt, createdAt: serverTimestamp() });
-      for(let i=0; i<contacts.length; i++) {
-          if(!broadcastActive) break; const t = contacts[i]; log.insertAdjacentHTML("beforeend", `<div>Sending to ${escapeHtml(t.name)}...</div>`);
-          try {
-             const res = await fetch(TWILIO_SEND_URL, { method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: t.phone, body: txt, mediaUrls: [] }) });
-             if(res.ok) { const sid = `mass-${Date.now()}-${Math.random()}`; await setDoc(doc(getMsgsCol(t.id), sid), { body: txt, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls: [] }); await updateDoc(getThreadDoc(t.id), { lastMessageText: txt, lastMessageAtMs: Date.now() }); sent++; document.getElementById("massSentCount").innerText = sent; pBar.style.width = `${(sent/contacts.length)*100}%`; } else { log.insertAdjacentHTML("beforeend", `<div class="text-rose-400">Failed: ${t.phone}</div>`); }
-          } catch(e) { log.insertAdjacentHTML("beforeend", `<div class="text-rose-400">Error: ${escapeHtml(e.message)}</div>`); }
-          log.scrollTop = log.scrollHeight; await new Promise(r => setTimeout(r, 400));
-      }
-      broadcastActive = false; log.insertAdjacentHTML("beforeend", `<div class="text-white mt-2">>> FINISHED. Sent ${sent}.</div>`); window.showToast("Broadcast Complete");
-  };
-  window.cancelBroadcast = () => { broadcastActive = false; window.showToast("Stopping..."); };
 
   // --- PAGINATED RENDER FUNCTIONS ---
   window.renderContactsManagerTable = () => {
@@ -937,68 +874,6 @@
     window.showToast("Directory Saved");
 };
 
-  window.renderLogbook = async () => {
-      const tagRow = document.getElementById("logTagRow");
-      if(tagRow) {
-          const allTags = new Set(); store.threads.forEach(t => (t.tags||[]).forEach(tag => allTags.add(tag)));
-          let tagHtml = `<button onclick="window.clearTagFilter()" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter.size===0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}">ALL</button>`;
-          const untaggedActive = store.tagFilter.has("__untagged__");
-          tagHtml += `<button onclick="window.toggleTagFilter('__untagged__')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${untaggedActive ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">Untagged</button>`;
-          Array.from(allTags).sort().forEach(tag => {
-              const active = store.tagFilter.has(tag);
-              tagHtml += `<button onclick="window.toggleTagFilter('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'}">${tag}</button>`;
-          });
-          tagRow.innerHTML = tagHtml;
-      }
-
-      // LOAD ALL LOGS ONCE IF EMPTY (Client-side cache)
-      if (store.logs.length === 0) {
-          const snap = await getDocs(query(collection(db, "organizations", SHARED_ORG_ID, "logs"), orderBy("createdAt", "desc"), limit(200))); 
-          store.logs = snap.docs.map(d => d.data());
-      }
-
-      const tbody = document.getElementById("logbookList");
-      const filtered = store.logs.filter(l => {
-          const thread = store.threads.find(t => t.id === l.threadId || t.phone === l.phone);
-          const threadTags = thread ? (thread.tags || []) : [];
-
-          if (store.tagFilter.size > 0) {
-              const wantsUntagged = store.tagFilter.has("__untagged__");
-              const hasTagMatch = threadTags.some(tag => store.tagFilter.has(tag));
-              const isUntaggedMatch = wantsUntagged && threadTags.length === 0;
-              if (!hasTagMatch && !isUntaggedMatch) return false;
-          }
-          return true;
-      });
-
-      // Pagination Logic
-      const totalPages = Math.ceil(filtered.length / store.itemsPerPage) || 1;
-      store.logPage = Math.max(1, Math.min(store.logPage, totalPages));
-      document.getElementById("logPageInfo").innerText = `Page ${store.logPage} of ${totalPages}`;
-      
-      const start = (store.logPage - 1) * store.itemsPerPage;
-      const paginated = filtered.slice(start, start + store.itemsPerPage);
-
-      tbody.innerHTML = paginated.map(l => {
-          const thread = store.threads.find(t => t.id === l.threadId || t.phone === l.phone);
-          const threadTags = thread ? (thread.tags || []) : [];
-          const tagBadges = threadTags.slice(0,2).map(tag => `<span class="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px] border border-slate-200 font-bold mr-1">${tag}</span>`).join("");
-          return `<tr>
-            <td class="p-4 pl-6 text-xs font-mono text-slate-500">${new Date(l.createdAt?.toMillis()).toLocaleString()}</td>
-            <td class="p-4 text-sm font-bold text-slate-800">
-                ${escapeHtml(l.threadName || l.phone || "System")}
-                <div class="mt-1">${tagBadges}</div>
-            </td>
-            <td class="p-4 text-xs">
-                <span class="font-bold uppercase text-slate-400 mr-2 text-[10px] tracking-wider border border-slate-200 px-1.5 py-0.5 rounded">${l.type}</span>
-                ${escapeHtml(l.message||"")}
-            </td>
-            <td class="p-4 pr-6 text-right"><button onclick="window.switchView('inbox'); window.loadThread('${l.threadId}')" class="text-blue-600 font-bold text-xs hover:underline">View</button></td>
-          </tr>`;
-      }).join("");
-  };
-
-  window.changeLogPage = (dir) => { store.logPage += dir; window.renderLogbook(); };
 
   window.openNewMsgModal = () => document.getElementById("newMsgModal").classList.remove("hidden");
  window.createThreadFromModal = async () => { 
