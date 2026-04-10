@@ -1945,7 +1945,7 @@ let activeReviewRegion = null;
       return;
     }
 
-    const shiftsToSeed = (window.ttDrivers || [])
+    const shiftsToSeed = (ttDrivers || [])
       .filter(d => d.name && d.vehicle)
       .map(d => ({
         id: `shift_${date}_${String(d.vehicle).replace(/\s+/g, "_")}`,
