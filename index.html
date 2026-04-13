@@ -325,6 +325,8 @@
           <option value="all">All Types</option>
           <option value="vehicle_alert">Vehicle Alerts</option>
           <option value="fleetio_issue">Fleetio Issues</option>
+          <option value="trip_designated">Trip Designated</option>
+          <option value="trip_undesignated">Trip Undesignated</option>
           <option value="late_signin">Late Sign-Ins</option>
           <option value="long_shift">Long Shifts</option>
         </select>
@@ -346,6 +348,10 @@
         <div class="bg-white border border-slate-200 rounded-xl px-5 py-4 flex items-center gap-4 shadow-sm">
           <div class="w-11 h-11 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-lg"><i class="fa-solid fa-wrench"></i></div>
           <div><div class="text-xs text-slate-400 font-semibold">Fleetio Issues</div><div id="notifFleetioCount" class="text-2xl font-bold text-slate-800">0</div></div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl px-5 py-4 flex items-center gap-4 shadow-sm">
+          <div class="w-11 h-11 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg"><i class="fa-solid fa-route"></i></div>
+          <div><div class="text-xs text-slate-400 font-semibold">Trip Changes</div><div id="notifDesignateCount" class="text-2xl font-bold text-slate-800">0</div></div>
         </div>
       </div>
       <div id="notifFeed" class="max-w-5xl mx-auto space-y-3">
@@ -1869,11 +1875,13 @@ let activeReviewRegion = null;
 
     const vehicleCount = store.notifications.filter(n => n.type === "vehicle_alert").length;
     const fleetioCount = store.notifications.filter(n => n.type === "fleetio_issue").length;
+    const designateCount = store.notifications.filter(n => n.type === "trip_designated" || n.type === "trip_undesignated").length;
     document.getElementById("notifVehicleCount").textContent = vehicleCount;
     document.getElementById("notifFleetioCount").textContent = fleetioCount;
+    document.getElementById("notifDesignateCount").textContent = designateCount;
     document.getElementById("notifCenterCount").textContent = `${store.notifications.filter(n => !n.read).length} active`;
 
-    const activeAlerts = store.notifications.filter(n => !n.read && n.type === "fleetio_issue");
+    const activeAlerts = store.notifications.filter(n => !n.read && (n.type === "fleetio_issue" || n.type === "trip_designated" || n.type === "trip_undesignated"));
     const alertsEl = document.getElementById("notifActiveAlerts");
     if (activeAlerts.length > 0) {
       alertsEl.innerHTML = activeAlerts.slice(0, 5).map(n => {
@@ -1915,6 +1923,12 @@ let activeReviewRegion = null;
           break;
         case "fleetio_issue":
           typeConfig = { icon: "fa-wrench", iconBg: "bg-orange-100 text-orange-600", badge: "bg-orange-100 text-orange-700 border-orange-200", label: "FLEETIO ISSUE", cardBorder: n.read ? "" : "border-l-4 border-l-orange-400" };
+          break;
+        case "trip_designated":
+          typeConfig = { icon: "fa-circle-check", iconBg: "bg-emerald-100 text-emerald-600", badge: "bg-emerald-100 text-emerald-700 border-emerald-200", label: "DESIGNATED", cardBorder: n.read ? "" : "border-l-4 border-l-emerald-400" };
+          break;
+        case "trip_undesignated":
+          typeConfig = { icon: "fa-circle-xmark", iconBg: "bg-rose-100 text-rose-600", badge: "bg-rose-100 text-rose-700 border-rose-200", label: "UNDESIGNATED", cardBorder: n.read ? "" : "border-l-4 border-l-rose-400" };
           break;
         case "late_signin":
           typeConfig = { icon: "fa-clock", iconBg: "bg-amber-100 text-amber-600", badge: "bg-amber-100 text-amber-700 border-amber-200", label: "LATE SIGN-IN", cardBorder: n.read ? "" : "border-l-4 border-l-amber-400" };

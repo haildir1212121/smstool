@@ -436,18 +436,40 @@ async function processTripEvent(request, env, eventType) {
     // 2. Is this an explicit removal, or an update with a cleared driver?
     if (eventType === "undesignate" || !trip.vehicleRef) {
       console.log(`[${eventType.toUpperCase()}] Removing trip ${trip.id} from database (Unassigned).`);
-      
+
       const result = await removeTripFromSupabase(env, trip.id, trip.vehicleRef, trip.passenger, trip.date);
-      if (result && result.deleted) processedCount++;
+      if (result && result.deleted) {
+        processedCount++;
+        const label = [trip.passenger, trip.pickup, trip.date].filter(Boolean).join(" · ");
+        writeNotificationToFirestore(env, {
+          type: "trip_undesignated",
+          title: `Trip Undesignated${trip.vehicleRef ? ` — Vehicle ${trip.vehicleRef}` : ""}`,
+          message: label || trip.id,
+          vehicleRef: trip.vehicleRef || "",
+          driverName: trip.driverName || "",
+          tripDate: trip.date || "",
+        }).catch(e => console.error("Firestore undesignate notification error:", e));
+      }
       continue;
     }
 
-    // 3. If it has a driver/vehicle, we UPSERT. 
+    // 3. If it has a driver/vehicle, we UPSERT.
     // This perfectly handles: No Driver -> Driver, AND Driver -> New Driver
     console.log(`[${eventType.toUpperCase()}] Upserting trip ${trip.id} (Vehicle: ${trip.vehicleRef}).`);
     const ok = await supabaseUpsertTrip(env, trip);
-    if (ok) processedCount++;
-    
+    if (ok) {
+      processedCount++;
+      const label = [trip.passenger, trip.pickup, trip.date].filter(Boolean).join(" · ");
+      writeNotificationToFirestore(env, {
+        type: "trip_designated",
+        title: `Trip Designated — Vehicle ${trip.vehicleRef}`,
+        message: label || trip.id,
+        vehicleRef: trip.vehicleRef || "",
+        driverName: trip.driverName || "",
+        tripDate: trip.date || "",
+      }).catch(e => console.error("Firestore designate notification error:", e));
+    }
+
     // Backup to Firestore
     firestoreWriteTrip(env, trip).catch((e) => console.error("Firestore write error:", e));
   }
