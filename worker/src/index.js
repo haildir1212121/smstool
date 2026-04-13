@@ -861,6 +861,7 @@ function normalizeTrip(raw) {
     b.destination?.address ||
     b.destination?.text ||
     b.destination?.name ||
+    b.address ||
     b.to ||
     "";
 
