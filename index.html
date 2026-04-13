@@ -9,6 +9,8 @@
   <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   
   <style>
     body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; overflow: hidden; }
@@ -45,6 +47,7 @@
       </button>
       <button onclick="window.switchView('tripdata')" id="nav-tripdata" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Trip Data Viewer"><i class="fa-solid fa-database text-xl"></i></button>
       <button onclick="window.switchView('shifts')" id="nav-shifts" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Driver Shifts"><i class="fa-solid fa-user-clock text-xl"></i></button>
+      <button onclick="window.switchView('livemap')" id="nav-livemap" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Live Map & Routing"><i class="fa-solid fa-map-location-dot text-xl"></i></button>
    </div>
     <div class="flex-1"></div>
     <button onclick="window.toggleMasterMute()" id="nav-mute-btn" class="w-10 h-10 text-slate-500 hover:text-white transition mb-1" title="Mute All Sounds">
@@ -454,6 +457,81 @@
     </div>
   </div>
 
+  <!-- ── Live Map & Routing View ─────────────────────────────────────────── -->
+  <div id="view-livemap" class="hidden flex-1 h-full flex flex-col bg-slate-50 fade-in overflow-hidden">
+    <!-- Header -->
+    <div class="h-16 flex items-center px-6 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
+      <div class="flex items-center gap-4">
+        <h2 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-map-location-dot mr-2 text-emerald-600"></i>Live Map &amp; Routing</h2>
+        <span id="lmTripCount" class="hidden text-xs font-mono bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">0 trips</span>
+      </div>
+      <div class="flex gap-3 items-center">
+        <input id="lmDate" type="date" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 outline-none focus:ring-2 focus:ring-emerald-200">
+        <button onclick="window.fetchLiveMapTrips()" id="lmFetchBtn" class="px-5 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition shadow-sm">
+          <i class="fa-solid fa-map-location-dot mr-1"></i>Load
+        </button>
+      </div>
+    </div>
+
+    <!-- Two-panel layout -->
+    <div class="flex-1 flex min-h-0">
+
+      <!-- Left panel: driver list + trip route -->
+      <div class="w-[380px] bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-hidden">
+
+        <!-- Driver list -->
+        <div class="shrink-0 border-b border-slate-100">
+          <div class="px-4 pt-3 pb-1 flex items-center justify-between">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Drivers / Vehicles</span>
+            <span id="lmDriverCount" class="hidden text-[10px] font-mono text-slate-400"></span>
+          </div>
+          <div id="lmDriverList" class="overflow-y-auto max-h-52 scrollbar-hide">
+            <div class="p-5 text-center text-slate-300 text-xs">
+              <i class="fa-solid fa-users text-2xl mb-2 opacity-40 block"></i>
+              Load trips to see drivers
+            </div>
+          </div>
+        </div>
+
+        <!-- Route details panel -->
+        <div id="lmRoutePanelEmpty" class="flex-1 flex flex-col items-center justify-center text-slate-300 p-6">
+          <i class="fa-solid fa-route text-4xl mb-3 opacity-30"></i>
+          <p class="font-medium text-sm text-center">Select a driver to view their day's route</p>
+          <p class="text-xs mt-1 opacity-70 text-center">Routes use OpenStreetMap + OSRM (free)</p>
+        </div>
+
+        <div id="lmRoutePanel" class="hidden flex-1 flex flex-col overflow-hidden">
+          <!-- Driver / route header -->
+          <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/80 shrink-0">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div id="lmRoutePanelVehicle" class="font-bold text-slate-800 text-sm font-mono"></div>
+                <div id="lmRoutePanelDriver" class="text-xs text-slate-500 truncate"></div>
+              </div>
+              <div id="lmRouteSummary" class="shrink-0 text-right"></div>
+            </div>
+            <div id="lmRouteStatus" class="text-[11px] text-slate-400 mt-1.5 min-h-[14px]"></div>
+          </div>
+          <!-- Scrollable trip list -->
+          <div id="lmTripList" class="flex-1 overflow-y-auto scrollbar-hide"></div>
+        </div>
+
+      </div>
+
+      <!-- Map container -->
+      <div class="flex-1 relative">
+        <div id="lmMapContainer" class="absolute inset-0"></div>
+        <!-- Empty state (hidden once map initialises) -->
+        <div id="lmMapEmpty" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-100 pointer-events-none">
+          <i class="fa-solid fa-map text-5xl text-slate-300 mb-4"></i>
+          <p class="font-semibold text-slate-400">Select a date and click Load</p>
+          <p class="text-xs text-slate-400 mt-1 opacity-70">Powered by OpenStreetMap &amp; OSRM (100% free)</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <div id="tdDetailModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-white rounded-2xl w-full max-w-xl shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
       <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100 shrink-0">
@@ -616,9 +694,10 @@
   }
 
   window.switchView = (v) => {
-      ['inbox', 'contacts', 'triptexts', 'notifications', 'tripdata', 'shifts'].forEach(x => document.getElementById(`view-${x}`).classList.add('hidden'));
+      ['inbox', 'contacts', 'triptexts', 'notifications', 'tripdata', 'shifts', 'livemap'].forEach(x => document.getElementById(`view-${x}`).classList.add('hidden'));
       document.getElementById(`view-${v}`).classList.remove('hidden');
       if (v === 'shifts') window.loadShiftView();
+      if (v === 'livemap') window.initLiveMap();
       document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
       document.getElementById(`nav-${v}`).classList.add('active');
       if(v === 'contacts') { store.cmPage = 1; window.renderContactsManagerTable(); }
@@ -2561,6 +2640,329 @@ let activeReviewRegion = null;
         <td class="p-4 pr-6">${progressCell}</td>
       </tr>`;
     }).join("");
+  };
+
+  // ── Live Map & Routing ────────────────────────────────────────────────────
+
+  let lmTrips = [];
+  let lmDrivers = [];
+  let lmActiveDriverKey = null;
+  let lmMap = null;
+  let lmMarkers = [];
+  let lmRouteLayer = null;
+  let lmGeoCache = {};
+  let lmGeoQueue = [];
+  let lmGeoProcessing = false;
+
+  // Persist geocache in localStorage so repeated addresses skip the API
+  try { const c = localStorage.getItem('lmGeoCache'); if (c) lmGeoCache = JSON.parse(c); } catch(e) {}
+  function lmSaveGeoCache() { try { localStorage.setItem('lmGeoCache', JSON.stringify(lmGeoCache)); } catch(e) {} }
+
+  // Sequential rate-limited geocoding queue (Nominatim: max 1 req/sec)
+  async function lmProcessGeoQueue() {
+    if (lmGeoProcessing) return;
+    lmGeoProcessing = true;
+    while (lmGeoQueue.length > 0) {
+      const { address, resolve } = lmGeoQueue.shift();
+      if (lmGeoCache[address] !== undefined) { resolve(lmGeoCache[address]); continue; }
+      await new Promise(r => setTimeout(r, 1150));
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}`;
+        const res = await fetch(url, { headers: { 'Accept-Language': 'en', 'User-Agent': 'DispatchCommand/1.0' } });
+        const data = await res.json();
+        const result = (data && data[0]) ? { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) } : null;
+        lmGeoCache[address] = result;
+        lmSaveGeoCache();
+        resolve(result);
+      } catch(e) { lmGeoCache[address] = null; resolve(null); }
+    }
+    lmGeoProcessing = false;
+  }
+
+  function lmGeocodeAddress(address) {
+    if (lmGeoCache[address] !== undefined) return Promise.resolve(lmGeoCache[address]);
+    return new Promise(resolve => { lmGeoQueue.push({ address, resolve }); lmProcessGeoQueue(); });
+  }
+
+  // Initialise (or re-show) the Leaflet map
+  window.initLiveMap = () => {
+    if (!document.getElementById('lmDate').value) {
+      document.getElementById('lmDate').value = new Date().toISOString().split('T')[0];
+    }
+    if (lmMap) { setTimeout(() => lmMap.invalidateSize(), 50); return; }
+
+    lmMap = L.map('lmMapContainer', { zoomControl: true }).setView([44.0521, -123.0868], 11);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
+      maxZoom: 19
+    }).addTo(lmMap);
+    document.getElementById('lmMapEmpty').classList.add('hidden');
+  };
+
+  // Fetch trips from Supabase for the selected date
+  window.fetchLiveMapTrips = async () => {
+    const date = document.getElementById('lmDate').value;
+    if (!date) { window.showToast("Select a date first", "error"); return; }
+
+    const btn = document.getElementById('lmFetchBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Loading...';
+
+    try {
+      const { data, error } = await supabase.from("trips")
+        .select("*")
+        .eq("date", date)
+        .order("time", { ascending: true });
+      if (error) throw new Error(error.message);
+
+      lmTrips = (data || []).filter(t => t.pickup && t.dropoff);
+
+      // Group trips by vehicle_ref (fall back to driver_name)
+      const driverMap = {};
+      lmTrips.forEach(trip => {
+        const key = (trip.vehicle_ref || trip.driver_name || "unassigned").trim();
+        if (!driverMap[key]) driverMap[key] = { key, vehicle: trip.vehicle_ref || "", name: trip.driver_name || "Unassigned", trips: [] };
+        driverMap[key].trips.push({ ...trip });
+      });
+      lmDrivers = Object.values(driverMap).sort((a, b) => (a.vehicle || a.name).localeCompare(b.vehicle || b.name));
+
+      const cnt = document.getElementById('lmTripCount');
+      cnt.textContent = `${lmTrips.length} trips`;
+      cnt.classList.remove('hidden');
+      const dc = document.getElementById('lmDriverCount');
+      dc.textContent = `${lmDrivers.length} driver${lmDrivers.length !== 1 ? 's' : ''}`;
+      dc.classList.remove('hidden');
+
+      window.renderLmDriverList();
+
+      if (lmDrivers.length > 0) {
+        await window.selectLmDriver(lmDrivers[0].key);
+      } else {
+        window.showToast("No trips with pickup/dropoff found for " + date, "error");
+      }
+    } catch(e) {
+      window.showToast("Fetch failed: " + e.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-map-location-dot mr-1"></i>Load';
+    }
+  };
+
+  // Render the driver/vehicle list on the left
+  window.renderLmDriverList = () => {
+    const el = document.getElementById('lmDriverList');
+    if (lmDrivers.length === 0) {
+      el.innerHTML = `<div class="p-4 text-center text-slate-300 text-xs">No trips for this date</div>`;
+      return;
+    }
+    el.innerHTML = lmDrivers.map(d => {
+      const active = lmActiveDriverKey === d.key;
+      const safeKey = d.key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      return `<button onclick="window.selectLmDriver('${safeKey}')"
+        class="w-full text-left px-4 py-3 border-b border-slate-100 hover:bg-slate-50 transition ${active ? 'bg-blue-50 border-l-2 border-blue-500' : 'border-l-2 border-transparent'}">
+        <div class="flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="font-bold text-sm text-slate-800 font-mono">${d.vehicle || '—'}</div>
+            <div class="text-xs text-slate-400 truncate">${d.name}</div>
+          </div>
+          <span class="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full shrink-0">${d.trips.length} trip${d.trips.length !== 1 ? 's' : ''}</span>
+        </div>
+      </button>`;
+    }).join('');
+  };
+
+  // Select a driver and kick off geocoding + routing
+  window.selectLmDriver = async (key) => {
+    lmActiveDriverKey = key;
+    window.renderLmDriverList();
+    const driver = lmDrivers.find(d => d.key === key);
+    if (!driver) return;
+
+    document.getElementById('lmRoutePanelEmpty').classList.add('hidden');
+    document.getElementById('lmRoutePanel').classList.remove('hidden');
+    document.getElementById('lmRoutePanelVehicle').textContent = driver.vehicle || 'Unassigned';
+    document.getElementById('lmRoutePanelDriver').textContent = driver.name;
+    document.getElementById('lmRouteSummary').innerHTML = '';
+    document.getElementById('lmRouteStatus').innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1 text-blue-400"></i>Building route...';
+
+    window.renderLmTripList(driver);
+    await window.buildLmRoute(driver);
+  };
+
+  // Render the ordered trip list for a driver
+  window.renderLmTripList = (driver) => {
+    const el = document.getElementById('lmTripList');
+    const esc = s => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const safeKey = driver.key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+
+    if (driver.trips.length === 0) {
+      el.innerHTML = `<div class="p-6 text-center text-slate-300 text-xs">No trips</div>`;
+      return;
+    }
+
+    el.innerHTML = driver.trips.map((t, i) => {
+      const hasGeo = (lmGeoCache[t.pickup] || lmGeoCache[t.dropoff]) ? '' :
+        '<span class="text-[9px] text-amber-400 ml-1" title="Address not yet geocoded"><i class="fa-solid fa-location-question"></i></span>';
+      return `<div class="px-3 py-3 border-b border-slate-100 hover:bg-slate-50/80 transition cursor-pointer" onclick="window.lmZoomToTrip('${safeKey}', ${i})">
+        <div class="flex items-start gap-2">
+          <div class="flex flex-col items-center gap-0.5 shrink-0 mt-0.5">
+            <button onclick="event.stopPropagation();window.lmMoveTrip('${safeKey}',${i},-1)" class="text-slate-200 hover:text-slate-500 transition leading-none p-0.5"><i class="fa-solid fa-chevron-up text-[8px]"></i></button>
+            <button onclick="event.stopPropagation();window.lmMoveTrip('${safeKey}',${i},1)" class="text-slate-200 hover:text-slate-500 transition leading-none p-0.5"><i class="fa-solid fa-chevron-down text-[8px]"></i></button>
+          </div>
+          <div class="shrink-0 flex flex-col items-center gap-0.5 mt-0.5">
+            <div class="w-[22px] h-[22px] rounded-full bg-emerald-100 flex items-center justify-center text-[9px] font-bold text-emerald-700 border border-emerald-200">P${i+1}</div>
+            <div class="w-px h-2 bg-slate-200"></div>
+            <div class="w-[22px] h-[22px] rounded-full bg-rose-100 flex items-center justify-center text-[9px] font-bold text-rose-600 border border-rose-200">D${i+1}</div>
+          </div>
+          <div class="flex-1 min-w-0 ml-0.5">
+            <div class="flex items-center justify-between mb-0.5">
+              <span class="text-xs font-bold text-slate-700 font-mono">${esc(t.time || '?')}</span>
+              ${t.site_ref ? `<span class="text-[9px] text-slate-400 font-mono bg-slate-100 px-1.5 py-0.5 rounded">${esc(t.site_ref)}</span>` : ''}
+            </div>
+            <div class="text-xs font-semibold text-slate-800 truncate">${esc(t.passenger || '—')}${hasGeo}</div>
+            <div class="text-[10px] text-emerald-700 truncate mt-0.5"><i class="fa-solid fa-circle-dot text-[7px] mr-0.5 opacity-70"></i>${esc(t.pickup)}</div>
+            <div class="text-[10px] text-rose-600 truncate"><i class="fa-solid fa-location-dot text-[7px] mr-0.5 opacity-70"></i>${esc(t.dropoff)}</div>
+            ${t.notes ? `<div class="text-[9px] text-slate-400 truncate mt-0.5 italic">${esc(t.notes)}</div>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  };
+
+  // Move a trip up or down in the order, then rebuild route
+  window.lmMoveTrip = async (driverKey, index, direction) => {
+    const driver = lmDrivers.find(d => d.key === driverKey);
+    if (!driver) return;
+    const newIdx = index + direction;
+    if (newIdx < 0 || newIdx >= driver.trips.length) return;
+    [driver.trips[index], driver.trips[newIdx]] = [driver.trips[newIdx], driver.trips[index]];
+    window.renderLmTripList(driver);
+    await window.buildLmRoute(driver);
+  };
+
+  // Pan/zoom to a trip's pickup on the map
+  window.lmZoomToTrip = (driverKey, index) => {
+    const driver = lmDrivers.find(d => d.key === driverKey);
+    if (!driver || !lmMap) return;
+    const trip = driver.trips[index];
+    const coord = lmGeoCache[trip.pickup] || lmGeoCache[trip.dropoff];
+    if (coord) lmMap.setView([coord.lat, coord.lon], 15);
+  };
+
+  // Geocode all stops, draw markers + OSRM route for a driver
+  window.buildLmRoute = async (driver) => {
+    if (!lmMap) return;
+
+    // Clear previous layers
+    lmMarkers.forEach(m => { try { lmMap.removeLayer(m); } catch(e) {} });
+    lmMarkers = [];
+    if (lmRouteLayer) { try { lmMap.removeLayer(lmRouteLayer); } catch(e) {} lmRouteLayer = null; }
+
+    const trips = driver.trips;
+    const statusEl = document.getElementById('lmRouteStatus');
+
+    // Collect unique addresses not yet in cache
+    const uniqueAddrs = [...new Set(trips.flatMap(t => [t.pickup, t.dropoff]).filter(Boolean))];
+    const toGeocode = uniqueAddrs.filter(a => lmGeoCache[a] === undefined);
+
+    if (toGeocode.length > 0) {
+      statusEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1 text-blue-400"></i>Geocoding addresses (${toGeocode.length} new)...`;
+    }
+
+    let geocodedCount = 0;
+    for (const addr of uniqueAddrs) {
+      if (lmGeoCache[addr] === undefined) {
+        geocodedCount++;
+        statusEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1 text-blue-400"></i>Geocoding ${geocodedCount}/${toGeocode.length}...`;
+      }
+      await lmGeocodeAddress(addr);
+    }
+
+    // Re-render trip list now geocache is populated (shows/hides ? icons)
+    window.renderLmTripList(driver);
+
+    // Build ordered stop list: pickup₁, dropoff₁, pickup₂, dropoff₂ …
+    const stops = [];
+    trips.forEach((t, i) => {
+      const pu = lmGeoCache[t.pickup];
+      const dr = lmGeoCache[t.dropoff];
+      if (pu) stops.push({ type: 'pickup',  trip: t, idx: i, coords: pu });
+      if (dr) stops.push({ type: 'dropoff', trip: t, idx: i, coords: dr });
+    });
+
+    if (stops.length === 0) {
+      statusEl.innerHTML = '<i class="fa-solid fa-circle-exclamation mr-1 text-rose-400"></i>No addresses could be geocoded';
+      return;
+    }
+
+    // Add Leaflet markers
+    stops.forEach(stop => {
+      const isPickup = stop.type === 'pickup';
+      const num = stop.idx + 1;
+      const bg = isPickup ? '#10b981' : '#ef4444';
+      const label = isPickup ? `P${num}` : `D${num}`;
+      const icon = L.divIcon({
+        html: `<div style="background:${bg};width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);cursor:pointer">${label}</div>`,
+        className: '', iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -14]
+      });
+      const esc = s => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const addr = isPickup ? stop.trip.pickup : stop.trip.dropoff;
+      const popup = `<div style="font-size:12px;line-height:1.5;min-width:170px">
+        <span style="color:${bg};font-weight:700">${label} — ${isPickup ? 'Pickup' : 'Dropoff'}</span><br>
+        <b>${esc(stop.trip.passenger || '—')}</b><br>
+        <span style="color:#475569">${esc(addr)}</span><br>
+        <span style="color:#94a3b8;font-size:10px">${esc(stop.trip.time || '')}${stop.trip.site_ref ? ' &nbsp;·&nbsp; ' + esc(stop.trip.site_ref) : ''}</span>
+      </div>`;
+      const marker = L.marker([stop.coords.lat, stop.coords.lon], { icon }).addTo(lmMap).bindPopup(popup);
+      lmMarkers.push(marker);
+    });
+
+    // Fit map to markers immediately while route loads
+    try {
+      const group = new L.featureGroup(lmMarkers);
+      lmMap.fitBounds(group.getBounds().pad(0.15));
+    } catch(e) {}
+
+    if (stops.length < 2) {
+      statusEl.innerHTML = '<i class="fa-solid fa-circle-check mr-1 text-emerald-500"></i>Address located';
+      return;
+    }
+
+    // OSRM route request — public demo server, free, no key needed
+    statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1 text-blue-400"></i>Calculating road route...';
+    try {
+      // OSRM demo server handles up to ~100 waypoints; chunk if needed
+      const MAX_WP = 100;
+      const coords = stops.slice(0, MAX_WP).map(s => `${s.coords.lon},${s.coords.lat}`).join(';');
+      const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      const json = await res.json();
+
+      if (json.code === 'Ok' && json.routes && json.routes[0]) {
+        const route = json.routes[0];
+        lmRouteLayer = L.geoJSON(route.geometry, {
+          style: { color: '#3b82f6', weight: 4, opacity: 0.85 }
+        }).addTo(lmMap);
+
+        const distMi  = (route.distance / 1609.34).toFixed(1);
+        const durMin  = Math.round(route.duration / 60);
+        const h = Math.floor(durMin / 60), m = durMin % 60;
+        const durStr  = h > 0 ? `${h}h ${m}m` : `${m}m`;
+        const truncNote = stops.length < trips.length * 2 ? ' <span style="color:#f59e0b">⚠ some addresses unresolved</span>' : '';
+
+        statusEl.innerHTML = `<i class="fa-solid fa-circle-check mr-1 text-emerald-500"></i>Route ready${truncNote}`;
+        document.getElementById('lmRouteSummary').innerHTML = `
+          <div class="flex gap-3 text-xs">
+            <span><b class="text-slate-700">${trips.length}</b><span class="text-slate-400 ml-0.5">trips</span></span>
+            <span><b class="text-slate-700">${distMi}</b><span class="text-slate-400 ml-0.5">mi</span></span>
+            <span><b class="text-slate-700">${durStr}</b><span class="text-slate-400 ml-0.5">drive</span></span>
+          </div>`;
+      } else {
+        statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1 text-amber-400"></i>Road routing unavailable — markers shown';
+      }
+    } catch(e) {
+      statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1 text-amber-400"></i>Routing failed — markers shown';
+    }
   };
 </script>
 </body>
