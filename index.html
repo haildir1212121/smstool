@@ -31,6 +31,7 @@
   <body class="h-screen w-full flex text-slate-800 bg-slate-50">
 
   <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3"></audio>
+  <audio id="notifTripSound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
 
   <nav class="w-[64px] bg-slate-900 flex flex-col items-center py-4 z-50 shrink-0 shadow-xl">
     <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg mb-6 shadow-lg shadow-blue-900/50">D</div>
@@ -156,6 +157,13 @@
             <div><div class="font-bold text-sm text-slate-800">Message Sounds</div><div class="text-[10px] text-slate-500">New SMS & Alerts</div></div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" id="soundToggleMsgs" class="sr-only peer" onchange="window.toggleSound('msgs')">
+              <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+          <div class="flex items-center justify-between">
+            <div><div class="font-bold text-sm text-slate-800">Trip Sounds</div><div class="text-[10px] text-slate-500">Designations & updates</div></div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="soundToggleTrips" class="sr-only peer" onchange="window.toggleSound('trips')">
               <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
@@ -2173,13 +2181,24 @@ let activeReviewRegion = null;
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'trips' }, payload => {
          const updatedTrip = payload.new;
-         
-         const tzOffset = (new Date()).getTimezoneOffset() * 60000;
-         const todayStr = new Date(Date.now() - tzOffset).toISOString().split('T')[0];
 
-         // Only refresh the table if a FUTURE trip is updated
-         if (!updatedTrip.date || updatedTrip.date <= todayStr) return;
+         // Determine what changed and build an appropriate label
+         const oldVehicle = (payload.old?.vehicle_ref || "").trim();
+         const newVehicle = (updatedTrip.vehicle_ref || "").trim();
+         let toastLabel;
+         if (!oldVehicle && newVehicle) {
+           toastLabel = `Trip Designated — Vehicle ${newVehicle}`;
+         } else if (oldVehicle && !newVehicle) {
+           toastLabel = `Trip Undesignated — Vehicle ${oldVehicle}`;
+         } else {
+           const vRef = newVehicle || oldVehicle;
+           toastLabel = vRef ? `Trip Updated — Vehicle ${vRef}` : "Trip Updated";
+         }
 
+         window.showToast(toastLabel);
+         if (soundPrefs.trips) document.getElementById("notifTripSound")?.play().catch(() => {});
+
+         // Silently refresh trip data view if open
          if (!document.getElementById("view-tripdata").classList.contains("hidden")) {
             window.fetchTripData(true);
         }
