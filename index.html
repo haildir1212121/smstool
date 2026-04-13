@@ -420,10 +420,12 @@
         <span id="shiftRowCount" class="text-xs font-mono bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold hidden">0 shifts</span>
       </div>
       <div class="flex gap-3 items-center">
-        <div id="shiftCurrentDateBadge" class="bg-slate-100 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-600">Today</div>
+        <input id="shiftDateFrom" type="date" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 outline-none">
+        <span class="text-xs text-slate-400 font-bold">to</span>
+        <input id="shiftDateTo" type="date" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 outline-none">
         <input id="shiftDriverSearch" type="text" placeholder="Filter by driver..." class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600 outline-none w-44" oninput="window.renderShiftTable()">
         <button onclick="window.loadShifts()" id="shiftFetchBtn" class="px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-bold hover:bg-amber-600 transition shadow-sm">
-          <i class="fa-solid fa-arrows-rotate mr-1"></i>Refresh
+          <i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch
         </button>
       </div>
     </div>
@@ -443,9 +445,9 @@
           </thead>
           <tbody id="shiftTableBody" class="divide-y divide-gray-100"></tbody>
         </table>
-      <div id="shiftEmptyState" class="flex flex-col items-center justify-center py-16 text-slate-300">
+        <div id="shiftEmptyState" class="flex flex-col items-center justify-center py-16 text-slate-300">
           <i class="fa-solid fa-user-clock text-4xl mb-3 opacity-40"></i>
-          <p class="font-medium text-sm">No shifts recorded for today yet</p>
+          <p class="font-medium text-sm">Select a date range and click Fetch</p>
           <p class="text-xs text-slate-400 mt-1">Shows clock-in / clock-out times recorded via iCabbi</p>
         </div>
       </div>
@@ -2434,31 +2436,37 @@ let activeReviewRegion = null;
   };
 
   window.loadShiftView = () => {
-   const today = new Date();
-    const dateStr = today.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-    const badge = document.getElementById("shiftCurrentDateBadge");
-    if (badge) badge.innerText = `Today, ${dateStr}`;
+    const today = new Date();
+    const from  = new Date(today); from.setDate(from.getDate() - 6);
+    if (!document.getElementById("shiftDateFrom").value) document.getElementById("shiftDateFrom").value = shiftFmtDate(from);
+    if (!document.getElementById("shiftDateTo").value)   document.getElementById("shiftDateTo").value   = shiftFmtDate(today);
     window.loadShifts();
   };
 
   // Silent background re-fetch (no button state change) for auto-refresh
- async function silentRefreshShifts() {
+  async function silentRefreshShifts() {
     if (document.getElementById("view-shifts").classList.contains("hidden")) {
       clearInterval(shiftLiveTimer); shiftLiveTimer = null; return;
     }
-    const today = shiftFmtDate(new Date());
+    const from = document.getElementById("shiftDateFrom").value;
+    const to   = document.getElementById("shiftDateTo").value;
+    if (!from || !to) return;
     try {
       const { data: rows, error } = await supabase
         .from("driver_shifts")
         .select("id, vehicle_ref, driver_name, date, signed_in_at, signed_out_at, total_hours_min, is_late, late_by_min, scheduled_signin")
-        .eq("date", today)
+        .gte("date", from)
+        .lte("date", to)
+        .order("date", { ascending: true })
         .order("signed_in_at", { ascending: true });
       if (!error) { shiftData = rows || []; window.renderShiftTable(); }
     } catch (e) { /* silent */ }
   }
 
   window.loadShifts = async () => {
-    const today = shiftFmtDate(new Date());
+    const from = document.getElementById("shiftDateFrom").value;
+    const to   = document.getElementById("shiftDateTo").value;
+    if (!from || !to) return;
 
     const btn = document.getElementById("shiftFetchBtn");
     btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>Loading`;
@@ -2469,7 +2477,9 @@ let activeReviewRegion = null;
       const { data: rows, error } = await supabase
         .from("driver_shifts")
         .select("id, vehicle_ref, driver_name, date, signed_in_at, signed_out_at, total_hours_min, is_late, late_by_min, scheduled_signin")
-        .eq("date", today)
+        .gte("date", from)
+        .lte("date", to)
+        .order("date", { ascending: true })
         .order("signed_in_at", { ascending: true });
 
       if (error) throw new Error(error.message);
@@ -2478,14 +2488,9 @@ let activeReviewRegion = null;
       shiftData = [];
       window.showToast("Could not load shift data: " + e.message, "error");
     } finally {
-      btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-arrows-rotate mr-1"></i>Refresh`;
+      btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch`;
     }
 
-    window.renderShiftTable();
-
-    // Re-fetch from Supabase every 60s while view is open
-    shiftLiveTimer = setInterval(silentRefreshShifts, 60000);
-  };
     window.renderShiftTable();
 
     // Re-fetch from Supabase every 60s while view is open
