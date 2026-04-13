@@ -2715,9 +2715,10 @@ let activeReviewRegion = null;
         .order("time", { ascending: true });
       if (error) throw new Error(error.message);
 
-      lmTrips = (data || []).filter(t => t.pickup && t.dropoff);
+      // Load ALL trips for the date — missing addresses are handled during geocoding
+      lmTrips = data || [];
 
-      // Group trips by vehicle_ref (fall back to driver_name)
+      // Group trips by vehicle_ref (fall back to driver_name, then "unassigned")
       const driverMap = {};
       lmTrips.forEach(trip => {
         const key = (trip.vehicle_ref || trip.driver_name || "unassigned").trim();
@@ -2726,8 +2727,9 @@ let activeReviewRegion = null;
       });
       lmDrivers = Object.values(driverMap).sort((a, b) => (a.vehicle || a.name).localeCompare(b.vehicle || b.name));
 
+      const withAddrs = lmTrips.filter(t => t.pickup || t.dropoff).length;
       const cnt = document.getElementById('lmTripCount');
-      cnt.textContent = `${lmTrips.length} trips`;
+      cnt.textContent = `${lmTrips.length} trips (${withAddrs} with addresses)`;
       cnt.classList.remove('hidden');
       const dc = document.getElementById('lmDriverCount');
       dc.textContent = `${lmDrivers.length} driver${lmDrivers.length !== 1 ? 's' : ''}`;
@@ -2738,7 +2740,7 @@ let activeReviewRegion = null;
       if (lmDrivers.length > 0) {
         await window.selectLmDriver(lmDrivers[0].key);
       } else {
-        window.showToast("No trips with pickup/dropoff found for " + date, "error");
+        window.showToast("No trips found for " + date, "error");
       }
     } catch(e) {
       window.showToast("Fetch failed: " + e.message, "error");
@@ -2861,8 +2863,9 @@ let activeReviewRegion = null;
     const trips = driver.trips;
     const statusEl = document.getElementById('lmRouteStatus');
 
-    // Collect unique addresses not yet in cache
-    const uniqueAddrs = [...new Set(trips.flatMap(t => [t.pickup, t.dropoff]).filter(Boolean))];
+    // Collect unique addresses not yet in cache; skip blanks and the literal "Unknown" fallback
+    const BAD_ADDRS = new Set(["", "unknown", "Unknown"]);
+    const uniqueAddrs = [...new Set(trips.flatMap(t => [t.pickup, t.dropoff]).filter(a => a && !BAD_ADDRS.has(a)))];
     const toGeocode = uniqueAddrs.filter(a => lmGeoCache[a] === undefined);
 
     if (toGeocode.length > 0) {
@@ -2884,14 +2887,17 @@ let activeReviewRegion = null;
     // Build ordered stop list: pickup₁, dropoff₁, pickup₂, dropoff₂ …
     const stops = [];
     trips.forEach((t, i) => {
-      const pu = lmGeoCache[t.pickup];
-      const dr = lmGeoCache[t.dropoff];
+      const pu = t.pickup && !BAD_ADDRS.has(t.pickup) ? lmGeoCache[t.pickup] : null;
+      const dr = t.dropoff && !BAD_ADDRS.has(t.dropoff) ? lmGeoCache[t.dropoff] : null;
       if (pu) stops.push({ type: 'pickup',  trip: t, idx: i, coords: pu });
       if (dr) stops.push({ type: 'dropoff', trip: t, idx: i, coords: dr });
     });
 
     if (stops.length === 0) {
-      statusEl.innerHTML = '<i class="fa-solid fa-circle-exclamation mr-1 text-rose-400"></i>No addresses could be geocoded';
+      const hasAnyAddr = trips.some(t => t.pickup && !BAD_ADDRS.has(t.pickup) || t.dropoff && !BAD_ADDRS.has(t.dropoff));
+      statusEl.innerHTML = hasAnyAddr
+        ? '<i class="fa-solid fa-circle-exclamation mr-1 text-rose-400"></i>Addresses found but could not be geocoded'
+        : '<i class="fa-solid fa-circle-exclamation mr-1 text-amber-400"></i>No address data on these trips yet';
       return;
     }
 
