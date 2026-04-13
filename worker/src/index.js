@@ -674,20 +674,6 @@ async function handleFleetioWebhook(request, env) {
   };
   await supabaseUpsertTrip(env, localTrip);
 
-  await writeNotificationToFirestore(env, {
-    type: "trip_created",
-    title: tripName,
-    message: tripCreated
-      ? `Auto-created trip for ${contact.name}. Vehicle: ${issue.vehicleRef}.`
-      : `Trip prepared for ${contact.name}. iCabbi API Error: ${icabbiResult?.error}.`,
-    vehicleRef: issue.vehicleRef || "",
-    driverName: contact.name || issue.driverName,
-    driverPhone: contact.phone || "",
-    tripName: tripName,
-    repairShop: repairShop?.shopName || pickupAddress || "",
-    pipelineSteps: [{ label: "Issue Reported", status: "done" }, { label: "Driver Match", status: "done" }, { label: "Trip Creation", status: tripCreated ? "done" : "pending" }, { label: "Notification", status: "done" }]
-  });
-
   return jsonResponse({ ok: true, tripCreated, tripName, driverName: contact.name, vehicleRef: issue.vehicleRef });
 }
 

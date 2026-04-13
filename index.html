@@ -31,8 +31,6 @@
   <body class="h-screen w-full flex text-slate-800 bg-slate-50">
 
   <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3"></audio>
-  
-  <audio id="notifTripSound" src="https://residence-lescale.fr/wp-content/plugins/youzify/includes/public/assets/youzify-notification-sound.ogg"></audio>
 
   <nav class="w-[64px] bg-slate-900 flex flex-col items-center py-4 z-50 shrink-0 shadow-xl">
     <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg mb-6 shadow-lg shadow-blue-900/50">D</div>
@@ -158,13 +156,6 @@
             <div><div class="font-bold text-sm text-slate-800">Message Sounds</div><div class="text-[10px] text-slate-500">New SMS & Alerts</div></div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" id="soundToggleMsgs" class="sr-only peer" onchange="window.toggleSound('msgs')">
-              <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-            </label>
-          </div>
-          <div class="flex items-center justify-between">
-            <div><div class="font-bold text-sm text-slate-800">Trip Sounds</div><div class="text-[10px] text-slate-500">Live Trip Assignments</div></div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" id="soundToggleTrips" class="sr-only peer" onchange="window.toggleSound('trips')">
               <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
@@ -334,7 +325,6 @@
           <option value="all">All Types</option>
           <option value="vehicle_alert">Vehicle Alerts</option>
           <option value="fleetio_issue">Fleetio Issues</option>
-          <option value="trip_created">Auto-Created Trips</option>
           <option value="late_signin">Late Sign-Ins</option>
           <option value="long_shift">Long Shifts</option>
         </select>
@@ -356,10 +346,6 @@
         <div class="bg-white border border-slate-200 rounded-xl px-5 py-4 flex items-center gap-4 shadow-sm">
           <div class="w-11 h-11 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-lg"><i class="fa-solid fa-wrench"></i></div>
           <div><div class="text-xs text-slate-400 font-semibold">Fleetio Issues</div><div id="notifFleetioCount" class="text-2xl font-bold text-slate-800">0</div></div>
-        </div>
-        <div class="bg-white border border-slate-200 rounded-xl px-5 py-4 flex items-center gap-4 shadow-sm">
-          <div class="w-11 h-11 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg"><i class="fa-solid fa-route"></i></div>
-          <div><div class="text-xs text-slate-400 font-semibold">Auto Trips Created</div><div id="notifTripCount" class="text-2xl font-bold text-slate-800">0</div></div>
         </div>
       </div>
       <div id="notifFeed" class="max-w-5xl mx-auto space-y-3">
@@ -1883,25 +1869,17 @@ let activeReviewRegion = null;
 
     const vehicleCount = store.notifications.filter(n => n.type === "vehicle_alert").length;
     const fleetioCount = store.notifications.filter(n => n.type === "fleetio_issue").length;
-    const tripCount = store.notifications.filter(n => n.type === "trip_created").length;
     document.getElementById("notifVehicleCount").textContent = vehicleCount;
     document.getElementById("notifFleetioCount").textContent = fleetioCount;
-    document.getElementById("notifTripCount").textContent = tripCount;
     document.getElementById("notifCenterCount").textContent = `${store.notifications.filter(n => !n.read).length} active`;
 
-    const activeAlerts = store.notifications.filter(n => !n.read && (n.type === "fleetio_issue" || n.type === "trip_created"));
+    const activeAlerts = store.notifications.filter(n => !n.read && n.type === "fleetio_issue");
     const alertsEl = document.getElementById("notifActiveAlerts");
     if (activeAlerts.length > 0) {
       alertsEl.innerHTML = activeAlerts.slice(0, 5).map(n => {
-        const icon = n.type === "trip_created"
-          ? '<i class="fa-solid fa-route text-emerald-600"></i>'
-          : '<i class="fa-solid fa-wrench text-orange-600"></i>';
-        const bgClass = n.type === "trip_created"
-          ? 'bg-emerald-50 border-emerald-300 border-l-4 border-l-emerald-500'
-          : 'bg-orange-50 border-orange-300 border-l-4 border-l-orange-500';
         const ts = n.createdAt?.toMillis ? new Date(n.createdAt.toMillis()).toLocaleString() : "Just now";
-        return `<div class="${bgClass} rounded-xl p-4 flex items-start gap-4 shadow-sm">
-          <div class="w-10 h-10 rounded-full ${n.type === 'trip_created' ? 'bg-emerald-100' : 'bg-orange-100'} flex items-center justify-center text-lg shrink-0">${icon}</div>
+        return `<div class="bg-orange-50 border-orange-300 border-l-4 border-l-orange-500 rounded-xl p-4 flex items-start gap-4 shadow-sm">
+          <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-lg shrink-0"><i class="fa-solid fa-wrench text-orange-600"></i></div>
           <div class="flex-1 min-w-0">
             <div class="flex justify-between items-start">
               <div class="font-bold text-sm text-slate-800">${escapeHtml(n.title || n.type)}</div>
@@ -1937,9 +1915,6 @@ let activeReviewRegion = null;
           break;
         case "fleetio_issue":
           typeConfig = { icon: "fa-wrench", iconBg: "bg-orange-100 text-orange-600", badge: "bg-orange-100 text-orange-700 border-orange-200", label: "FLEETIO ISSUE", cardBorder: n.read ? "" : "border-l-4 border-l-orange-400" };
-          break;
-        case "trip_created":
-          typeConfig = { icon: "fa-route", iconBg: "bg-emerald-100 text-emerald-600", badge: "bg-emerald-100 text-emerald-700 border-emerald-200", label: "TRIP CREATED", cardBorder: n.read ? "" : "border-l-4 border-l-emerald-400" };
           break;
         case "late_signin":
           typeConfig = { icon: "fa-clock", iconBg: "bg-amber-100 text-amber-600", badge: "bg-amber-100 text-amber-700 border-amber-200", label: "LATE SIGN-IN", cardBorder: n.read ? "" : "border-l-4 border-l-amber-400" };
@@ -2176,17 +2151,8 @@ let activeReviewRegion = null;
             return; 
         }
 
-        // 3. Process Future Trips Only
+        // 3. Process Future Trips Only — silently refresh the trip data view if open
         console.log("🟢 NEW FUTURE TRIP INSERTED VIA WEBHOOK:", newTrip);
-        
-        // --- NEW: Play the distinct trip sound ---
-        document.getElementById("notifTripSound")?.play().catch(e => {
-            console.warn("🔇 Browser blocked audio autoplay. You must click somewhere on the page first.", e);
-        });
-        
-        window.showToast(`Live update: Future trip logged for ${newTrip.date}`);
-
-        // Silently refresh the UI if the user is currently looking at the Trip Data page
         if (!document.getElementById("view-tripdata").classList.contains("hidden")) {
             window.fetchTripData(true);
         }
