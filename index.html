@@ -508,7 +508,10 @@
                 <div id="lmRoutePanelVehicle" class="font-bold text-slate-800 text-sm font-mono"></div>
                 <div id="lmRoutePanelDriver" class="text-xs text-slate-500 truncate"></div>
               </div>
-              <div id="lmRouteSummary" class="shrink-0 text-right"></div>
+              <div class="shrink-0 flex flex-col items-end gap-1">
+                <div id="lmRouteSummary" class="text-right"></div>
+                <button id="lmResortBtn" onclick="window.lmResort()" class="hidden text-[10px] font-bold text-blue-600 hover:text-blue-800 transition flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-full"><i class="fa-solid fa-wand-magic-sparkles text-[8px]"></i>Re-sort</button>
+              </div>
             </div>
             <div id="lmRouteStatus" class="text-[11px] text-slate-400 mt-1.5 min-h-[14px]"></div>
           </div>
@@ -2780,19 +2783,25 @@ let activeReviewRegion = null;
     const driver = lmDrivers.find(d => d.key === key);
     if (!driver) return;
 
+    // Reset sort flag so auto-sort runs fresh for this driver selection
+    driver._autoSorted = false;
+    driver._gaps = {};
+
     document.getElementById('lmRoutePanelEmpty').classList.add('hidden');
     document.getElementById('lmRoutePanel').classList.remove('hidden');
     document.getElementById('lmRoutePanelVehicle').textContent = driver.vehicle || 'Unassigned';
     document.getElementById('lmRoutePanelDriver').textContent = driver.name;
     document.getElementById('lmRouteSummary').innerHTML = '';
     document.getElementById('lmRouteStatus').innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1 text-blue-400"></i>Building route...';
+    document.getElementById('lmResortBtn').classList.add('hidden');
 
     window.renderLmTripList(driver);
     await window.buildLmRoute(driver);
   };
 
-  // Render the ordered trip list for a driver
-  window.renderLmTripList = (driver) => {
+  // Render the ordered trip list for a driver.
+  // gaps = { [tripIdx]: { secs, mi } } — dead-head data from OSRM legs
+  window.renderLmTripList = (driver, gaps = {}) => {
     const el = document.getElementById('lmTripList');
     const esc = s => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const safeKey = driver.key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
@@ -2802,42 +2811,82 @@ let activeReviewRegion = null;
       return;
     }
 
-    el.innerHTML = driver.trips.map((t, i) => {
+    const parts = [];
+    driver.trips.forEach((t, i) => {
+      // ── Dead-head connector between trips ──────────────────────────────
+      if (i > 0) {
+        const gap = gaps[i];
+        if (gap) {
+          const gapMin  = Math.round(gap.secs / 60);
+          const gapStr  = gapMin < 60 ? `${gapMin} min` : `${Math.floor(gapMin/60)}h ${gapMin%60}m`;
+          const mi      = parseFloat(gap.mi);
+          const urgency = mi > 15 ? 'text-rose-500' : mi > 7 ? 'text-amber-500' : 'text-slate-400';
+          parts.push(`
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-50/60 border-b border-slate-100">
+              <div class="w-[38px] shrink-0 flex justify-center">
+                <div class="w-px h-5 border-l-2 border-dashed border-slate-200"></div>
+              </div>
+              <div class="flex-1 flex items-center gap-1.5">
+                <div class="flex-1 border-t border-dashed border-slate-200"></div>
+                <span class="text-[9px] font-bold ${urgency} whitespace-nowrap shrink-0 flex items-center gap-1">
+                  <i class="fa-solid fa-car-side text-[8px]"></i>${gap.mi} mi &nbsp;·&nbsp; ${gapStr} to next pickup
+                </span>
+                <div class="flex-1 border-t border-dashed border-slate-200"></div>
+              </div>
+            </div>`);
+        } else {
+          // No gap data yet — show a simple divider arrow
+          parts.push(`
+            <div class="flex items-center px-3 py-1 bg-slate-50/30 border-b border-slate-100">
+              <div class="w-[38px] shrink-0 flex justify-center">
+                <div class="w-px h-3 border-l border-dashed border-slate-200"></div>
+              </div>
+            </div>`);
+        }
+      }
+
+      // ── Trip card ──────────────────────────────────────────────────────
       const hasGeo = (lmGeoCache[t.pickup] || lmGeoCache[t.dropoff]) ? '' :
-        '<span class="text-[9px] text-amber-400 ml-1" title="Address not yet geocoded"><i class="fa-solid fa-location-question"></i></span>';
-      return `<div class="px-3 py-3 border-b border-slate-100 hover:bg-slate-50/80 transition cursor-pointer" onclick="window.lmZoomToTrip('${safeKey}', ${i})">
-        <div class="flex items-start gap-2">
-          <div class="flex flex-col items-center gap-0.5 shrink-0 mt-0.5">
-            <button onclick="event.stopPropagation();window.lmMoveTrip('${safeKey}',${i},-1)" class="text-slate-200 hover:text-slate-500 transition leading-none p-0.5"><i class="fa-solid fa-chevron-up text-[8px]"></i></button>
-            <button onclick="event.stopPropagation();window.lmMoveTrip('${safeKey}',${i},1)" class="text-slate-200 hover:text-slate-500 transition leading-none p-0.5"><i class="fa-solid fa-chevron-down text-[8px]"></i></button>
-          </div>
-          <div class="shrink-0 flex flex-col items-center gap-0.5 mt-0.5">
-            <div class="w-[22px] h-[22px] rounded-full bg-emerald-100 flex items-center justify-center text-[9px] font-bold text-emerald-700 border border-emerald-200">P${i+1}</div>
-            <div class="w-px h-2 bg-slate-200"></div>
-            <div class="w-[22px] h-[22px] rounded-full bg-rose-100 flex items-center justify-center text-[9px] font-bold text-rose-600 border border-rose-200">D${i+1}</div>
-          </div>
-          <div class="flex-1 min-w-0 ml-0.5">
-            <div class="flex items-center justify-between mb-0.5">
-              <span class="text-xs font-bold text-slate-700 font-mono">${esc(t.time || '?')}</span>
-              ${t.site_ref ? `<span class="text-[9px] text-slate-400 font-mono bg-slate-100 px-1.5 py-0.5 rounded">${esc(t.site_ref)}</span>` : ''}
+        '<span class="text-[9px] text-amber-400 ml-1" title="Address not geocoded"><i class="fa-solid fa-location-question"></i></span>';
+      parts.push(`
+        <div class="px-3 py-3 border-b border-slate-100 hover:bg-slate-50/80 transition cursor-pointer" onclick="window.lmZoomToTrip('${safeKey}', ${i})">
+          <div class="flex items-start gap-2">
+            <div class="flex flex-col items-center gap-0.5 shrink-0 mt-0.5">
+              <button onclick="event.stopPropagation();window.lmMoveTrip('${safeKey}',${i},-1)" class="text-slate-200 hover:text-slate-500 transition leading-none p-0.5"><i class="fa-solid fa-chevron-up text-[8px]"></i></button>
+              <button onclick="event.stopPropagation();window.lmMoveTrip('${safeKey}',${i},1)" class="text-slate-200 hover:text-slate-500 transition leading-none p-0.5"><i class="fa-solid fa-chevron-down text-[8px]"></i></button>
             </div>
-            <div class="text-xs font-semibold text-slate-800 truncate">${esc(t.passenger || '—')}${hasGeo}</div>
-            <div class="text-[10px] text-emerald-700 truncate mt-0.5"><i class="fa-solid fa-circle-dot text-[7px] mr-0.5 opacity-70"></i>${esc(t.pickup)}</div>
-            <div class="text-[10px] text-rose-600 truncate"><i class="fa-solid fa-location-dot text-[7px] mr-0.5 opacity-70"></i>${esc(t.dropoff)}</div>
-            ${t.notes ? `<div class="text-[9px] text-slate-400 truncate mt-0.5 italic">${esc(t.notes)}</div>` : ''}
+            <div class="shrink-0 flex flex-col items-center gap-0.5 mt-0.5">
+              <div class="w-[22px] h-[22px] rounded-full bg-emerald-100 flex items-center justify-center text-[9px] font-bold text-emerald-700 border border-emerald-200">P${i+1}</div>
+              <div class="w-px h-2 bg-slate-200"></div>
+              <div class="w-[22px] h-[22px] rounded-full bg-rose-100 flex items-center justify-center text-[9px] font-bold text-rose-600 border border-rose-200">D${i+1}</div>
+            </div>
+            <div class="flex-1 min-w-0 ml-0.5">
+              <div class="flex items-center justify-between mb-0.5">
+                <span class="text-xs font-bold text-slate-700 font-mono">${esc(t.time || '?')}</span>
+                ${t.site_ref ? `<span class="text-[9px] text-slate-400 font-mono bg-slate-100 px-1.5 py-0.5 rounded">${esc(t.site_ref)}</span>` : ''}
+              </div>
+              <div class="text-xs font-semibold text-slate-800 truncate">${esc(t.passenger || '—')}${hasGeo}</div>
+              <div class="text-[10px] text-emerald-700 truncate mt-0.5"><i class="fa-solid fa-circle-dot text-[7px] mr-0.5 opacity-70"></i>${esc(t.pickup)}</div>
+              <div class="text-[10px] text-rose-600 truncate"><i class="fa-solid fa-location-dot text-[7px] mr-0.5 opacity-70"></i>${esc(t.dropoff)}</div>
+              ${t.notes ? `<div class="text-[9px] text-slate-400 truncate mt-0.5 italic">${esc(t.notes)}</div>` : ''}
+            </div>
           </div>
-        </div>
-      </div>`;
-    }).join('');
+        </div>`);
+    });
+
+    el.innerHTML = parts.join('');
   };
 
-  // Move a trip up or down in the order, then rebuild route
+  // Move a trip up or down in the order, then rebuild route.
+  // Mark as manually sorted so auto-sort won't override the user's intent.
   window.lmMoveTrip = async (driverKey, index, direction) => {
     const driver = lmDrivers.find(d => d.key === driverKey);
     if (!driver) return;
     const newIdx = index + direction;
     if (newIdx < 0 || newIdx >= driver.trips.length) return;
     [driver.trips[index], driver.trips[newIdx]] = [driver.trips[newIdx], driver.trips[index]];
+    driver._autoSorted = true; // prevent auto-sort from overriding the manual change
+    driver._gaps = {};
     window.renderLmTripList(driver);
     await window.buildLmRoute(driver);
   };
@@ -2849,6 +2898,68 @@ let activeReviewRegion = null;
     const trip = driver.trips[index];
     const coord = lmGeoCache[trip.pickup] || lmGeoCache[trip.dropoff];
     if (coord) lmMap.setView([coord.lat, coord.lon], 15);
+  };
+
+  // ── Routing helpers ──────────────────────────────────────────────────────
+
+  // Haversine straight-line distance in miles between two lat/lon points
+  function haversine(lat1, lon1, lat2, lon2) {
+    const R = 3959, r = Math.PI / 180;
+    const dLat = (lat2 - lat1) * r, dLon = (lon2 - lon1) * r;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*r) * Math.cos(lat2*r) * Math.sin(dLon/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  // Nearest-neighbor auto-sort: first trip stays fixed; each subsequent stop
+  // is the unscheduled trip whose pickup is closest to the previous dropoff.
+  // Returns true if the order was changed.
+  function lmAutoSort(driver) {
+    const BAD = new Set(["", "unknown", "Unknown"]);
+    const trips = driver.trips;
+    if (trips.length <= 1) return false;
+
+    // Split into geocoded (have a resolvable pickup) and unresolvable
+    const geocoded = [], ungeo = [];
+    trips.forEach(t => {
+      const pu = t.pickup && !BAD.has(t.pickup) ? lmGeoCache[t.pickup] : null;
+      (pu ? geocoded : ungeo).push(t);
+    });
+    if (geocoded.length <= 1) return false;
+
+    // First trip is always locked
+    const first = geocoded.shift();
+    const ordered = [first];
+    const pool = [...geocoded];
+
+    // Start position = dropoff of first trip (fall back to its pickup)
+    const firstDr = first.dropoff && !BAD.has(first.dropoff) ? lmGeoCache[first.dropoff] : null;
+    let cur = firstDr || lmGeoCache[first.pickup];
+
+    while (pool.length > 0) {
+      let bestIdx = 0, bestDist = Infinity;
+      pool.forEach((t, i) => {
+        const pu = lmGeoCache[t.pickup];
+        if (!pu) return;
+        const d = haversine(cur.lat, cur.lon, pu.lat, pu.lon);
+        if (d < bestDist) { bestDist = d; bestIdx = i; }
+      });
+      const next = pool.splice(bestIdx, 1)[0];
+      ordered.push(next);
+      const dr = next.dropoff && !BAD.has(next.dropoff) ? lmGeoCache[next.dropoff] : null;
+      cur = dr || lmGeoCache[next.pickup];
+    }
+
+    driver.trips = [...ordered, ...ungeo];
+    return true;
+  }
+
+  // Re-sort button handler — resets the sort flag and rebuilds
+  window.lmResort = async () => {
+    const driver = lmDrivers.find(d => d.key === lmActiveDriverKey);
+    if (!driver) return;
+    driver._autoSorted = false;
+    document.getElementById('lmResortBtn').classList.add('hidden');
+    await window.buildLmRoute(driver);
   };
 
   // Geocode all stops, draw markers + OSRM route for a driver
@@ -2881,12 +2992,22 @@ let activeReviewRegion = null;
       await lmGeocodeAddress(addr);
     }
 
-    // Re-render trip list now geocache is populated (shows/hides ? icons)
+    // Auto-sort by proximity (nearest-neighbor from first trip's dropoff).
+    // Only runs once per driver selection; manual reorders are respected.
+    if (!driver._autoSorted) {
+      statusEl.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles mr-1 text-blue-400"></i>Optimising route order...';
+      const changed = lmAutoSort(driver);
+      driver._autoSorted = true;
+      if (changed) window.showToast('Route auto-sorted by proximity');
+      document.getElementById('lmResortBtn').classList.remove('hidden');
+    }
+
+    // Re-render trip list with the (potentially new) order before route draws
     window.renderLmTripList(driver);
 
     // Build ordered stop list: pickup₁, dropoff₁, pickup₂, dropoff₂ …
     const stops = [];
-    trips.forEach((t, i) => {
+    driver.trips.forEach((t, i) => {
       const pu = t.pickup && !BAD_ADDRS.has(t.pickup) ? lmGeoCache[t.pickup] : null;
       const dr = t.dropoff && !BAD_ADDRS.has(t.dropoff) ? lmGeoCache[t.dropoff] : null;
       if (pu) stops.push({ type: 'pickup',  trip: t, idx: i, coords: pu });
@@ -2950,19 +3071,41 @@ let activeReviewRegion = null;
           style: { color: '#3b82f6', weight: 4, opacity: 0.85 }
         }).addTo(lmMap);
 
-        const distMi  = (route.distance / 1609.34).toFixed(1);
-        const durMin  = Math.round(route.duration / 60);
+        // Extract dead-head gap times from OSRM legs.
+        // A "gap" is any leg that transitions from a dropoff of one trip
+        // to the pickup of a different (next) trip.
+        const gaps = {};
+        const legs = route.legs || [];
+        stops.forEach((stop, si) => {
+          if (si === 0) return;
+          const prev = stops[si - 1];
+          const leg  = legs[si - 1];
+          if (!leg) return;
+          if (prev.type === 'dropoff' && stop.type === 'pickup' && prev.idx !== stop.idx) {
+            gaps[stop.idx] = {
+              secs: Math.round(leg.duration),
+              mi:   (leg.distance / 1609.34).toFixed(1)
+            };
+          }
+        });
+        driver._gaps = gaps;
+
+        const distMi = (route.distance / 1609.34).toFixed(1);
+        const durMin = Math.round(route.duration / 60);
         const h = Math.floor(durMin / 60), m = durMin % 60;
-        const durStr  = h > 0 ? `${h}h ${m}m` : `${m}m`;
-        const truncNote = stops.length < trips.length * 2 ? ' <span style="color:#f59e0b">⚠ some addresses unresolved</span>' : '';
+        const durStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+        const truncNote = stops.length < driver.trips.length * 2 ? ' <span style="color:#f59e0b">⚠ some addresses unresolved</span>' : '';
 
         statusEl.innerHTML = `<i class="fa-solid fa-circle-check mr-1 text-emerald-500"></i>Route ready${truncNote}`;
         document.getElementById('lmRouteSummary').innerHTML = `
           <div class="flex gap-3 text-xs">
-            <span><b class="text-slate-700">${trips.length}</b><span class="text-slate-400 ml-0.5">trips</span></span>
+            <span><b class="text-slate-700">${driver.trips.length}</b><span class="text-slate-400 ml-0.5">trips</span></span>
             <span><b class="text-slate-700">${distMi}</b><span class="text-slate-400 ml-0.5">mi</span></span>
             <span><b class="text-slate-700">${durStr}</b><span class="text-slate-400 ml-0.5">drive</span></span>
           </div>`;
+
+        // Re-render trip list with gap connectors now that we have leg data
+        window.renderLmTripList(driver, gaps);
       } else {
         statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1 text-amber-400"></i>Road routing unavailable — markers shown';
       }
