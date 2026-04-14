@@ -2649,6 +2649,7 @@ let activeReviewRegion = null;
 
   let lmTrips = [];
   let lmDrivers = [];
+  let lmUnassignedTrips = []; // trips with no vehicle_ref — shared pool for routing
   let lmActiveDriverKey = null;
   let lmMap = null;
   let lmMarkers = [];
@@ -2720,22 +2721,33 @@ let activeReviewRegion = null;
 
       // Load ALL trips for the date — missing addresses are handled during geocoding
       lmTrips = data || [];
+      lmUnassignedTrips = [];
 
-      // Group trips by vehicle_ref (fall back to driver_name, then "unassigned")
+      // Group trips WITH a vehicle_ref into driver buckets.
+      // Trips with no vehicle_ref go into the shared unassigned pool.
       const driverMap = {};
       lmTrips.forEach(trip => {
-        const key = (trip.vehicle_ref || trip.driver_name || "unassigned").trim();
-        if (!driverMap[key]) driverMap[key] = { key, vehicle: trip.vehicle_ref || "", name: trip.driver_name || "Unassigned", trips: [] };
-        driverMap[key].trips.push({ ...trip });
+        const vRef = (trip.vehicle_ref || "").trim();
+        if (!vRef) {
+          lmUnassignedTrips.push({ ...trip, _fromUnassigned: true });
+          return;
+        }
+        if (!driverMap[vRef]) driverMap[vRef] = {
+          key: vRef, vehicle: vRef,
+          name: trip.driver_name || vRef,
+          trips: [], _assignedTrips: []
+        };
+        const t = { ...trip, _fromUnassigned: false };
+        driverMap[vRef].trips.push(t);
+        driverMap[vRef]._assignedTrips.push(t);
       });
-      lmDrivers = Object.values(driverMap).sort((a, b) => (a.vehicle || a.name).localeCompare(b.vehicle || b.name));
+      lmDrivers = Object.values(driverMap).sort((a, b) => a.vehicle.localeCompare(b.vehicle));
 
-      const withAddrs = lmTrips.filter(t => t.pickup || t.dropoff).length;
       const cnt = document.getElementById('lmTripCount');
-      cnt.textContent = `${lmTrips.length} trips (${withAddrs} with addresses)`;
+      cnt.textContent = `${lmTrips.length} trips · ${lmUnassignedTrips.length} unassigned`;
       cnt.classList.remove('hidden');
       const dc = document.getElementById('lmDriverCount');
-      dc.textContent = `${lmDrivers.length} driver${lmDrivers.length !== 1 ? 's' : ''}`;
+      dc.textContent = `${lmDrivers.length} vehicle${lmDrivers.length !== 1 ? 's' : ''}`;
       dc.classList.remove('hidden');
 
       window.renderLmDriverList();
@@ -2757,23 +2769,42 @@ let activeReviewRegion = null;
   window.renderLmDriverList = () => {
     const el = document.getElementById('lmDriverList');
     if (lmDrivers.length === 0) {
-      el.innerHTML = `<div class="p-4 text-center text-slate-300 text-xs">No trips for this date</div>`;
+      el.innerHTML = `<div class="p-4 text-center text-slate-300 text-xs">No assigned trips for this date</div>`;
       return;
     }
-    el.innerHTML = lmDrivers.map(d => {
+    const rows = lmDrivers.map(d => {
       const active = lmActiveDriverKey === d.key;
       const safeKey = d.key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      // Count how many unassigned trips were pulled into this driver's current route
+      const addedCount = d.trips.filter(t => t._fromUnassigned).length;
+      const addedBadge = addedCount > 0
+        ? `<span class="text-[9px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full shrink-0">+${addedCount} unassigned</span>`
+        : '';
       return `<button onclick="window.selectLmDriver('${safeKey}')"
         class="w-full text-left px-4 py-3 border-b border-slate-100 hover:bg-slate-50 transition ${active ? 'bg-blue-50 border-l-2 border-blue-500' : 'border-l-2 border-transparent'}">
         <div class="flex items-center justify-between gap-2">
           <div class="min-w-0">
-            <div class="font-bold text-sm text-slate-800 font-mono">${d.vehicle || '—'}</div>
+            <div class="font-bold text-sm text-slate-800 font-mono">${d.vehicle}</div>
             <div class="text-xs text-slate-400 truncate">${d.name}</div>
           </div>
-          <span class="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full shrink-0">${d.trips.length} trip${d.trips.length !== 1 ? 's' : ''}</span>
+          <div class="flex flex-col items-end gap-0.5 shrink-0">
+            <span class="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">${d._assignedTrips.length} assigned</span>
+            ${addedBadge}
+          </div>
         </div>
       </button>`;
-    }).join('');
+    });
+
+    // Unassigned pool indicator at the bottom
+    const poolRow = lmUnassignedTrips.length > 0
+      ? `<div class="px-4 py-2.5 bg-violet-50 border-t border-violet-100 flex items-center gap-2">
+           <i class="fa-solid fa-circle-question text-violet-400 text-xs"></i>
+           <span class="text-[11px] text-violet-600 font-bold">${lmUnassignedTrips.length} unassigned trip${lmUnassignedTrips.length !== 1 ? 's' : ''} in pool</span>
+           <span class="text-[10px] text-violet-400">— auto-routed by proximity</span>
+         </div>`
+      : '';
+
+    el.innerHTML = rows.join('') + poolRow;
   };
 
   // Select a driver and kick off geocoding + routing
@@ -2783,7 +2814,8 @@ let activeReviewRegion = null;
     const driver = lmDrivers.find(d => d.key === key);
     if (!driver) return;
 
-    // Reset sort flag so auto-sort runs fresh for this driver selection
+    // Reset to just assigned trips so previous unassigned additions don't carry over
+    driver.trips = driver._assignedTrips.map(t => ({ ...t, _fromUnassigned: false }));
     driver._autoSorted = false;
     driver._gaps = {};
 
@@ -2846,24 +2878,34 @@ let activeReviewRegion = null;
       }
 
       // ── Trip card ──────────────────────────────────────────────────────
+      const isUnassigned = !!t._fromUnassigned;
+      const cardBg   = isUnassigned ? 'bg-violet-50/60 hover:bg-violet-50' : 'hover:bg-slate-50/80';
+      const pCircle  = isUnassigned ? 'bg-violet-100 text-violet-700 border-violet-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      const dCircle  = isUnassigned ? 'bg-violet-100 text-violet-600 border-violet-200' : 'bg-rose-100 text-rose-600 border-rose-200';
       const hasGeo = (lmGeoCache[t.pickup] || lmGeoCache[t.dropoff]) ? '' :
         '<span class="text-[9px] text-amber-400 ml-1" title="Address not geocoded"><i class="fa-solid fa-location-question"></i></span>';
+      const unassignedBadge = isUnassigned
+        ? `<span class="text-[9px] font-bold text-violet-600 bg-violet-100 px-1.5 py-0.5 rounded-full ml-1 shrink-0"><i class="fa-solid fa-circle-question text-[7px] mr-0.5"></i>No vehicle</span>`
+        : '';
       parts.push(`
-        <div class="px-3 py-3 border-b border-slate-100 hover:bg-slate-50/80 transition cursor-pointer" onclick="window.lmZoomToTrip('${safeKey}', ${i})">
+        <div class="px-3 py-3 border-b border-slate-100 ${cardBg} transition cursor-pointer" onclick="window.lmZoomToTrip('${safeKey}', ${i})">
           <div class="flex items-start gap-2">
             <div class="flex flex-col items-center gap-0.5 shrink-0 mt-0.5">
               <button onclick="event.stopPropagation();window.lmMoveTrip('${safeKey}',${i},-1)" class="text-slate-200 hover:text-slate-500 transition leading-none p-0.5"><i class="fa-solid fa-chevron-up text-[8px]"></i></button>
               <button onclick="event.stopPropagation();window.lmMoveTrip('${safeKey}',${i},1)" class="text-slate-200 hover:text-slate-500 transition leading-none p-0.5"><i class="fa-solid fa-chevron-down text-[8px]"></i></button>
             </div>
             <div class="shrink-0 flex flex-col items-center gap-0.5 mt-0.5">
-              <div class="w-[22px] h-[22px] rounded-full bg-emerald-100 flex items-center justify-center text-[9px] font-bold text-emerald-700 border border-emerald-200">P${i+1}</div>
+              <div class="w-[22px] h-[22px] rounded-full ${pCircle} flex items-center justify-center text-[9px] font-bold border">P${i+1}</div>
               <div class="w-px h-2 bg-slate-200"></div>
-              <div class="w-[22px] h-[22px] rounded-full bg-rose-100 flex items-center justify-center text-[9px] font-bold text-rose-600 border border-rose-200">D${i+1}</div>
+              <div class="w-[22px] h-[22px] rounded-full ${dCircle} flex items-center justify-center text-[9px] font-bold border">D${i+1}</div>
             </div>
             <div class="flex-1 min-w-0 ml-0.5">
-              <div class="flex items-center justify-between mb-0.5">
-                <span class="text-xs font-bold text-slate-700 font-mono">${esc(t.time || '?')}</span>
-                ${t.site_ref ? `<span class="text-[9px] text-slate-400 font-mono bg-slate-100 px-1.5 py-0.5 rounded">${esc(t.site_ref)}</span>` : ''}
+              <div class="flex items-center justify-between mb-0.5 gap-1">
+                <span class="text-xs font-bold text-slate-700 font-mono shrink-0">${esc(t.time || '?')}</span>
+                <div class="flex items-center gap-1 min-w-0">
+                  ${unassignedBadge}
+                  ${t.site_ref ? `<span class="text-[9px] text-slate-400 font-mono bg-slate-100 px-1.5 py-0.5 rounded shrink-0">${esc(t.site_ref)}</span>` : ''}
+                </div>
               </div>
               <div class="text-xs font-semibold text-slate-800 truncate">${esc(t.passenger || '—')}${hasGeo}</div>
               <div class="text-[10px] text-emerald-700 truncate mt-0.5"><i class="fa-solid fa-circle-dot text-[7px] mr-0.5 opacity-70"></i>${esc(t.pickup)}</div>
@@ -2910,28 +2952,44 @@ let activeReviewRegion = null;
     return 2 * R * Math.asin(Math.sqrt(a));
   }
 
-  // Nearest-neighbor auto-sort: first trip stays fixed; each subsequent stop
-  // is the unscheduled trip whose pickup is closest to the previous dropoff.
-  // Returns true if the order was changed.
+  // Nearest-neighbor auto-sort.
+  //
+  // Trip 1 (anchor) = the driver's earliest assigned trip (has vehicle_ref).
+  // Pool = remaining assigned trips + ALL unassigned trips from lmUnassignedTrips.
+  // At each step the algorithm picks the closest pickup to the current dropoff,
+  // regardless of whether that trip is assigned or unassigned.
+  //
+  // Unassigned trips pulled in are tagged _fromUnassigned: true so the UI can
+  // show them distinctly.  Returns true if driver.trips was changed.
   function lmAutoSort(driver) {
     const BAD = new Set(["", "unknown", "Unknown"]);
-    const trips = driver.trips;
-    if (trips.length <= 1) return false;
 
-    // Split into geocoded (have a resolvable pickup) and unresolvable
-    const geocoded = [], ungeo = [];
-    trips.forEach(t => {
-      const pu = t.pickup && !BAD.has(t.pickup) ? lmGeoCache[t.pickup] : null;
-      (pu ? geocoded : ungeo).push(t);
-    });
-    if (geocoded.length <= 1) return false;
+    // Helper: does this trip have a geocodable pickup?
+    const hasPickup = t => t.pickup && !BAD.has(t.pickup) && lmGeoCache[t.pickup];
 
-    // First trip is always locked
-    const first = geocoded.shift();
+    // Assigned trips sorted by scheduled time — geocoded vs not
+    const assignedGeo   = driver._assignedTrips.filter(t =>  hasPickup(t))
+                            .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    const assignedUngeo = driver._assignedTrips.filter(t => !hasPickup(t));
+
+    if (assignedGeo.length === 0) return false;
+
+    // Geocoded unassigned trips from the shared pool
+    const unassignedGeo = lmUnassignedTrips
+      .filter(t => hasPickup(t))
+      .map(t => ({ ...t, _fromUnassigned: true }));
+
+    // Lock in first trip (earliest assigned)
+    const first = { ...assignedGeo.shift(), _fromUnassigned: false };
     const ordered = [first];
-    const pool = [...geocoded];
 
-    // Start position = dropoff of first trip (fall back to its pickup)
+    // Combined pool: remaining assigned + all geocoded unassigned
+    const pool = [
+      ...assignedGeo.map(t => ({ ...t, _fromUnassigned: false })),
+      ...unassignedGeo
+    ];
+
+    // Current position starts at the first trip's dropoff (or pickup if no dropoff)
     const firstDr = first.dropoff && !BAD.has(first.dropoff) ? lmGeoCache[first.dropoff] : null;
     let cur = firstDr || lmGeoCache[first.pickup];
 
@@ -2949,7 +3007,8 @@ let activeReviewRegion = null;
       cur = dr || lmGeoCache[next.pickup];
     }
 
-    driver.trips = [...ordered, ...ungeo];
+    // Ungeocodable assigned trips always go at the end
+    driver.trips = [...ordered, ...assignedUngeo];
     return true;
   }
 
@@ -2971,16 +3030,19 @@ let activeReviewRegion = null;
     lmMarkers = [];
     if (lmRouteLayer) { try { lmMap.removeLayer(lmRouteLayer); } catch(e) {} lmRouteLayer = null; }
 
-    const trips = driver.trips;
     const statusEl = document.getElementById('lmRouteStatus');
-
-    // Collect unique addresses not yet in cache; skip blanks and the literal "Unknown" fallback
     const BAD_ADDRS = new Set(["", "unknown", "Unknown"]);
-    const uniqueAddrs = [...new Set(trips.flatMap(t => [t.pickup, t.dropoff]).filter(a => a && !BAD_ADDRS.has(a)))];
+
+    // Geocode addresses from BOTH the driver's assigned trips AND the full
+    // unassigned pool — the sort needs the pool geocoded before it can run.
+    const allSrcTrips = [...driver._assignedTrips, ...lmUnassignedTrips];
+    const uniqueAddrs = [...new Set(
+      allSrcTrips.flatMap(t => [t.pickup, t.dropoff]).filter(a => a && !BAD_ADDRS.has(a))
+    )];
     const toGeocode = uniqueAddrs.filter(a => lmGeoCache[a] === undefined);
 
     if (toGeocode.length > 0) {
-      statusEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1 text-blue-400"></i>Geocoding addresses (${toGeocode.length} new)...`;
+      statusEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1 text-blue-400"></i>Geocoding ${toGeocode.length} address${toGeocode.length !== 1 ? 'es' : ''}...`;
     }
 
     let geocodedCount = 0;
@@ -3015,7 +3077,7 @@ let activeReviewRegion = null;
     });
 
     if (stops.length === 0) {
-      const hasAnyAddr = trips.some(t => t.pickup && !BAD_ADDRS.has(t.pickup) || t.dropoff && !BAD_ADDRS.has(t.dropoff));
+      const hasAnyAddr = driver.trips.some(t => t.pickup && !BAD_ADDRS.has(t.pickup) || t.dropoff && !BAD_ADDRS.has(t.dropoff));
       statusEl.innerHTML = hasAnyAddr
         ? '<i class="fa-solid fa-circle-exclamation mr-1 text-rose-400"></i>Addresses found but could not be geocoded'
         : '<i class="fa-solid fa-circle-exclamation mr-1 text-amber-400"></i>No address data on these trips yet';
