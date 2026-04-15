@@ -730,6 +730,16 @@
       window.showToast("Thread Deleted");
   };
 
+  window.deleteMessage = async (msgId) => {
+      if (!store.activeThreadId || !msgId) return;
+      try {
+          await deleteDoc(doc(getMsgsCol(store.activeThreadId), msgId));
+          // onSnapshot removes it from the view automatically
+      } catch(e) {
+          window.showToast("Could not delete message", "error");
+      }
+  };
+
   window.deleteContact = async (id) => {
       if(!confirm("Delete this contact and all their messages?")) return;
       await deleteDoc(getThreadDoc(id));
@@ -851,14 +861,18 @@
           }
 
           html += `
-            <div class="flex w-full ${isMe ? "justify-end" : "justify-start"} fade-in">
-              <div class="max-w-[85%] lg:max-w-[70%]">
-                <div class="px-4 py-2.5 text-sm shadow-sm ${isMe ? "msg-sent" : "msg-received"}">
-                  ${escapeHtml(m.body)}${mediaHtml}
+            <div class="flex w-full ${isMe ? "justify-end" : "justify-start"} fade-in group">
+              <div class="max-w-[85%] lg:max-w-[70%] flex items-end gap-1.5">
+                ${isMe ? `<button onclick="window.deleteMessage('${d.id}')" class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 w-6 h-6 flex items-center justify-center rounded-full hover:bg-rose-100 text-slate-300 hover:text-rose-500 mb-5" title="Delete message"><i class="fa-regular fa-trash-can text-[10px]"></i></button>` : ''}
+                <div class="min-w-0">
+                  <div class="px-4 py-2.5 text-sm shadow-sm ${isMe ? "msg-sent" : "msg-received"}">
+                    ${escapeHtml(m.body)}${mediaHtml}
+                  </div>
+                  <div class="text-[10px] text-gray-400 mt-1 ${isMe ? "text-right" : ""} opacity-75">
+                    ${ts ? `${escapeHtml(formatDate(ts))} • ${escapeHtml(formatTime(ts))}` : ""}
+                  </div>
                 </div>
-                <div class="text-[10px] text-gray-400 mt-1 ${isMe ? "text-right" : ""} opacity-75">
-                  ${ts ? `${escapeHtml(formatDate(ts))} • ${escapeHtml(formatTime(ts))}` : ""}
-                </div>
+                ${!isMe ? `<button onclick="window.deleteMessage('${d.id}')" class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 w-6 h-6 flex items-center justify-center rounded-full hover:bg-rose-100 text-slate-300 hover:text-rose-500 mb-5" title="Delete message"><i class="fa-regular fa-trash-can text-[10px]"></i></button>` : ''}
               </div>
             </div>
           `;
