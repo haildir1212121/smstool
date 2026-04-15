@@ -57,22 +57,34 @@
   </nav>
 
   <div id="view-inbox" class="flex-1 flex min-w-0 h-full fade-in">
-    <aside class="w-[340px] bg-white border-r border-gray-200 flex flex-col shrink-0 z-20">
-      <div class="h-16 px-4 flex items-center border-b border-gray-100 gap-2 shrink-0">
-        <div class="relative flex-1">
-            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-xs"></i>
-            <input id="searchContacts" oninput="window.renderThreadList()" placeholder="Search messages..." class="w-full bg-slate-50 border border-slate-100 rounded-lg pl-8 pr-3 py-2 text-sm focus:bg-white focus:border-blue-300 outline-none transition">
+    <aside class="w-[340px] bg-white border-r border-gray-200 flex flex-col shrink-0 z-20 overflow-hidden relative">
+      <!-- Panel 1: Tag Navigation -->
+      <div id="inboxTagPanel" class="absolute inset-0 flex flex-col transition-transform duration-300 ease-in-out" style="transform:translateX(0)">
+        <div class="h-16 px-4 flex items-center border-b border-gray-100 shrink-0">
+          <span class="flex-1 font-bold text-slate-800 text-sm">Inbox</span>
+          <button onclick="window.openNewMsgModal()" class="w-8 h-8 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center shadow-sm transition"><i class="fa-solid fa-plus"></i></button>
         </div>
-        <button onclick="window.openNewMsgModal()" class="w-8 h-8 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center shadow-sm transition"><i class="fa-solid fa-plus"></i></button>
+        <div id="inboxTagList" class="flex-1 overflow-y-auto scrollbar-hide"></div>
       </div>
-      <div class="flex flex-col border-b border-gray-50 shrink-0">
-          <div class="px-4 py-2 flex gap-2">
+      <!-- Panel 2: Contact List -->
+      <div id="inboxContactPanel" class="absolute inset-0 flex flex-col transition-transform duration-300 ease-in-out" style="transform:translateX(100%)">
+        <div class="h-16 px-3 flex items-center border-b border-gray-100 gap-2 shrink-0">
+          <button onclick="window.backToTagNav()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 transition shrink-0"><i class="fa-solid fa-arrow-left text-sm"></i></button>
+          <span id="inboxPanelHeader" class="flex-1 font-bold text-sm text-slate-800 truncate min-w-0">All Messages</span>
+          <button onclick="window.openNewMsgModal()" class="w-8 h-8 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center shadow-sm transition shrink-0"><i class="fa-solid fa-plus"></i></button>
+        </div>
+        <div class="px-3 py-2 border-b border-gray-50 shrink-0 space-y-2">
+          <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+            <input id="searchContacts" oninput="window.renderThreadList()" placeholder="Search..." class="w-full bg-slate-50 border border-slate-100 rounded-lg pl-8 pr-3 py-2 text-sm focus:bg-white focus:border-blue-300 outline-none transition">
+          </div>
+          <div class="flex gap-2">
             <button onclick="window.toggleUnreadOnly()" id="filterUnread" class="px-3 py-1 rounded-md text-[10px] font-bold border border-gray-200 text-gray-500 hover:bg-gray-50 uppercase transition">Unread</button>
             <button onclick="window.toggleUrgentOnly()" id="filterUrgent" class="px-3 py-1 rounded-md text-[10px] font-bold border border-gray-200 text-gray-500 hover:bg-gray-50 uppercase transition">Urgent</button>
           </div>
-          <div id="tagFilterRow" class="px-4 pb-2 flex gap-2 overflow-x-auto scrollbar-hide empty:hidden"></div>
+        </div>
+        <div id="contactList" class="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-hide"></div>
       </div>
-      <div id="contactList" class="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-hide"></div>
     </aside>
 
     <main class="flex-1 flex flex-col bg-slate-50/50 relative min-w-0">
@@ -699,6 +711,7 @@
   window.switchView = (v) => {
       ['inbox', 'contacts', 'triptexts', 'notifications', 'tripdata', 'shifts', 'livemap'].forEach(x => document.getElementById(`view-${x}`).classList.add('hidden'));
       document.getElementById(`view-${v}`).classList.remove('hidden');
+      if (v === 'inbox') window.renderTagNavList();
       if (v === 'shifts') window.loadShiftView();
       if (v === 'livemap') window.initLiveMap();
       document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -753,23 +766,12 @@
 
   window.renderThreadList = () => {
       const el = document.getElementById("contactList");
-      const tagRow = document.getElementById("tagFilterRow");
-      const s = (document.getElementById("searchContacts").value || "").toLowerCase();
-      document.getElementById("filterUnread").className = `px-3 py-1 rounded-md text-[10px] font-bold border uppercase transition ${store.onlyUnread?'bg-blue-600 text-white border-blue-600':'bg-white border-gray-200 text-gray-500'}`;
-      document.getElementById("filterUrgent").className = `px-3 py-1 rounded-md text-[10px] font-bold border uppercase transition ${store.onlyUrgent?'bg-rose-500 text-white border-rose-500':'bg-white border-gray-200 text-gray-500'}`;
-      
-      const allTags = new Set(); store.threads.forEach(t => (t.tags||[]).forEach(tag => allTags.add(tag)));
-      if(allTags.size > 0 || store.threads.length > 0) {
-          tagRow.classList.remove("hidden");
-          let tagHtml = `<button onclick="window.clearTagFilter()" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${store.tagFilter.size===0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200'}">ALL</button>`;
-          const untaggedActive = store.tagFilter.has("__untagged__");
-          tagHtml += `<button onclick="window.toggleTagFilter('__untagged__')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${untaggedActive ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">Untagged</button>`;
-          Array.from(allTags).sort().forEach(tag => {
-              const active = store.tagFilter.has(tag);
-              tagHtml += `<button onclick="window.toggleTagFilter('${tag}')" class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200'}">${tag}</button>`;
-          });
-          tagRow.innerHTML = tagHtml;
-      } else { tagRow.classList.add("hidden"); }
+      const searchEl = document.getElementById("searchContacts");
+      const s = (searchEl ? searchEl.value || "" : "").toLowerCase();
+      const fuEl = document.getElementById("filterUnread");
+      const fiEl = document.getElementById("filterUrgent");
+      if (fuEl) fuEl.className = `px-3 py-1 rounded-md text-[10px] font-bold border uppercase transition ${store.onlyUnread?'bg-blue-600 text-white border-blue-600':'bg-white border-gray-200 text-gray-500'}`;
+      if (fiEl) fiEl.className = `px-3 py-1 rounded-md text-[10px] font-bold border uppercase transition ${store.onlyUrgent?'bg-rose-500 text-white border-rose-500':'bg-white border-gray-200 text-gray-500'}`;
 
       let list = store.threads.slice().sort((a,b) => (b.lastMessageAtMs||0)-(a.lastMessageAtMs||0));
       list = list.filter(t => {
@@ -786,7 +788,7 @@
           return true;
       });
 
-      el.innerHTML = list.map(t => {
+      if (el) el.innerHTML = list.map(t => {
           const isActive = t.id === store.activeThreadId, isUnread = (t.unread||0) > 0;
           const isVehicleAlert = t.isUrgent && vehicleKeywords.some(k => (t.lastMessageText||'').toLowerCase().includes(k));
           let cardClass = isActive ? 'bg-blue-50 border border-blue-100 shadow-sm' : 'hover:bg-slate-50 border border-transparent';
@@ -805,10 +807,113 @@
             <div class="flex-1 min-w-0"><div class="flex justify-between items-baseline"><span class="font-bold text-sm ${isUnread?'text-gray-900':'text-gray-700'} truncate">${escapeHtml(t.name)}</span><span class="text-[10px] text-gray-400 whitespace-nowrap">${relativeTime(t.lastMessageAtMs)}</span></div><div class="text-xs text-gray-500 truncate h-4 leading-4 opacity-80">${escapeHtml(t.lastMessageText || "No messages")}</div>${t.tags && t.tags.length ? `<div class="flex gap-1 mt-1 overflow-hidden h-4">${t.tags.slice(0,3).map(g=>`<span class="px-1 bg-slate-100 text-slate-500 text-[9px] rounded border border-slate-200">${g}</span>`).join("")}</div>` : ''}</div>
           </div>`;
       }).join("");
+
+      window.renderTagNavList();
   };
 
   window.toggleTagFilter = (tag) => { if (store.tagFilter.has(tag)) store.tagFilter.delete(tag); else store.tagFilter.add(tag); window.renderThreadList(); window.renderLogbook(); window.renderContactsManagerTable(); };
   window.clearTagFilter = () => { store.tagFilter.clear(); window.renderThreadList(); window.renderLogbook(); window.renderContactsManagerTable(); };
+
+  function tagNavColor(tag) {
+      const palettes = [
+          { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
+          { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200' },
+          { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
+          { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200' },
+          { bg: 'bg-rose-100', text: 'text-rose-700', border: 'border-rose-200' },
+          { bg: 'bg-cyan-100', text: 'text-cyan-700', border: 'border-cyan-200' },
+          { bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-200' },
+          { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' },
+      ];
+      let h = 0;
+      for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) & 0xffff;
+      return palettes[h % palettes.length];
+  }
+
+  window.renderTagNavList = () => {
+      const el = document.getElementById("inboxTagList");
+      if (!el) return;
+      const allTags = new Set();
+      const tagUnread = {}, tagCount = {};
+      let totalUnread = 0, untaggedUnread = 0, untaggedCount = 0;
+      store.threads.forEach(t => {
+          const hasUnread = (t.unread || 0) > 0;
+          if (hasUnread) totalUnread++;
+          const tags = t.tags || [];
+          if (tags.length === 0) {
+              untaggedCount++;
+              if (hasUnread) untaggedUnread++;
+          } else {
+              tags.forEach(tag => {
+                  allTags.add(tag);
+                  tagCount[tag] = (tagCount[tag] || 0) + 1;
+                  if (hasUnread) tagUnread[tag] = (tagUnread[tag] || 0) + 1;
+              });
+          }
+      });
+      const sortedTags = Array.from(allTags).sort();
+      const badge = (n) => n > 0 ? `<span class="shrink-0 min-w-[20px] h-5 px-1.5 bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">${n}</span>` : '';
+      const navRow = (onclick, iconHtml, title, subtitle, unread) => `
+          <button onclick="${onclick}" class="w-full p-3 rounded-xl text-left flex items-center gap-3 hover:bg-slate-50 active:bg-slate-100 transition border border-transparent hover:border-slate-100 group">
+              ${iconHtml}
+              <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-slate-800">${title}</div>
+                  <div class="text-xs text-slate-400">${subtitle}</div>
+              </div>
+              ${badge(unread)}
+              <i class="fa-solid fa-chevron-right text-slate-300 text-xs shrink-0 group-hover:text-slate-400 transition"></i>
+          </button>`;
+      let html = `<div class="p-2 space-y-0.5">`;
+      const total = store.threads.length;
+      html += navRow(
+          "window.selectTagNav('__all__')",
+          `<div class="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0"><i class="fa-solid fa-inbox text-slate-500 text-sm"></i></div>`,
+          'All Messages',
+          `${total} contact${total !== 1 ? 's' : ''}`,
+          totalUnread
+      );
+      sortedTags.forEach(tag => {
+          const c = tagNavColor(tag);
+          const cnt = tagCount[tag] || 0;
+          const safe = tag.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          const iconHtml = `<div class="w-9 h-9 rounded-full ${c.bg} border ${c.border} flex items-center justify-center shrink-0"><i class="fa-solid fa-tag text-xs ${c.text}"></i></div>`;
+          html += navRow(`window.selectTagNav('${safe}')`, iconHtml, escapeHtml(tag), `${cnt} contact${cnt !== 1 ? 's' : ''}`, tagUnread[tag] || 0);
+      });
+      if (untaggedCount > 0) {
+          html += navRow(
+              "window.selectTagNav('__untagged__')",
+              `<div class="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0"><i class="fa-solid fa-tag text-xs text-slate-400"></i></div>`,
+              'Untagged',
+              `${untaggedCount} contact${untaggedCount !== 1 ? 's' : ''}`,
+              untaggedUnread
+          );
+      }
+      html += `</div>`;
+      el.innerHTML = html;
+  };
+
+  window.selectTagNav = (tag) => {
+      store.tagFilter.clear();
+      if (tag !== '__all__') store.tagFilter.add(tag);
+      const header = document.getElementById("inboxPanelHeader");
+      if (header) header.textContent = tag === '__all__' ? 'All Messages' : tag === '__untagged__' ? 'Untagged' : tag;
+      document.getElementById("inboxTagPanel").style.transform = "translateX(-100%)";
+      document.getElementById("inboxContactPanel").style.transform = "translateX(0)";
+      const searchEl = document.getElementById("searchContacts");
+      if (searchEl) searchEl.value = "";
+      window.renderThreadList();
+      window.renderLogbook();
+      window.renderContactsManagerTable();
+  };
+
+  window.backToTagNav = () => {
+      store.tagFilter.clear();
+      document.getElementById("inboxTagPanel").style.transform = "translateX(0)";
+      document.getElementById("inboxContactPanel").style.transform = "translateX(100%)";
+      window.renderTagNavList();
+      window.renderLogbook();
+      window.renderContactsManagerTable();
+  };
 
   window.loadThread = async (id) => {
       if(unsubMessages) unsubMessages(); store.activeThreadId = id; store.activeThread = store.threads.find(t=>t.id===id);
