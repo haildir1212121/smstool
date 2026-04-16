@@ -1536,8 +1536,9 @@ let soundPrefs = JSON.parse(localStorage.getItem('sound_prefs') || '{"msgs":true
     if (passengerKey) seenPassengers.add(passengerKey);
 
     if (isReturn) {
-      // Return trip — use dropoff city, fall back to pickup
-      const city = extractCity(trip.dropoff) || extractCity(trip.pickup) || "Unknown";
+      // Return trip — "return from [destination]" = where the passenger was taken to
+      // On the return leg, trip.pickup is the destination (where we collect them)
+      const city = extractCity(trip.pickup) || extractCity(trip.dropoff) || "Unknown";
       return `${time} return from ${city}${lastName ? ` (${lastName})` : ""}`;
     } else {
       // First trip for this passenger — use pickup city, fall back to dropoff
