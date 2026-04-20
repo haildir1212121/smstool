@@ -2304,6 +2304,7 @@ let activeReviewRegion = null;
             <th class="px-3 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wide text-[10px]">ID</th>
             <th class="px-3 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wide text-[10px]">Received</th>
             <th class="px-3 py-2.5 text-center font-bold text-slate-500 uppercase tracking-wide text-[10px]">Debug</th>
+            <th class="px-3 py-2.5 text-center font-bold text-slate-500 uppercase tracking-wide text-[10px]">Del</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">`;
@@ -2334,11 +2335,24 @@ let activeReviewRegion = null;
         <td class="px-3 py-2 font-mono text-slate-400 max-w-[100px] truncate" title="${(row.id||'').replace(/"/g,'&quot;')}">${(row.id || '—').slice(0, 12)}${(row.id||'').length > 12 ? '…' : ''}</td>
         <td class="px-3 py-2 font-mono text-slate-400 text-[10px]">${row.received_at ? new Date(row.received_at).toLocaleString('en-US', {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '—'}</td>
         <td class="px-3 py-2 text-center"><button onclick="window.showTdDetail(${escapedRow})" class="w-7 h-7 rounded-lg hover:bg-violet-100 text-violet-500 transition"><i class="fa-solid fa-bug text-[10px]"></i></button></td>
+        <td class="px-3 py-2 text-center"><button onclick="window.deleteTdTrip(${escapedRow})" class="w-7 h-7 rounded-lg hover:bg-rose-100 text-rose-400 transition" title="Delete trip"><i class="fa-solid fa-trash text-[10px]"></i></button></td>
       </tr>`;
     }
 
     html += `</tbody></table></div>`;
     document.getElementById("tdContent").innerHTML = html;
+  };
+
+  window.deleteTdTrip = async (idx) => {
+    const row = tdFiltered[idx];
+    if (!row) return;
+    const label = [row.passenger, row.vehicle_ref, row.date].filter(Boolean).join(" · ");
+    if (!confirm(`Delete trip${label ? `: ${label}` : ""}?\n\nThis removes it from Supabase permanently.`)) return;
+    const { error } = await supabase.from("trips").delete().eq("id", row.id);
+    if (error) { window.showToast("Delete failed: " + error.message, "error"); return; }
+    tdRows = tdRows.filter(r => r.id !== row.id);
+    window.renderTripData();
+    window.showToast("Trip deleted");
   };
 
   window.showTdDetail = (idx) => {
