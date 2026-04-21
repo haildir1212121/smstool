@@ -1,0 +1,27 @@
+name = "icabbi-budget"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+SUPABASE_URL = "https://mdutrtmdjodabggirntb.supabase.co"
+ICABBI_API   = "https://api.icabbi.us/us4"
+
+# Secrets (set via `wrangler secret put <NAME>`):
+#   SUPABASE_SERVICE_KEY
+#   WEBHOOK_SECRET
+#   ICABBI_KEY
+
+# ─── Cloudflare Queue ────────────────────────────────────────
+# The booking webhook fast-path drops payloads here instantly.
+# The queue consumer (queue() export) picks them up asynchronously.
+
+[[queues.producers]]
+queue   = "icabbi-booking-queue"
+binding = "BOOKING_QUEUE"
+
+[[queues.consumers]]
+queue             = "icabbi-booking-queue"
+max_batch_size    = 10     # process up to 10 bookings per invocation
+max_batch_timeout = 5      # wait up to 5s to fill a batch before flushing
+max_retries       = 3      # retry a failing message up to 3 times
+dead_letter_queue = "icabbi-booking-dlq"  # exhausted messages land here
