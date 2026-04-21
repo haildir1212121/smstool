@@ -4,6 +4,7 @@
  * POST /webhook               — receives iCabbi "Pre-booking: Driver Designated" events
  * POST /webhook/undesignate   — receives iCabbi "Driver Undesignate" events (deletes trip)
  * POST /webhook/update        — receives iCabbi "Pre-booking: Update" events (patches vehicle/driver)
+ * POST /webhook/cancelled     — receives iCabbi "Pre-booking: Cancelled" events (marks trip cancelled)
  * POST /webhook/fleetio       — receives Fleetio issue reports, auto-creates iCabbi trips
  * GET  /trips                — returns stored trips for a date range (?from=YYYY-MM-DD&to=YYYY-MM-DD)
  * GET  /trips/stats          — quick count of stored trips for a date
@@ -366,6 +367,9 @@ export default {
       if (url.pathname === "/webhook/update" && request.method === "POST") {
         return await handleUpdate(request, env);
       }
+      if (url.pathname === "/webhook/cancelled" && request.method === "POST") {
+        return await handleBookingCancelled(request, env);
+      }
       if (url.pathname === "/webhook/fleetio" && request.method === "POST") {
         return await handleFleetioWebhook(request, env);
       }
@@ -413,6 +417,50 @@ async function handleUpdate(request, env) {
 async function handleUndesignate(request, env) {
   // iCabbi "Driver Undesignate"
   return await processTripEvent(request, env, "undesignate");
+}
+
+async function handleBookingCancelled(request, env) {
+  // iCabbi "Pre-booking: Cancelled" — fired when any cancellation occurs (operator, API, passenger app)
+  const secret = request.headers.get("X-Webhook-Secret") || "";
+  if (!env.WEBHOOK_SECRET || secret !== env.WEBHOOK_SECRET) {
+    return jsonResponse({ error: "Unauthorized" }, 401);
+  }
+
+  const payload = await request.json();
+  const bookings = Array.isArray(payload) ? payload : [payload];
+
+  let processed = 0;
+
+  for (const booking of bookings) {
+    const trip = normalizeTrip(booking);
+    if (!trip || !trip.date) continue;
+
+    // Stamp cancelled status and upsert — keeps the row visible in the dispatcher view
+    // so they know the booking existed and was cancelled (not just silently missing).
+    trip.status = "cancelled";
+
+    console.log(`[CANCELLED] Marking trip ${trip.id} as cancelled (passenger: ${trip.passenger}, vehicle: ${trip.vehicleRef || "unassigned"}).`);
+
+    const ok = await supabaseUpsertTrip(env, trip);
+    if (ok) {
+      processed++;
+
+      const label = [trip.passenger, trip.pickup, trip.date].filter(Boolean).join(" · ");
+      writeNotificationToFirestore(env, {
+        type: "trip_cancelled",
+        title: `Trip Cancelled${trip.vehicleRef ? ` — Vehicle ${trip.vehicleRef}` : ""}`,
+        message: label || trip.id,
+        vehicleRef: trip.vehicleRef || "",
+        driverName: trip.driverName || "",
+        tripDate: trip.date || "",
+      }).catch(e => console.error("Firestore cancel notification error:", e));
+
+      // Remove from Firestore trip backup since the booking is no longer active
+      firestoreDeleteTrip(env, trip).catch(e => console.error("Firestore cancel delete error:", e));
+    }
+  }
+
+  return jsonResponse({ ok: true, processed });
 }
 
 // ── Unified Processing Logic ──────────────────────────────────────────────────
