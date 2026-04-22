@@ -453,13 +453,28 @@ async function processTripEvent(request, env, eventType) {
         // Auto-cancel SMS: if trip was assigned to a vehicle on today or a future date, notify the driver
         const today = new Date().toISOString().split("T")[0];
         if (trip.vehicleRef && trip.date && trip.date >= today) {
-          supabaseGetExpectedShift(env, trip.vehicleRef, trip.date).then(shift => {
+          supabaseGetExpectedShift(env, trip.vehicleRef, trip.date).then(async shift => {
             const phone = shift?.driver_phone;
             if (!phone) return;
             const driverName = shift.driver_name || "Driver";
-            const timeStr = trip.time ? ` at ${trip.time}` : "";
             const passengerStr = trip.passenger ? ` for ${trip.passenger}` : "";
-            const msg = `Hi ${driverName}, your trip${passengerStr}${timeStr} has been cancelled. Please still sign in at your scheduled time and await dispatch's instructions.`;
+            const timeStr = trip.time ? ` at ${trip.time}` : "";
+
+            // If the cancelled trip was before 7:00 AM and it's now their only trip, redirect to 7am sign-in
+            const tripHour = parseTripHour(trip.time);
+            const isEarlyTrip = tripHour !== null && tripHour < 7;
+            let msg;
+            if (isEarlyTrip) {
+              const remaining = await supabaseCountRemainingTrips(env, trip.vehicleRef, trip.date);
+              if (remaining === 0) {
+                msg = `Hi ${driverName}, your trip${passengerStr}${timeStr} has been cancelled. As this was your only early trip, please sign in at 7:00 AM to receive further instructions.`;
+              } else {
+                msg = `Hi ${driverName}, your trip${passengerStr}${timeStr} has been cancelled. Please still sign in at your scheduled time and await dispatch's instructions.`;
+              }
+            } else {
+              msg = `Hi ${driverName}, your trip${passengerStr}${timeStr} has been cancelled. Please still sign in at your scheduled time and await dispatch's instructions.`;
+            }
+
             sendTwilioSms(env, phone, msg).catch(e => console.error("Twilio cancellation send error:", e));
             writeFirestoreThreadMessage(env, phone, msg).catch(e => console.error("Firestore thread write error:", e));
             writeNotificationToFirestore(env, {
@@ -844,6 +859,26 @@ async function createIcabbiTrip(env, tripBody) {
   });
   if (!res.ok) throw new Error(await res.text());
   return await res.json();
+}
+
+// Returns the hour (0-23) from a trip time string, or null if unparseable
+function parseTripHour(timeStr) {
+  if (!timeStr) return null;
+  const match = String(timeStr).match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  return parseInt(match[1], 10);
+}
+
+// Counts remaining trips for a vehicle on a given date (called after the cancelled trip is already deleted)
+async function supabaseCountRemainingTrips(env, vehicleRef, date) {
+  const res = await supabaseRequest(
+    env,
+    `trips?vehicle_ref=eq.${encodeURIComponent(vehicleRef)}&date=eq.${date}&select=id`,
+    { method: "GET", headers: { Accept: "application/json" } }
+  );
+  if (!res.ok) return -1;
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows.length : -1;
 }
 
 async function sendTwilioSms(env, to, body) {
