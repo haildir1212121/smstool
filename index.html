@@ -174,6 +174,20 @@
       </div>
   </div>
 
+  <!-- Trip Assignment History Modal -->
+  <div id="tripHistoryModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[80vh]">
+      <div class="flex justify-between items-center p-5 border-b border-slate-100 shrink-0">
+        <div>
+          <h3 id="tripHistoryTitle" class="text-base font-bold text-slate-800">Assignment History</h3>
+          <p class="text-[10px] text-slate-400 mt-0.5">Sent trip assignment messages</p>
+        </div>
+        <button onclick="document.getElementById('tripHistoryModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 transition"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <div id="tripHistoryList" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
+    </div>
+  </div>
+
   <div id="view-contacts" class="hidden flex-1 h-full flex-col bg-white fade-in overflow-hidden">
     <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
         <div class="flex items-center gap-4">
@@ -335,6 +349,7 @@
           <option value="fleetio_issue">Fleetio Issues</option>
           <option value="trip_designated">Trip Designated</option>
           <option value="trip_undesignated">Trip Undesignated</option>
+          <option value="trip_cancelled">Trip Cancelled</option>
           <option value="late_signin">Late Sign-Ins</option>
           <option value="long_shift">Long Shifts</option>
         </select>
@@ -858,10 +873,37 @@
       const start = (store.cmPage - 1) * store.itemsPerPage;
       const paginated = filtered.slice(start, start + store.itemsPerPage);
 
-      tbody.innerHTML = paginated.map(t => `<tr><td class="p-4 pl-6"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">${initials(t.name)}</div><input class="cm-name bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-sm font-bold w-full text-slate-700" data-id="${t.id}" value="${escapeHtml(t.name)}"></div></td><td class="p-4 text-xs font-mono text-slate-500">${t.phone}</td><td class="p-4"><input class="cm-tags bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-xs w-full text-slate-600" data-id="${t.id}" value="${(t.tags||[]).join(",")}" placeholder="Tags"></td><td class="p-4 pr-6 text-right text-xs text-slate-400">${relativeTime(t.lastMessageAtMs)}</td><td class="p-4 text-right"><button onclick="window.deleteContact('${t.id}')" class="text-slate-400 hover:text-rose-600 transition"><i class="fa-solid fa-trash"></i></button></td></tr>`).join("");
+      tbody.innerHTML = paginated.map(t => `<tr><td class="p-4 pl-6"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">${initials(t.name)}</div><input class="cm-name bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-sm font-bold w-full text-slate-700" data-id="${t.id}" value="${escapeHtml(t.name)}"></div></td><td class="p-4 text-xs font-mono text-slate-500">${t.phone}</td><td class="p-4"><input class="cm-tags bg-transparent border-b border-transparent focus:border-blue-300 outline-none text-xs w-full text-slate-600" data-id="${t.id}" value="${(t.tags||[]).join(",")}" placeholder="Tags"></td><td class="p-4 pr-6 text-right text-xs text-slate-400">${relativeTime(t.lastMessageAtMs)}</td><td class="p-4 text-right flex items-center justify-end gap-2"><button onclick="window.showTripHistory('${t.phone}','${escapeHtml(t.name).replace(/'/g,"&#39;")}')" class="text-slate-400 hover:text-violet-600 transition" title="Trip assignment history"><i class="fa-solid fa-clock-rotate-left"></i></button><button onclick="window.deleteContact('${t.id}')" class="text-slate-400 hover:text-rose-600 transition"><i class="fa-solid fa-trash"></i></button></td></tr>`).join("");
   };
 
   window.changeCmPage = (dir) => { store.cmPage += dir; window.renderContactsManagerTable(); };
+
+  window.showTripHistory = async (phone, name) => {
+    document.getElementById("tripHistoryTitle").textContent = `${name} — Assignment History`;
+    const listEl = document.getElementById("tripHistoryList");
+    listEl.innerHTML = `<div class="flex flex-col items-center justify-center py-10 text-slate-300"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><p class="text-sm">Loading...</p></div>`;
+    document.getElementById("tripHistoryModal").classList.remove("hidden");
+    try {
+      const q = query(collection(db, "organizations", SHARED_ORG_ID, "threads", phone, "messages"), where("type", "==", "trip_assignment"), orderBy("createdAt", "desc"), limit(30));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        listEl.innerHTML = `<div class="flex flex-col items-center justify-center py-10 text-slate-300"><i class="fa-solid fa-inbox text-2xl mb-2"></i><p class="text-sm">No trip assignments sent yet</p></div>`;
+        return;
+      }
+      listEl.innerHTML = snap.docs.map(d => {
+        const msg = d.data();
+        const ts = msg.createdAt?.toDate ? msg.createdAt.toDate().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "Unknown date";
+        const dateLabel = msg.tripDate ? `<span class="text-[10px] font-mono bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded font-bold">${msg.tripDate}</span>` : "";
+        const vehicleLabel = msg.vehicleRef ? `<span class="text-[10px] font-mono bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">V${msg.vehicleRef}</span>` : "";
+        return `<div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
+          <div class="flex items-center gap-2 mb-2 flex-wrap">${dateLabel}${vehicleLabel}<span class="text-[10px] text-slate-400 ml-auto">${ts}</span></div>
+          <p class="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">${escapeHtml(msg.body || "")}</p>
+        </div>`;
+      }).join("");
+    } catch (e) {
+      listEl.innerHTML = `<div class="text-center text-rose-400 py-8 text-sm"><i class="fa-solid fa-circle-exclamation mr-1"></i>${e.message}</div>`;
+    }
+  };
 
  window.saveContactsManager = async () => {
     const names = document.querySelectorAll(".cm-name");
@@ -1788,7 +1830,7 @@ let activeReviewRegion = null;
 
         if (res.ok) {
           const sid = `trip-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-          await setDoc(doc(getMsgsCol(m.phone), sid), { body: finalMsg, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls: [] });
+          await setDoc(doc(getMsgsCol(m.phone), sid), { body: finalMsg, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls: [], type: "trip_assignment", tripDate: window.ttTripDate || "", vehicleRef: m.driver?.vehicle || "", driverName: m.driver?.name || m.contactName || "" });
           await updateDoc(getThreadDoc(m.phone), { lastMessageText: finalMsg.slice(0, 80) + "...", lastMessageAtMs: Date.now() });
           sent++;
         }
@@ -1890,7 +1932,7 @@ let activeReviewRegion = null;
     document.getElementById("notifDesignateCount").textContent = designateCount;
     document.getElementById("notifCenterCount").textContent = `${store.notifications.filter(n => !n.read).length} active`;
 
-    const activeAlerts = store.notifications.filter(n => !n.read && (n.type === "fleetio_issue" || n.type === "trip_designated" || n.type === "trip_undesignated"));
+    const activeAlerts = store.notifications.filter(n => !n.read && (n.type === "fleetio_issue" || n.type === "trip_designated" || n.type === "trip_undesignated" || n.type === "trip_cancelled"));
     const alertsEl = document.getElementById("notifActiveAlerts");
     if (activeAlerts.length > 0) {
       alertsEl.innerHTML = activeAlerts.slice(0, 5).map(n => {
@@ -1938,6 +1980,9 @@ let activeReviewRegion = null;
           break;
         case "trip_undesignated":
           typeConfig = { icon: "fa-circle-xmark", iconBg: "bg-rose-100 text-rose-600", badge: "bg-rose-100 text-rose-700 border-rose-200", label: "UNDESIGNATED", cardBorder: n.read ? "" : "border-l-4 border-l-rose-400" };
+          break;
+        case "trip_cancelled":
+          typeConfig = { icon: "fa-ban", iconBg: "bg-red-100 text-red-600", badge: "bg-red-100 text-red-700 border-red-200", label: "CANCELLED", cardBorder: n.read ? "" : "border-l-4 border-l-red-500" };
           break;
         case "late_signin":
           typeConfig = { icon: "fa-clock", iconBg: "bg-amber-100 text-amber-600", badge: "bg-amber-100 text-amber-700 border-amber-200", label: "LATE SIGN-IN", cardBorder: n.read ? "" : "border-l-4 border-l-amber-400" };

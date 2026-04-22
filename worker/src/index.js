@@ -449,6 +449,29 @@ async function processTripEvent(request, env, eventType) {
           driverName: trip.driverName || "",
           tripDate: trip.date || "",
         }).catch(e => console.error("Firestore undesignate notification error:", e));
+
+        // Auto-cancel SMS: if trip was assigned to a vehicle on today or a future date, notify the driver
+        const today = new Date().toISOString().split("T")[0];
+        if (trip.vehicleRef && trip.date && trip.date >= today) {
+          supabaseGetExpectedShift(env, trip.vehicleRef, trip.date).then(shift => {
+            const phone = shift?.driver_phone;
+            if (!phone) return;
+            const driverName = shift.driver_name || "Driver";
+            const timeStr = trip.time ? ` at ${trip.time}` : "";
+            const passengerStr = trip.passenger ? ` for ${trip.passenger}` : "";
+            const msg = `Hi ${driverName}, your trip${passengerStr}${timeStr} has been cancelled. Please still sign in at your scheduled time and await dispatch's instructions.`;
+            sendTwilioSms(env, phone, msg).catch(e => console.error("Twilio cancellation send error:", e));
+            writeFirestoreThreadMessage(env, phone, msg).catch(e => console.error("Firestore thread write error:", e));
+            writeNotificationToFirestore(env, {
+              type: "trip_cancelled",
+              title: `Trip Cancelled — Vehicle ${trip.vehicleRef}`,
+              message: label || trip.id,
+              vehicleRef: trip.vehicleRef || "",
+              driverName: driverName,
+              tripDate: trip.date || "",
+            }).catch(e => console.error("Firestore cancel notification error:", e));
+          }).catch(e => console.error("Shift lookup for cancel SMS failed:", e));
+        }
       }
       continue;
     }
@@ -821,6 +844,42 @@ async function createIcabbiTrip(env, tripBody) {
   });
   if (!res.ok) throw new Error(await res.text());
   return await res.json();
+}
+
+async function sendTwilioSms(env, to, body) {
+  if (!env.TWILIO_SEND_URL || !to) return false;
+  try {
+    const res = await fetch(env.TWILIO_SEND_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to, body, mediaUrls: [] }),
+    });
+    if (!res.ok) console.error("Twilio send failed:", await res.text());
+    return res.ok;
+  } catch (e) {
+    console.error("Twilio SMS send error:", e);
+    return false;
+  }
+}
+
+async function writeFirestoreThreadMessage(env, phone, body) {
+  const token = await getFirebaseIdToken(env);
+  const sid = `trip-cancel-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const url = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID || "sms-dlx"}/databases/(default)/documents/organizations/${ORG_ID}/threads/${encodeURIComponent(phone)}/messages/${sid}?key=${env.FIREBASE_API_KEY}`;
+  const fields = {
+    body: { stringValue: body },
+    direction: { stringValue: "sent" },
+    sid: { stringValue: sid },
+    type: { stringValue: "trip_cancellation" },
+    createdAt: { timestampValue: new Date().toISOString() },
+    mediaUrls: { arrayValue: { values: [] } },
+  };
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) console.error("Firestore thread message write failed:", await res.text());
 }
 
 async function writeNotificationToFirestore(env, data) {

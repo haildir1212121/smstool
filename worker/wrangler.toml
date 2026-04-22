@@ -8,6 +8,7 @@ compatibility_date = "2024-01-01"
 # Value: AIzaSyCaypEoug2f7OTJjKOdkkJPaZDypcr3NF8
 FIREBASE_PROJECT_ID = "sms-dlx"
 SUPABASE_URL = "https://mdutrtmdjodabggirntb.supabase.co"
+TWILIO_SEND_URL = "https://sms-backend-3488.twil.io/send-sms"
 
 # Set SUPABASE_SERVICE_KEY via `wrangler secret put SUPABASE_SERVICE_KEY`
 
