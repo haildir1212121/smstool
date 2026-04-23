@@ -1121,9 +1121,7 @@ let soundPrefs = JSON.parse(localStorage.getItem('sound_prefs') || '{"msgs":true
         if (region.tabletCol !== null) {
           const tCell = ws[XLSX.utils.encode_cell({ r: r - 1, c: region.tabletCol })];
           if (tCell && tCell.v) {
-            const val = String(tCell.v).trim();
-            // Treat "off" as no tablet time — driver is not scheduled
-            if (val.toLowerCase() !== "off") tablet = val;
+            tablet = String(tCell.v).trim();
           }
         }
 
@@ -1378,11 +1376,15 @@ let soundPrefs = JSON.parse(localStorage.getItem('sound_prefs') || '{"msgs":true
                       ? `<span class="text-emerald-600 font-bold"><i class="fa-solid fa-check-circle mr-1"></i>${escapeHtml(d.matched.name)}</span> <button onclick="window.openManualMatch(${ttDrivers.indexOf(d)})" class="text-slate-400 hover:text-blue-600 ml-1 text-[10px] underline">change</button>`
                       : `<span class="text-rose-400 mr-2"><i class="fa-solid fa-circle-xmark mr-1"></i>No match</span><button onclick="window.openManualMatch(${ttDrivers.indexOf(d)})" class="px-2 py-0.5 bg-blue-600 text-white rounded text-[10px] font-bold hover:bg-blue-700 transition">Match</button>`
                     }</td>
-                    <td class="px-6 py-3 text-xs">${d.trips.length
-                      ? `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">${d.trips.length} trips</span>`
-                      : d.tablet
-                        ? `<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">Scheduled @ ${escapeHtml(d.tablet)}</span>`
-                        : `<span class="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">No trips</span>`
+                    <td class="px-6 py-3 text-xs">${(d.tablet||"").toLowerCase() === "off"
+                      ? `<span class="bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold"><i class="fa-solid fa-ban mr-1"></i>OFF</span>`
+                      : (d.tablet||"").toLowerCase() === "late"
+                        ? `<span class="bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-bold"><i class="fa-solid fa-clock mr-1"></i>Late Start</span>`
+                        : d.trips.length
+                          ? `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">${d.trips.length} trips</span>`
+                          : d.tablet
+                            ? `<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">Scheduled @ ${escapeHtml(d.tablet)}</span>`
+                            : `<span class="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">No trips</span>`
                     }</td>
                   </tr>
                 `).join("")}
@@ -1604,6 +1606,14 @@ let soundPrefs = JSON.parse(localStorage.getItem('sound_prefs') || '{"msgs":true
 
   // Generate a single-day trip message for a specific day's trips
   function generateSingleDayMessage(driver, dayTrips, dayLabel) {
+    const tabletLower = (driver.tablet || "").toLowerCase();
+    if (tabletLower === "off") {
+      return `${dayLabel}: NO SHIFT / OFF - DUE TO LOW RIDE VOLUME`;
+    }
+    if (tabletLower === "late") {
+      return `${dayLabel}: Assigned vehicle ${driver.vehicle}. Please sign in to your tablet at your earliest convenience to start your shift`;
+    }
+
     const seenPassengers = new Set();
 
     if (dayTrips.length === 0) {
@@ -1617,6 +1627,14 @@ let soundPrefs = JSON.parse(localStorage.getItem('sound_prefs') || '{"msgs":true
 
   function generateTripMessage(driver) {
     const dayLabel = driver.trips[0]?.date ? formatDayLabel(driver.trips[0].date) : formatDayLabel(window.ttTripDate);
+
+    const tabletLower = (driver.tablet || "").toLowerCase();
+    if (tabletLower === "off") {
+      return `${dayLabel}: NO SHIFT / OFF - DUE TO LOW RIDE VOLUME`;
+    }
+    if (tabletLower === "late") {
+      return `${dayLabel}: Assigned vehicle ${driver.vehicle}. Please sign in to your tablet at your earliest convenience to start your shift`;
+    }
 
     // LTD drivers: include vehicle, start time, and stop time
     if (driver.region === "LTD") {
