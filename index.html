@@ -2008,6 +2008,7 @@ let activeReviewRegion = null;
   window.selectAllMt = (val) => { mtContacts.forEach(c => { c.enabled = val; }); renderMassTextModal(); };
 
   window.toggleMtTag = (key) => {
+    mtActiveTag = key;
     const groups = getMtTagGroups();
     const group = groups.find(g => g.key === key);
     if (!group) return;
