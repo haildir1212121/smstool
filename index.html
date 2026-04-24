@@ -267,6 +267,9 @@
           <button onclick="window.openTripReviewModal()" id="ttReviewBtn" class="px-5 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition shadow-sm self-center hidden">
             <i class="fa-solid fa-paper-plane mr-1"></i>Review &amp; Send
           </button>
+          <button onclick="window.openMassTextModal()" id="ttMassTextBtn" class="px-5 py-2 bg-violet-600 text-white rounded-xl text-sm font-bold hover:bg-violet-700 transition shadow-sm self-center hidden">
+            <i class="fa-solid fa-bullhorn mr-1"></i>Mass Text
+          </button>
         </div>
 
         <div id="ttRegionList" class="space-y-4"></div>
@@ -332,6 +335,38 @@
           <div class="text-sm font-bold text-slate-700"><span id="ttSendSentCount">0</span> / <span id="ttSendTotalCount">0</span> sent</div>
         </div>
         <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden"><div id="ttSendProgressBar" class="bg-blue-600 h-full w-0 transition-all duration-300"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mass Text Modal -->
+  <div id="massTextModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-white rounded-2xl w-full max-w-5xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden">
+      <div class="flex justify-between items-center px-5 py-3 border-b border-gray-100 shrink-0 bg-white z-10">
+        <div class="flex items-center gap-3">
+          <h3 class="text-sm font-bold"><i class="fa-solid fa-bullhorn mr-1 text-violet-600"></i>Mass Text</h3>
+          <button onclick="window.selectAllMtMsgs(true)" class="text-[10px] text-blue-600 hover:underline font-semibold">All</button>
+          <button onclick="window.selectAllMtMsgs(false)" class="text-[10px] text-slate-400 hover:underline font-semibold">None</button>
+        </div>
+        <button onclick="document.getElementById('massTextModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <div class="px-5 py-3 border-b border-gray-100 bg-slate-50/60 shrink-0">
+        <textarea id="mtCustomMsg" rows="3" placeholder="Type your message here…" oninput="document.getElementById('mtCharCount').textContent=this.value.length" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm resize-none outline-none focus:ring-2 focus:ring-violet-300 font-mono leading-relaxed"></textarea>
+        <div class="flex justify-end mt-1"><span id="mtCharCount" class="text-[10px] text-slate-400 font-mono">0</span><span class="text-[10px] text-slate-400"> chars</span></div>
+      </div>
+      <div id="mtDriverList" class="flex-1 flex overflow-hidden bg-white"></div>
+      <div class="px-4 py-2.5 border-t border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
+        <div class="text-xs text-slate-500"><span id="mtReadyCount" class="font-bold text-slate-800">0</span> recipients selected</div>
+        <div class="flex gap-2">
+          <button onclick="document.getElementById('massTextModal').classList.add('hidden')" class="px-4 py-2 bg-gray-100 rounded-lg font-bold text-xs text-gray-600">Cancel</button>
+          <button onclick="window.sendMassTexts()" id="mtSendBtn" class="px-6 py-2 bg-violet-600 text-white rounded-lg font-bold text-xs hover:bg-violet-700 transition">Send to <span id="mtSendCount">0</span></button>
+        </div>
+      </div>
+      <div id="mtSendProgress" class="hidden p-6 border-t border-gray-100 bg-slate-50 shrink-0">
+        <div class="flex items-center gap-4 mb-3">
+          <div class="text-sm font-bold text-slate-700"><span id="mtSentCount">0</span> / <span id="mtTotalCount">0</span> sent</div>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden"><div id="mtProgressBar" class="bg-violet-600 h-full w-0 transition-all duration-300"></div></div>
       </div>
     </div>
   </div>
@@ -1501,6 +1536,7 @@ let soundPrefs = JSON.parse(localStorage.getItem('sound_prefs') || '{"msgs":true
       window.showToast(`Fetched ${totalTrips} trips for ${Object.keys(ttTrips).length} vehicles${dayLabel}`);
 
       document.getElementById("ttReviewBtn").classList.remove("hidden");
+      document.getElementById("ttMassTextBtn").classList.remove("hidden");
       renderTripTextsView();
 
     } catch (e) {
@@ -1874,6 +1910,142 @@ let activeReviewRegion = null;
     setTimeout(() => {
       document.getElementById("tripReviewModal").classList.add("hidden");
       document.getElementById("ttSendProgress").classList.add("hidden");
+    }, 2000);
+  };
+
+  // ── MASS TEXT ────────────────────────────────────────────────────────────────
+  let mtMessages = [];
+  let mtActiveRegion = null;
+
+  window.openMassTextModal = () => {
+    const matched = ttDrivers.filter(d => d.matched);
+    if (!matched.length) { window.showToast("No drivers loaded — upload a template first", "error"); return; }
+    mtMessages = matched.map(d => ({ phone: d.matched.phone, contactName: d.matched.name, driver: d, enabled: true }));
+    mtActiveRegion = null;
+    document.getElementById("mtCustomMsg").value = "";
+    document.getElementById("mtCharCount").textContent = "0";
+    document.getElementById("mtSendProgress").classList.add("hidden");
+    renderMassTextModal();
+    document.getElementById("massTextModal").classList.remove("hidden");
+  };
+
+  function renderMassTextModal() {
+    const enabledCount = mtMessages.filter(m => m.enabled).length;
+    document.getElementById("mtReadyCount").textContent = enabledCount;
+    document.getElementById("mtSendCount").textContent = enabledCount;
+
+    const regionMap = {};
+    mtMessages.forEach((m, i) => {
+      const region = m.driver.region || "Other";
+      if (!regionMap[region]) regionMap[region] = [];
+      regionMap[region].push({ msg: m, idx: i });
+    });
+    const regions = Object.keys(regionMap).sort();
+    if (!mtActiveRegion || !regionMap[mtActiveRegion]) mtActiveRegion = regions[0];
+
+    let html = `<div class="w-1/3 bg-slate-50 border-r border-gray-200 overflow-y-auto flex flex-col shrink-0">`;
+    regions.forEach(region => {
+      const items = regionMap[region];
+      const noneEnabled = items.every(it => !it.msg.enabled);
+      const regionEnabled = items.filter(it => it.msg.enabled).length;
+      const isActive = region === mtActiveRegion;
+      html += `<div class="flex items-center justify-between p-4 border-b border-gray-200 cursor-pointer transition ${isActive ? 'bg-white border-l-4 border-l-violet-600 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]' : 'hover:bg-gray-100 border-l-4 border-l-transparent'}" onclick="window.setMtRegion('${escapeHtml(region)}')">
+        <div class="flex items-center gap-3">
+          <label class="flex items-center justify-center cursor-pointer shrink-0" onclick="event.stopPropagation()">
+            <input type="checkbox" ${noneEnabled ? "" : "checked"} onchange="window.toggleMtRegion('${escapeHtml(region)}')" class="w-4 h-4 accent-violet-600">
+          </label>
+          <div>
+            <div class="font-bold text-sm ${isActive ? 'text-violet-700' : 'text-slate-700'}">${escapeHtml(region)}</div>
+            <div class="text-[10px] ${regionEnabled === 0 ? 'text-slate-400' : 'text-violet-500 font-semibold'}">${regionEnabled}/${items.length} selected</div>
+          </div>
+        </div>
+        <i class="fa-solid fa-chevron-right text-xs ${isActive ? 'text-violet-500' : 'text-slate-300'}"></i>
+      </div>`;
+    });
+    html += `</div>`;
+
+    html += `<div class="w-2/3 bg-white p-6 overflow-y-auto">`;
+    if (mtActiveRegion && regionMap[mtActiveRegion]) {
+      html += `<div class="mb-4 font-bold text-slate-800 text-lg">${escapeHtml(mtActiveRegion)}</div><div class="space-y-2">`;
+      regionMap[mtActiveRegion].forEach(({ msg: m, idx: i }) => {
+        const tabletLower = (m.driver.tablet || "").toLowerCase();
+        const badge = tabletLower === "off"
+          ? `<span class="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold">OFF</span>`
+          : tabletLower === "late"
+            ? `<span class="text-[10px] bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-bold">Late</span>`
+            : m.driver.tablet
+              ? `<span class="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">${escapeHtml(m.driver.tablet)}</span>`
+              : "";
+        html += `<div class="flex items-center gap-3 p-3 rounded-xl border transition ${m.enabled ? 'border-violet-200 bg-violet-50/20' : 'border-gray-200 bg-gray-50 opacity-60'}">
+          <label class="cursor-pointer shrink-0">
+            <input type="checkbox" ${m.enabled ? "checked" : ""} onchange="window.toggleMtMsg(${i})" class="w-5 h-5 accent-violet-600">
+          </label>
+          <div class="w-8 h-8 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-xs font-bold shrink-0">${initials(m.contactName)}</div>
+          <div class="flex-1 min-w-0">
+            <div class="font-bold text-sm text-slate-800 truncate">${escapeHtml(m.contactName)}</div>
+            <div class="text-[10px] text-slate-400 font-mono">${m.phone}</div>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span class="text-[10px] font-mono bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">V${escapeHtml(m.driver.vehicle)}</span>
+            ${badge}
+          </div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+    html += `</div>`;
+
+    document.getElementById("mtDriverList").innerHTML = html;
+  }
+
+  window.setMtRegion = (region) => { mtActiveRegion = region; renderMassTextModal(); };
+
+  window.toggleMtMsg = (i) => { mtMessages[i].enabled = !mtMessages[i].enabled; renderMassTextModal(); };
+
+  window.selectAllMtMsgs = (val) => { mtMessages.forEach(m => { m.enabled = val; }); renderMassTextModal(); };
+
+  window.toggleMtRegion = (region) => {
+    const inRegion = mtMessages.filter(m => (m.driver.region || "Other") === region);
+    const anyEnabled = inRegion.some(m => m.enabled);
+    inRegion.forEach(m => { m.enabled = !anyEnabled; });
+    renderMassTextModal();
+  };
+
+  window.sendMassTexts = async () => {
+    const body = document.getElementById("mtCustomMsg").value.trim();
+    if (!body) { window.showToast("Enter a message first", "error"); return; }
+    const toSend = mtMessages.filter(m => m.enabled);
+    if (!toSend.length) { window.showToast("No recipients selected", "error"); return; }
+    if (!confirm(`Send this message to ${toSend.length} driver${toSend.length !== 1 ? "s" : ""}?`)) return;
+
+    const btn = document.getElementById("mtSendBtn");
+    btn.disabled = true;
+    document.getElementById("mtSendProgress").classList.remove("hidden");
+    document.getElementById("mtTotalCount").textContent = toSend.length;
+    const pBar = document.getElementById("mtProgressBar");
+    let sent = 0;
+
+    for (let i = 0; i < toSend.length; i++) {
+      const m = toSend[i];
+      try {
+        const res = await fetch(TWILIO_SEND_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: m.phone, body, mediaUrls: [] }) });
+        if (res.ok) {
+          const sid = `mass-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+          await setDoc(doc(getMsgsCol(m.phone), sid), { body, direction: "sent", createdAt: serverTimestamp(), sid, mediaUrls: [], type: "mass_text" });
+          await updateDoc(getThreadDoc(m.phone), { lastMessageText: body.slice(0, 80), lastMessageAtMs: Date.now() });
+          sent++;
+        }
+      } catch (e) { console.error("Mass text send error:", e); }
+      document.getElementById("mtSentCount").textContent = sent;
+      pBar.style.width = `${((i + 1) / toSend.length) * 100}%`;
+      await new Promise(r => setTimeout(r, 400));
+    }
+
+    btn.disabled = false;
+    window.showToast(`Mass text sent to ${sent} driver${sent !== 1 ? "s" : ""}`);
+    setTimeout(() => {
+      document.getElementById("massTextModal").classList.add("hidden");
+      document.getElementById("mtSendProgress").classList.add("hidden");
     }, 2000);
   };
 
