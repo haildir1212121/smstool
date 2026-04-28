@@ -548,8 +548,23 @@
   };
 
   function relativeTime(ms) { if (!ms) return ""; const diff = Date.now() - ms; const min = 60000; if (diff < min) return "now"; if (diff < 60*min) return Math.floor(diff/min) + "m"; if (diff < 24*60*min) return Math.floor(diff/(60*min)) + "h"; return Math.floor(diff/(24*60*min)) + "d"; }
-  window.showToast = (msg, type) => { const t = document.getElementById("toast"); document.getElementById("toastMsg").innerText=msg; document.getElementById("toastIcon").className = type==="error"?"fa-solid fa-circle-exclamation text-rose-400":"fa-solid fa-check-circle text-emerald-400"; t.classList.remove("translate-y-20","opacity-0"); setTimeout(()=>t.classList.add("translate-y-20","opacity-0"), 2500); };
+let toastTimeout = null;
+window.showToast = (msg, type) => { 
+  const t = document.getElementById("toast"); 
+  document.getElementById("toastMsg").innerText = msg; 
+  document.getElementById("toastIcon").className = type === "error" 
+    ? "fa-solid fa-circle-exclamation text-rose-400" 
+    : "fa-solid fa-check-circle text-emerald-400"; 
+    
+  // Show the toast
+  t.classList.remove("translate-y-20","opacity-0"); 
   
+  // Clear any existing timeout so it doesn't hide prematurely
+  if (toastTimeout) clearTimeout(toastTimeout);
+  
+  // Start a fresh 2.5 second timer
+  toastTimeout = setTimeout(() => t.classList.add("translate-y-20","opacity-0"), 2500); 
+};
   window.requestNotifPerm = () => { Notification.requestPermission().then(p => { if(p==="granted") { window.showToast("Notifications Enabled"); } }); };
   function queueNotification(threadId, name, body) {
       if(document.visibilityState === 'visible' && store.activeThreadId === threadId) return;
