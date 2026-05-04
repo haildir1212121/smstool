@@ -348,7 +348,31 @@ async function firestoreDeleteTrip(env, trip) {
 
 // ── Main Router ──────────────────────────────────────────────────────────────
 
+async function purgeOldTrips(env) {
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() - 5);
+  const cutoffDate = cutoff.toISOString().slice(0, 10); // YYYY-MM-DD
+
+  const res = await supabaseRequest(env, `trips?date=lt.${cutoffDate}`, {
+    method: "DELETE",
+    headers: { Prefer: "return=representation" },
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error("Purge old trips failed:", errText);
+    return 0;
+  }
+  const deleted = await res.json();
+  console.log(`Purged ${deleted.length} trip(s) older than ${cutoffDate}`);
+  return deleted.length;
+}
+
 export default {
+  async scheduled(event, env) {
+    await purgeOldTrips(env);
+  },
+
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS_HEADERS });

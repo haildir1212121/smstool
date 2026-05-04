@@ -22,3 +22,6 @@ ICABBI_API_URL = "https://api.icabbi.us/us4"
 # Repair shop / issue type mappings (can also be configured in Automation Settings UI)
 # REPAIR_MAPPINGS = "RBG:Jiffy Lube:123 Main St Roseburg OR;EUG:Shop Name:456 Oak Eugene OR"
 # ISSUE_MAPPINGS = "headlight:Headlight repair;oil:Oil change"
+
+[triggers]
+crons = ["0 6 * * *"]  # Daily at 06:00 UTC — purge trips older than 5 days
