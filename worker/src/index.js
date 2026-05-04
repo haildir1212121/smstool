@@ -346,12 +346,12 @@ async function firestoreDeleteTrip(env, trip) {
   }
 }
 
-// ── Main Router ──────────────────────────────────────────────────────────────
+// ── Scheduled Cleanup ────────────────────────────────────────────────────────
 
 async function purgeOldTrips(env) {
   const cutoff = new Date();
   cutoff.setUTCDate(cutoff.getUTCDate() - 5);
-  const cutoffDate = cutoff.toISOString().slice(0, 10); // YYYY-MM-DD
+  const cutoffDate = cutoff.toISOString().slice(0, 10);
 
   const res = await supabaseRequest(env, `trips?date=lt.${cutoffDate}`, {
     method: "DELETE",
@@ -359,17 +359,17 @@ async function purgeOldTrips(env) {
   });
 
   if (!res.ok) {
-    const errText = await res.text();
-    console.error("Purge old trips failed:", errText);
-    return 0;
+    console.error("purgeOldTrips failed:", await res.text());
+    return;
   }
   const deleted = await res.json();
-  console.log(`Purged ${deleted.length} trip(s) older than ${cutoffDate}`);
-  return deleted.length;
+  console.log(`purgeOldTrips: removed ${deleted.length} trip(s) older than ${cutoffDate}`);
 }
 
+// ── Main Router ──────────────────────────────────────────────────────────────
+
 export default {
-  async scheduled(event, env) {
+  async scheduled(_event, env) {
     await purgeOldTrips(env);
   },
 
