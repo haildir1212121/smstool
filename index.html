@@ -39,10 +39,6 @@
       <button onclick="window.switchView('inbox')" id="nav-inbox" class="nav-item active w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-solid fa-inbox text-xl"></i></button>
       <button onclick="window.switchView('contacts')" id="nav-contacts" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition"><i class="fa-regular fa-address-book text-xl"></i></button>
       <button onclick="window.switchView('triptexts')" id="nav-triptexts" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Trip Texts"><i class="fa-solid fa-route text-xl"></i></button>
-      <button onclick="window.switchView('notifications')" id="nav-notifications" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition relative" title="Notifications">
-        <i class="fa-solid fa-bell text-xl"></i>
-        <span id="notifBadge" class="hidden absolute top-1.5 right-2.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-900 animate-pulse">0</span>
-      </button>
       <button onclick="window.switchView('tripdata')" id="nav-tripdata" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Trip Data Viewer"><i class="fa-solid fa-database text-xl"></i></button>
       <button onclick="window.switchView('shifts')" id="nav-shifts" class="nav-item w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Driver Shifts"><i class="fa-solid fa-user-clock text-xl"></i></button>
       <button onclick="window.openMassTextModal()" class="w-full h-12 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition" title="Mass Text"><i class="fa-solid fa-bullhorn text-xl"></i></button>
@@ -66,7 +62,7 @@
       <div class="flex flex-col border-b border-gray-50 shrink-0">
           <div class="px-4 py-2 flex gap-2">
             <button onclick="window.toggleUnreadOnly()" id="filterUnread" class="px-3 py-1 rounded-md text-[10px] font-bold border border-gray-200 text-gray-500 hover:bg-gray-50 uppercase transition">Unread</button>
-            <button onclick="window.toggleUrgentOnly()" id="filterUrgent" class="px-3 py-1 rounded-md text-[10px] font-bold border border-gray-200 text-gray-500 hover:bg-gray-50 uppercase transition">Urgent</button>
+            <button onclick="window.togglePinnedOnly()" id="filterPinned" class="px-3 py-1 rounded-md text-[10px] font-bold border border-gray-200 text-gray-500 hover:bg-gray-50 uppercase transition">Pinned</button>
           </div>
           <div id="tagFilterRow" class="px-4 pb-2 flex gap-2 overflow-x-auto scrollbar-hide empty:hidden"></div>
       </div>
@@ -85,7 +81,17 @@
          <div class="flex items-center gap-2 text-slate-400">
              <button onclick="window.deleteActiveThread()" class="w-8 h-8 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-600 transition" title="Delete Conversation"><i class="fa-regular fa-trash-can"></i></button>
              <div class="h-4 w-px bg-slate-200 mx-1"></div>
-             <button onclick="window.toggleUrgentThread()" id="headerUrgentBtn" class="w-8 h-8 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-500 transition"><i class="fa-solid fa-bell"></i></button>
+             <div class="relative">
+               <button onclick="window.togglePinMenu()" id="headerPinBtn" class="w-8 h-8 flex items-center justify-center rounded hover:bg-amber-50 hover:text-amber-500 transition text-slate-400" title="Pin / Alert Color"><i class="fa-solid fa-thumbtack"></i></button>
+               <div id="pinColorPicker" class="hidden absolute right-0 top-10 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-3 flex gap-2 items-center">
+                 <span class="text-xs font-bold text-slate-500 mr-1">Alert color:</span>
+                 <button onclick="window.pinThread('red')" class="w-7 h-7 rounded-full bg-red-500 hover:scale-110 transition border-2 border-white shadow" title="Red"></button>
+                 <button onclick="window.pinThread('amber')" class="w-7 h-7 rounded-full bg-amber-400 hover:scale-110 transition border-2 border-white shadow" title="Amber"></button>
+                 <button onclick="window.pinThread('blue')" class="w-7 h-7 rounded-full bg-blue-500 hover:scale-110 transition border-2 border-white shadow" title="Blue"></button>
+                 <button onclick="window.pinThread('emerald')" class="w-7 h-7 rounded-full bg-emerald-500 hover:scale-110 transition border-2 border-white shadow" title="Green"></button>
+                 <button onclick="window.pinThread('purple')" class="w-7 h-7 rounded-full bg-purple-500 hover:scale-110 transition border-2 border-white shadow" title="Purple"></button>
+               </div>
+             </div>
              <div class="h-4 w-px bg-slate-200 mx-1"></div>
              <button onclick="window.toggleInfoPanel()" class="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 hover:text-blue-600 transition"><i class="fa-solid fa-circle-info"></i></button>
          </div>
@@ -374,56 +380,6 @@
     </div>
   </div>
 
-  <div id="view-notifications" class="hidden flex-1 h-full flex flex-col bg-slate-50 fade-in overflow-hidden">
-    <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
-      <div class="flex items-center gap-4">
-        <h2 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-bell mr-2 text-amber-500"></i>Notification Center</h2>
-        <span id="notifCenterCount" class="text-xs font-mono bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">0 active</span>
-      </div>
-      <div class="flex gap-3 items-center">
-        <select id="notifFilterType" onchange="window.renderNotifications()" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 outline-none">
-          <option value="all">All Types</option>
-          <option value="vehicle_alert">Vehicle Alerts</option>
-          <option value="fleetio_issue">Fleetio Issues</option>
-          <option value="trip_designated">Trip Designated</option>
-          <option value="trip_undesignated">Trip Undesignated</option>
-          <option value="trip_cancelled">Trip Cancelled</option>
-          <option value="late_signin">Late Sign-Ins</option>
-          <option value="long_shift">Long Shifts</option>
-        </select>
-        <button onclick="window.markAllNotifsRead()" class="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition">
-          <i class="fa-solid fa-check-double mr-1"></i>Mark All Read
-        </button>
-        <button onclick="window.openAutomationSettings()" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition shadow-sm">
-          <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Automation Settings
-        </button>
-      </div>
-    </div>
-    <div class="flex-1 overflow-y-auto p-6">
-      <div id="notifActiveAlerts" class="max-w-5xl mx-auto mb-6 space-y-3"></div>
-      <div id="notifPipelineCards" class="max-w-5xl mx-auto grid grid-cols-3 gap-4 mb-6">
-        <div class="bg-white border border-slate-200 rounded-xl px-5 py-4 flex items-center gap-4 shadow-sm">
-          <div class="w-11 h-11 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-lg"><i class="fa-solid fa-triangle-exclamation"></i></div>
-          <div><div class="text-xs text-slate-400 font-semibold">Vehicle Alerts</div><div id="notifVehicleCount" class="text-2xl font-bold text-slate-800">0</div></div>
-        </div>
-        <div class="bg-white border border-slate-200 rounded-xl px-5 py-4 flex items-center gap-4 shadow-sm">
-          <div class="w-11 h-11 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-lg"><i class="fa-solid fa-wrench"></i></div>
-          <div><div class="text-xs text-slate-400 font-semibold">Fleetio Issues</div><div id="notifFleetioCount" class="text-2xl font-bold text-slate-800">0</div></div>
-        </div>
-        <div class="bg-white border border-slate-200 rounded-xl px-5 py-4 flex items-center gap-4 shadow-sm">
-          <div class="w-11 h-11 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg"><i class="fa-solid fa-route"></i></div>
-          <div><div class="text-xs text-slate-400 font-semibold">Trip Changes</div><div id="notifDesignateCount" class="text-2xl font-bold text-slate-800">0</div></div>
-        </div>
-      </div>
-      <div id="notifFeed" class="max-w-5xl mx-auto space-y-3">
-        <div class="flex flex-col items-center justify-center py-16 text-slate-300">
-          <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-slate-100"><i class="fa-solid fa-bell-slash text-2xl opacity-50"></i></div>
-          <p class="font-medium text-sm">No notifications yet</p>
-          <p class="text-xs text-slate-400 mt-1">Vehicle alerts and Fleetio automations will appear here</p>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <div id="view-tripdata" class="hidden flex-1 h-full flex flex-col bg-slate-50 fade-in overflow-hidden">
     <div class="h-16 flex items-center px-8 justify-between border-b border-gray-200 bg-white/90 sticky top-0 z-10 shrink-0">
@@ -519,47 +475,6 @@
     </div>
   </div>
 
-  <div id="automationSettingsModal" class="fixed inset-0 bg-black/40 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4">
-    <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
-      <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100 shrink-0">
-        <h3 class="text-lg font-bold"><i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-500"></i>Automation Settings</h3>
-        <button onclick="document.getElementById('automationSettingsModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-      <div class="flex-1 overflow-y-auto p-6 space-y-5">
-        <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
-          <h4 class="text-sm font-bold text-indigo-900 mb-3"><i class="fa-solid fa-plug mr-1"></i>Fleetio Connection</h4>
-          <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Fleetio Account Token</label>
-          <input id="autoFleetioToken" type="password" class="w-full bg-white border border-gray-200 p-2.5 mb-2 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-indigo-200" placeholder="Your Fleetio API token">
-          <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Fleetio API Key</label>
-          <input id="autoFleetioApiKey" type="password" class="w-full bg-white border border-gray-200 p-2.5 mb-2 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-indigo-200" placeholder="Your Fleetio API key">
-          <p class="text-[10px] text-indigo-600 mt-1">Fleetio sends webhooks to your worker at <code>/webhook/fleetio</code></p>
-        </div>
-        <div class="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
-          <h4 class="text-sm font-bold text-emerald-900 mb-3"><i class="fa-solid fa-taxi mr-1"></i>iCabbi Trip Creation</h4>
-          <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">iCabbi API URL</label>
-          <input id="autoIcabbiApiUrl" class="w-full bg-white border border-gray-200 p-2.5 mb-2 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-emerald-200" placeholder="https://api.icabbi.com/v1">
-          <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">iCabbi API Key</label>
-          <input id="autoIcabbiApiKey" type="password" class="w-full bg-white border border-gray-200 p-2.5 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-emerald-200" placeholder="Your iCabbi API key">
-        </div>
-        <div class="bg-amber-50 border border-amber-100 rounded-xl p-4">
-          <h4 class="text-sm font-bold text-amber-900 mb-3"><i class="fa-solid fa-map-pin mr-1"></i>Repair Shop Mappings</h4>
-          <p class="text-xs text-amber-700 mb-3">Map each iCabbi site_ref to a default repair shop. When a Fleetio issue comes in for a vehicle at that site, the auto-created trip will use this pickup address.</p>
-          <div id="repairShopMappings" class="space-y-2 mb-3"></div>
-          <button onclick="window.addRepairMapping()" class="text-xs text-amber-700 font-bold hover:underline"><i class="fa-solid fa-plus mr-1"></i>Add Mapping</button>
-        </div>
-        <div class="bg-sky-50 border border-sky-100 rounded-xl p-4">
-          <h4 class="text-sm font-bold text-sky-900 mb-3"><i class="fa-solid fa-list-check mr-1"></i>Issue Type Mappings</h4>
-          <p class="text-xs text-sky-700 mb-3">Map Fleetio issue keywords to trip name prefixes. Example: "headlight" → "Headlight repair"</p>
-          <div id="issueTypeMappings" class="space-y-2 mb-3"></div>
-          <button onclick="window.addIssueMapping()" class="text-xs text-sky-700 font-bold hover:underline"><i class="fa-solid fa-plus mr-1"></i>Add Mapping</button>
-        </div>
-      </div>
-      <div class="px-6 py-4 border-t border-gray-100 flex gap-2 shrink-0">
-        <button onclick="document.getElementById('automationSettingsModal').classList.add('hidden')" class="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-sm text-gray-600">Cancel</button>
-        <button onclick="window.saveAutomationSettings()" class="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700">Save</button>
-      </div>
-    </div>
-  </div>
 
 <script type="module">
   const SMS_BACKEND_BASE = "https://sms-backend-3488.twil.io";
@@ -581,7 +496,7 @@
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1kdXRydG1kam9kYWJnZ2lybnRiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5MDk3MzQsImV4cCI6MjA5MDQ4NTczNH0.GlrbsjnkBSwhnguBQUCb418NxvRO02PhXhBJZ69xTi4";
   const supabase = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   // ADDED PAGINATION STATE
-  let store = { threads: [], logs: [], activeThreadId: null, activeThread: null, pinned: new Set(), drafts: {}, cannedReplies: [], deletedSids: new Set(), lastInboundSidSeen: new Set(), isPolling: false, pendingMedia: [], isFirstLoad: true, onlyUnread: false, onlyUrgent: false, tagFilter: new Set(), notifQueue: {}, notifTimer: null, cmPage: 1, logPage: 1, itemsPerPage: 15 };
+  let store = { threads: [], logs: [], activeThreadId: null, activeThread: null, pinned: new Set(), drafts: {}, cannedReplies: [], deletedSids: new Set(), lastInboundSidSeen: new Set(), isPolling: false, pendingMedia: [], isFirstLoad: true, onlyUnread: false, onlyPinned: false, tagFilter: new Set(), notifQueue: {}, notifTimer: null, cmPage: 1, logPage: 1, itemsPerPage: 15 };
   
   // Make store global so pagination buttons can access it
   window.store = store;
@@ -622,7 +537,6 @@
   }
   const normalizePhone = (p) => { if (!p) return ""; let clean = p.replace(/\D/g, ''); if (clean.length === 10) return `+1${clean}`; if (clean.length === 11 && clean.startsWith('1')) return `+${clean}`; return clean.length > 0 ? `+${clean}` : ""; };
 
-  const vehicleKeywords = ["oil change", "repair", "red triangle", "check engine", "engine light", "won't start", "wont start", "not starting", "flat tire", "break down", "breakdown", "tow", "not turning on"];
 
   async function poll() {
       if(store.isPolling) return; store.isPolling = true;
@@ -640,24 +554,8 @@
                 const isViewing = (store.activeThreadId === phone && document.visibilityState === 'visible');
                 if (!isViewing) queueNotification(phone, t ? (t.name || phone) : phone, m.body);
 
-                const lowerBody = m.body.toLowerCase();
-                const isMaintenance = vehicleKeywords.some(k => lowerBody.includes(k));
-                
-                if (isMaintenance) {
-                    await addDoc(collection(db, "organizations", SHARED_ORG_ID, "logs"), {
-                        type: "vehicle_alert",
-                        threadName: t ? (t.name || phone) : phone,
-                        phone: phone,
-                        message: m.body,
-                        threadId: phone,
-                        createdAt: serverTimestamp()
-                    });
-                    window.showToast("Vehicle Issue Detected!", "error");
-                }
-
                 const updateData = { lastMessageText: m.body, lastMessageAtMs: msgTime, unread: isViewing ? 0 : increment(1), id: phone, phone: phone };
-                if (isMaintenance) updateData.isUrgent = true; 
-                if (!t) updateData.name = phone; 
+                if (!t) updateData.name = phone;
 
                 const currentLastMs = t ? (t.lastMessageAtMs || 0) : 0;
                 if (msgTime > currentLastMs) {
@@ -669,7 +567,7 @@
   }
 
   window.switchView = (v) => {
-      ['inbox', 'contacts', 'triptexts', 'notifications', 'tripdata', 'shifts'].forEach(x => document.getElementById(`view-${x}`).classList.add('hidden'));
+      ['inbox', 'contacts', 'triptexts', 'tripdata', 'shifts'].forEach(x => document.getElementById(`view-${x}`).classList.add('hidden'));
       document.getElementById(`view-${v}`).classList.remove('hidden');
       if (v === 'shifts') window.loadShiftView();
       document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -677,7 +575,6 @@
       if(v === 'contacts') { store.cmPage = 1; window.renderContactsManagerTable(); }
       if(v === 'broadcast') document.getElementById('massCountDisplay').innerText = store.threads.filter(t=>t.phone && t.phone.length > 5).length;
       if(v === 'logs') { store.logPage = 1; window.renderLogbook(); }
-      if(v === 'notifications') window.renderNotifications();
       if(v === 'tripdata') window.initTripDataView();
   };
   window.toggleInfoPanel = () => document.getElementById("infoPanel").classList.toggle("hidden");
@@ -717,7 +614,7 @@
       const tagRow = document.getElementById("tagFilterRow");
       const s = (document.getElementById("searchContacts").value || "").toLowerCase();
       document.getElementById("filterUnread").className = `px-3 py-1 rounded-md text-[10px] font-bold border uppercase transition ${store.onlyUnread?'bg-blue-600 text-white border-blue-600':'bg-white border-gray-200 text-gray-500'}`;
-      document.getElementById("filterUrgent").className = `px-3 py-1 rounded-md text-[10px] font-bold border uppercase transition ${store.onlyUrgent?'bg-rose-500 text-white border-rose-500':'bg-white border-gray-200 text-gray-500'}`;
+      document.getElementById("filterPinned").className = `px-3 py-1 rounded-md text-[10px] font-bold border uppercase transition ${store.onlyPinned?'bg-amber-500 text-white border-amber-500':'bg-white border-gray-200 text-gray-500'}`;
       
       const allTags = new Set(); store.threads.forEach(t => (t.tags||[]).forEach(tag => allTags.add(tag)));
       if(allTags.size > 0 || store.threads.length > 0) {
@@ -732,11 +629,15 @@
           tagRow.innerHTML = tagHtml;
       } else { tagRow.classList.add("hidden"); }
 
-      let list = store.threads.slice().sort((a,b) => (b.lastMessageAtMs||0)-(a.lastMessageAtMs||0));
+      let list = store.threads.slice().sort((a, b) => {
+          if (a.pinned && !b.pinned) return -1;
+          if (!a.pinned && b.pinned) return 1;
+          return (b.lastMessageAtMs || 0) - (a.lastMessageAtMs || 0);
+      });
       list = list.filter(t => {
           if (s && !`${t.name} ${t.phone}`.toLowerCase().includes(s)) return false;
           if (store.onlyUnread && !t.unread) return false;
-          if (store.onlyUrgent && !t.isUrgent) return false;
+          if (store.onlyPinned && !t.pinned) return false;
           if (store.tagFilter.size > 0) {
               const tTags = t.tags || [];
               const wantsUntagged = store.tagFilter.has("__untagged__");
@@ -747,22 +648,29 @@
           return true;
       });
 
+      const pinColorMap = {
+          red:     { card: 'bg-red-50 border-l-4 border-red-500',       cardActive: 'bg-red-100 border-l-4 border-red-500',       hex: '#ef4444' },
+          amber:   { card: 'bg-amber-50 border-l-4 border-amber-500',   cardActive: 'bg-amber-100 border-l-4 border-amber-500',   hex: '#f59e0b' },
+          blue:    { card: 'bg-blue-50 border-l-4 border-blue-500',     cardActive: 'bg-blue-100 border-l-4 border-blue-500',     hex: '#3b82f6' },
+          emerald: { card: 'bg-emerald-50 border-l-4 border-emerald-500', cardActive: 'bg-emerald-100 border-l-4 border-emerald-500', hex: '#10b981' },
+          purple:  { card: 'bg-purple-50 border-l-4 border-purple-500', cardActive: 'bg-purple-100 border-l-4 border-purple-500', hex: '#8b5cf6' },
+      };
+
       el.innerHTML = list.map(t => {
           const isActive = t.id === store.activeThreadId, isUnread = (t.unread||0) > 0;
-          const isVehicleAlert = t.isUrgent && vehicleKeywords.some(k => (t.lastMessageText||'').toLowerCase().includes(k));
+          const isPinned = t.pinned;
+          const pc = pinColorMap[t.pinColor] || pinColorMap.blue;
           let cardClass = isActive ? 'bg-blue-50 border border-blue-100 shadow-sm' : 'hover:bg-slate-50 border border-transparent';
           let iconClass = isActive ? 'bg-blue-600 text-white' : (isUnread ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500');
-          let urgentIcon = '';
+          let pinnedIcon = '';
 
-          if (isVehicleAlert) {
-              cardClass = isActive ? 'bg-amber-100 border-l-4 border-amber-500' : 'bg-amber-50 border-l-4 border-amber-400 hover:bg-amber-100';
-              urgentIcon = '<div class="absolute -top-1 -right-1 text-amber-600 animate-pulse"><i class="fa-solid fa-wrench"></i></div>';
-          } else if (t.isUrgent) {
-              urgentIcon = '<div class="absolute -top-1 -right-1 text-rose-500 animate-pulse"><i class="fa-solid fa-bell"></i></div>';
+          if (isPinned) {
+              cardClass = isActive ? pc.cardActive : pc.card;
+              pinnedIcon = `<div class="absolute -top-1 -right-1 animate-pulse" style="color:${pc.hex}"><i class="fa-solid fa-thumbtack text-xs"></i></div>`;
           }
 
           return `<div onclick="window.loadThread('${t.id}')" class="p-3 rounded-xl cursor-pointer mb-1 transition flex items-center gap-3 ${cardClass}">
-            <div class="relative w-10 h-10 rounded-full ${iconClass} flex items-center justify-center font-bold text-xs shrink-0 transition-colors">${initials(t.name)}${isUnread ? '<div class="absolute top-0 right-0 w-3 h-3 bg-blue-500 rounded-full border-2 border-white"></div>':''}${urgentIcon}</div>
+            <div class="relative w-10 h-10 rounded-full ${iconClass} flex items-center justify-center font-bold text-xs shrink-0 transition-colors">${initials(t.name)}${isUnread ? '<div class="absolute top-0 right-0 w-3 h-3 bg-blue-500 rounded-full border-2 border-white"></div>':''}${pinnedIcon}</div>
             <div class="flex-1 min-w-0"><div class="flex justify-between items-baseline"><span class="font-bold text-sm ${isUnread?'text-gray-900':'text-gray-700'} truncate">${escapeHtml(t.name)}</span><span class="text-[10px] text-gray-400 whitespace-nowrap">${relativeTime(t.lastMessageAtMs)}</span></div><div class="text-xs text-gray-500 truncate h-4 leading-4 opacity-80">${escapeHtml(t.lastMessageText || "No messages")}</div>${t.tags && t.tags.length ? `<div class="flex gap-1 mt-1 overflow-hidden h-4">${t.tags.slice(0,3).map(g=>`<span class="px-1 bg-slate-100 text-slate-500 text-[9px] rounded border border-slate-200">${g}</span>`).join("")}</div>` : ''}</div>
           </div>`;
       }).join("");
@@ -780,7 +688,15 @@
       document.getElementById("detailsName").innerText = store.activeThread?.name || id; document.getElementById("detailsPhone").innerText = store.activeThread?.phone;
       document.getElementById("detailsTagsInput").value = (store.activeThread?.tags||[]).join(", "); document.getElementById("detailsNotes").value = store.activeThread?.notes||"";
       document.getElementById("msgInput").value = store.drafts[id] || "";
-      document.getElementById("headerUrgentBtn").className = store.activeThread.isUrgent ? "w-8 h-8 flex items-center justify-center rounded bg-rose-100 text-rose-500" : "w-8 h-8 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-500 text-slate-400";
+      const _pinBtn = document.getElementById("headerPinBtn");
+      const _pinHexMap = { red: '#ef4444', amber: '#f59e0b', blue: '#3b82f6', emerald: '#10b981', purple: '#8b5cf6' };
+      if (store.activeThread.pinned) {
+          _pinBtn.style.color = _pinHexMap[store.activeThread.pinColor] || _pinHexMap.blue;
+          _pinBtn.title = "Unpin (click to remove pin)";
+      } else {
+          _pinBtn.style.color = '';
+          _pinBtn.title = "Pin / Alert Color";
+      }
       try { await updateDoc(getThreadDoc(id), { unread: 0, lastReadAtMs: Date.now() }); } catch {}
       
       const q = query(getMsgsCol(id), orderBy("createdAt", "asc"));
@@ -965,9 +881,23 @@
     document.getElementById("newMsgModal").classList.add("hidden"); 
     window.loadThread(cleanPhone); 
 };
-  window.toggleUrgentThread = async () => { if(store.activeThreadId) await updateDoc(getThreadDoc(store.activeThreadId), { isUrgent: !store.activeThread.isUrgent }); };
+  window.togglePinMenu = () => {
+      if (!store.activeThreadId) return;
+      const picker = document.getElementById("pinColorPicker");
+      if (store.activeThread?.pinned) {
+          picker.classList.add("hidden");
+          updateDoc(getThreadDoc(store.activeThreadId), { pinned: false, pinColor: null });
+      } else {
+          picker.classList.toggle("hidden");
+      }
+  };
+  window.pinThread = async (color) => {
+      document.getElementById("pinColorPicker").classList.add("hidden");
+      if (!store.activeThreadId) return;
+      await updateDoc(getThreadDoc(store.activeThreadId), { pinned: true, pinColor: color });
+  };
   window.toggleUnreadOnly = () => { store.onlyUnread = !store.onlyUnread; window.renderThreadList(); };
-  window.toggleUrgentOnly = () => { store.onlyUrgent = !store.onlyUrgent; window.renderThreadList(); };
+  window.togglePinnedOnly = () => { store.onlyPinned = !store.onlyPinned; window.renderThreadList(); };
 let soundPrefs = JSON.parse(localStorage.getItem('sound_prefs') || '{"msgs":true,"trips":true}');
 
   window.toggleSound = (type) => {
@@ -2083,254 +2013,6 @@ let activeReviewRegion = null;
     else console.log(`[autoSeed] Seeded ${rows.length} shift rows for ${date}`);
   }
 
-  // ==========================================
-  // NOTIFICATION CENTER
-  // ==========================================
-  store.notifications = [];
-  store.notifPage = 1;
-
-  function getNotificationsCol() {
-    return collection(db, "organizations", SHARED_ORG_ID, "notifications");
-  }
-
-  function setupNotificationListener() {
-    const q = query(getNotificationsCol(), orderBy("createdAt", "desc"), limit(100));
-    onSnapshot(q, snap => {
-      store.notifications = snap.docs.map(d => ({ ...d.data(), _id: d.id }));
-      updateNotifBadge();
-      if (!document.getElementById("view-notifications").classList.contains("hidden")) {
-        window.renderNotifications();
-      }
-    });
-  }
-
-  function updateNotifBadge() {
-    const unread = store.notifications.filter(n => !n.read).length;
-    const badge = document.getElementById("notifBadge");
-    if (unread > 0) {
-      badge.textContent = unread > 99 ? "99+" : unread;
-      badge.classList.remove("hidden");
-    } else {
-      badge.classList.add("hidden");
-    }
-  }
-
-  window.renderNotifications = () => {
-    const filter = document.getElementById("notifFilterType")?.value || "all";
-    let items = store.notifications.slice();
-    if (filter !== "all") items = items.filter(n => n.type === filter);
-
-    const vehicleCount = store.notifications.filter(n => n.type === "vehicle_alert").length;
-    const fleetioCount = store.notifications.filter(n => n.type === "fleetio_issue").length;
-    const designateCount = store.notifications.filter(n => n.type === "trip_designated" || n.type === "trip_undesignated").length;
-    document.getElementById("notifVehicleCount").textContent = vehicleCount;
-    document.getElementById("notifFleetioCount").textContent = fleetioCount;
-    document.getElementById("notifDesignateCount").textContent = designateCount;
-    document.getElementById("notifCenterCount").textContent = `${store.notifications.filter(n => !n.read).length} active`;
-
-    const activeAlerts = store.notifications.filter(n => !n.read && (n.type === "fleetio_issue" || n.type === "trip_designated" || n.type === "trip_undesignated" || n.type === "trip_cancelled"));
-    const alertsEl = document.getElementById("notifActiveAlerts");
-    if (activeAlerts.length > 0) {
-      alertsEl.innerHTML = activeAlerts.slice(0, 5).map(n => {
-        const ts = n.createdAt?.toMillis ? new Date(n.createdAt.toMillis()).toLocaleString() : "Just now";
-        return `<div class="bg-orange-50 border-orange-300 border-l-4 border-l-orange-500 rounded-xl p-4 flex items-start gap-4 shadow-sm">
-          <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-lg shrink-0"><i class="fa-solid fa-wrench text-orange-600"></i></div>
-          <div class="flex-1 min-w-0">
-            <div class="flex justify-between items-start">
-              <div class="font-bold text-sm text-slate-800">${escapeHtml(n.title || n.type)}</div>
-              <span class="text-[10px] text-slate-400 whitespace-nowrap ml-3">${ts}</span>
-            </div>
-            <div class="text-xs text-slate-600 mt-1">${escapeHtml(n.message || "")}</div>
-            ${n.vehicleRef ? `<span class="inline-block mt-2 px-2 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-bold text-slate-500"><i class="fa-solid fa-van-shuttle mr-1"></i>${escapeHtml(n.vehicleRef)}</span>` : ""}
-            ${n.tripName ? `<span class="inline-block mt-2 ml-1 px-2 py-0.5 bg-emerald-100 border border-emerald-200 rounded text-[10px] font-bold text-emerald-700"><i class="fa-solid fa-route mr-1"></i>${escapeHtml(n.tripName)}</span>` : ""}
-          </div>
-          <button onclick="window.dismissNotif('${n._id}')" class="text-slate-400 hover:text-slate-600 shrink-0 mt-1" title="Dismiss"><i class="fa-solid fa-xmark"></i></button>
-        </div>`;
-      }).join("");
-    } else {
-      alertsEl.innerHTML = "";
-    }
-
-    const feed = document.getElementById("notifFeed");
-    if (items.length === 0) {
-      feed.innerHTML = `<div class="flex flex-col items-center justify-center py-16 text-slate-300">
-        <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-slate-100"><i class="fa-solid fa-bell-slash text-2xl opacity-50"></i></div>
-        <p class="font-medium text-sm">No notifications yet</p>
-        <p class="text-xs text-slate-400 mt-1">Vehicle alerts and Fleetio automations will appear here</p>
-      </div>`;
-      return;
-    }
-
-    feed.innerHTML = items.map(n => {
-      const ts = n.createdAt?.toMillis ? new Date(n.createdAt.toMillis()).toLocaleString() : "Just now";
-      let typeConfig;
-      switch(n.type) {
-        case "vehicle_alert":
-          typeConfig = { icon: "fa-triangle-exclamation", iconBg: "bg-amber-100 text-amber-600", badge: "bg-amber-100 text-amber-700 border-amber-200", label: "VEHICLE ALERT", cardBorder: n.read ? "" : "border-l-4 border-l-amber-400" };
-          break;
-        case "fleetio_issue":
-          typeConfig = { icon: "fa-wrench", iconBg: "bg-orange-100 text-orange-600", badge: "bg-orange-100 text-orange-700 border-orange-200", label: "FLEETIO ISSUE", cardBorder: n.read ? "" : "border-l-4 border-l-orange-400" };
-          break;
-        case "trip_designated":
-          typeConfig = { icon: "fa-circle-check", iconBg: "bg-emerald-100 text-emerald-600", badge: "bg-emerald-100 text-emerald-700 border-emerald-200", label: "DESIGNATED", cardBorder: n.read ? "" : "border-l-4 border-l-emerald-400" };
-          break;
-        case "trip_undesignated":
-          typeConfig = { icon: "fa-circle-xmark", iconBg: "bg-rose-100 text-rose-600", badge: "bg-rose-100 text-rose-700 border-rose-200", label: "UNDESIGNATED", cardBorder: n.read ? "" : "border-l-4 border-l-rose-400" };
-          break;
-        case "trip_cancelled":
-          typeConfig = { icon: "fa-ban", iconBg: "bg-red-100 text-red-600", badge: "bg-red-100 text-red-700 border-red-200", label: "CANCELLED", cardBorder: n.read ? "" : "border-l-4 border-l-red-500" };
-          break;
-        case "late_signin":
-          typeConfig = { icon: "fa-clock", iconBg: "bg-amber-100 text-amber-600", badge: "bg-amber-100 text-amber-700 border-amber-200", label: "LATE SIGN-IN", cardBorder: n.read ? "" : "border-l-4 border-l-amber-400" };
-          break;
-        case "long_shift":
-          typeConfig = { icon: "fa-moon", iconBg: "bg-purple-100 text-purple-600", badge: "bg-purple-100 text-purple-700 border-purple-200", label: "LONG SHIFT", cardBorder: n.read ? "" : "border-l-4 border-l-purple-400" };
-          break;
-        default:
-          typeConfig = { icon: "fa-bell", iconBg: "bg-blue-100 text-blue-600", badge: "bg-blue-100 text-blue-700 border-blue-200", label: n.type?.toUpperCase() || "ALERT", cardBorder: n.read ? "" : "border-l-4 border-l-blue-400" };
-      }
-      const readClass = n.read ? "opacity-60" : "";
-      return `<div class="bg-white border border-slate-200 rounded-xl p-4 flex items-start gap-4 shadow-sm ${typeConfig.cardBorder} ${readClass} transition hover:shadow-md">
-        <div class="w-10 h-10 rounded-full ${typeConfig.iconBg} flex items-center justify-center text-lg shrink-0"><i class="fa-solid ${typeConfig.icon}"></i></div>
-        <div class="flex-1 min-w-0">
-          <div class="flex justify-between items-start mb-1">
-            <div class="flex items-center gap-2">
-              <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border ${typeConfig.badge}">${typeConfig.label}</span>
-              <span class="font-bold text-sm text-slate-800">${escapeHtml(n.title || "")}</span>
-            </div>
-            <span class="text-[10px] text-slate-400 whitespace-nowrap ml-3">${ts}</span>
-          </div>
-          <div class="text-xs text-slate-600 mt-1">${escapeHtml(n.message || "")}</div>
-          <div class="flex flex-wrap gap-1.5 mt-2">
-            ${n.vehicleRef ? `<span class="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-bold text-slate-500"><i class="fa-solid fa-van-shuttle mr-1"></i>${escapeHtml(n.vehicleRef)}</span>` : ""}
-            ${n.siteRef ? `<span class="px-2 py-0.5 bg-indigo-50 border border-indigo-200 rounded text-[10px] font-bold text-indigo-600"><i class="fa-solid fa-location-dot mr-1"></i>${escapeHtml(n.siteRef)}</span>` : ""}
-            ${n.tripName ? `<span class="px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded text-[10px] font-bold text-emerald-600"><i class="fa-solid fa-route mr-1"></i>${escapeHtml(n.tripName)}</span>` : ""}
-            ${n.repairShop ? `<span class="px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-[10px] font-bold text-amber-600"><i class="fa-solid fa-shop mr-1"></i>${escapeHtml(n.repairShop)}</span>` : ""}
-            ${n.driverName ? `<span class="px-2 py-0.5 bg-sky-50 border border-sky-200 rounded text-[10px] font-bold text-sky-600"><i class="fa-solid fa-user mr-1"></i>${escapeHtml(n.driverName)}</span>` : ""}
-          </div>
-          ${n.pipelineSteps ? `<div class="mt-3 flex items-center gap-1">${n.pipelineSteps.map((s, i) => {
-            const stepClass = s.status === "done" ? "bg-emerald-500 text-white" : s.status === "active" ? "bg-blue-500 text-white animate-pulse" : "bg-slate-200 text-slate-400";
-            return `<div class="flex items-center gap-1">
-              <div class="w-6 h-6 rounded-full ${stepClass} flex items-center justify-center text-[10px] font-bold">${i+1}</div>
-              <span class="text-[10px] font-semibold ${s.status === 'done' ? 'text-emerald-600' : s.status === 'active' ? 'text-blue-600' : 'text-slate-400'}">${escapeHtml(s.label)}</span>
-              ${i < n.pipelineSteps.length - 1 ? '<div class="w-4 h-px bg-slate-300 mx-0.5"></div>' : ''}
-            </div>`;
-          }).join("")}</div>` : ""}
-        </div>
-        <div class="flex flex-col gap-1 shrink-0">
-          ${!n.read ? `<button onclick="window.dismissNotif('${n._id}')" class="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center" title="Mark Read"><i class="fa-solid fa-check text-xs"></i></button>` : ""}
-          ${n.threadId ? `<button onclick="window.switchView('inbox'); window.loadThread('${n.threadId}')" class="w-7 h-7 rounded-lg hover:bg-blue-50 text-blue-500 flex items-center justify-center" title="View Thread"><i class="fa-solid fa-message text-xs"></i></button>` : ""}
-        </div>
-      </div>`;
-    }).join("");
-  };
-
-  window.dismissNotif = async (notifId) => {
-    await updateDoc(doc(db, "organizations", SHARED_ORG_ID, "notifications", notifId), { read: true });
-  };
-
-  window.markAllNotifsRead = async () => {
-    const unread = store.notifications.filter(n => !n.read);
-    for (const n of unread) {
-      await updateDoc(doc(db, "organizations", SHARED_ORG_ID, "notifications", n._id), { read: true });
-    }
-    window.showToast(`Marked ${unread.length} notifications as read`);
-  };
-
-  // ==========================================
-  // AUTOMATION SETTINGS (Fleetio + iCabbi mappings)
-  // ==========================================
-
-  function getAutomationSettings() {
-    return JSON.parse(localStorage.getItem("automation_settings") || '{"repairMappings":[],"issueMappings":[]}');
-  }
-
-  window.openAutomationSettings = () => {
-    const saved = getAutomationSettings();
-    document.getElementById("autoFleetioToken").value = saved.fleetioToken || "";
-    document.getElementById("autoFleetioApiKey").value = saved.fleetioApiKey || "";
-    document.getElementById("autoIcabbiApiUrl").value = saved.icabbiApiUrl || "";
-    document.getElementById("autoIcabbiApiKey").value = saved.icabbiApiKey || "";
-    renderRepairMappings(saved.repairMappings || []);
-    renderIssueMappings(saved.issueMappings || []);
-    document.getElementById("automationSettingsModal").classList.remove("hidden");
-  };
-
-  function renderRepairMappings(mappings) {
-    const el = document.getElementById("repairShopMappings");
-    if (mappings.length === 0) mappings = [{ siteRef: "", shopName: "", address: "" }];
-    el.innerHTML = mappings.map((m, i) => `<div class="flex gap-2 items-center">
-      <input class="repair-site-ref flex-1 bg-white border border-gray-200 p-2 rounded-lg text-xs outline-none" placeholder="Site Ref (e.g. RBG)" value="${escapeHtml(m.siteRef || "")}">
-      <input class="repair-shop-name flex-1 bg-white border border-gray-200 p-2 rounded-lg text-xs outline-none" placeholder="Shop Name" value="${escapeHtml(m.shopName || "")}">
-      <input class="repair-address flex-[2] bg-white border border-gray-200 p-2 rounded-lg text-xs outline-none" placeholder="Address" value="${escapeHtml(m.address || "")}">
-      <button onclick="this.parentElement.remove()" class="text-rose-400 hover:text-rose-600 text-xs"><i class="fa-solid fa-trash"></i></button>
-    </div>`).join("");
-  }
-
-  function renderIssueMappings(mappings) {
-    const el = document.getElementById("issueTypeMappings");
-    if (mappings.length === 0) mappings = [{ keyword: "", tripPrefix: "" }];
-    el.innerHTML = mappings.map((m, i) => `<div class="flex gap-2 items-center">
-      <input class="issue-keyword flex-1 bg-white border border-gray-200 p-2 rounded-lg text-xs outline-none" placeholder="Keyword (e.g. headlight)" value="${escapeHtml(m.keyword || "")}">
-      <input class="issue-prefix flex-1 bg-white border border-gray-200 p-2 rounded-lg text-xs outline-none" placeholder="Trip Name Prefix (e.g. Headlight repair)" value="${escapeHtml(m.tripPrefix || "")}">
-      <button onclick="this.parentElement.remove()" class="text-rose-400 hover:text-rose-600 text-xs"><i class="fa-solid fa-trash"></i></button>
-    </div>`).join("");
-  }
-
-  window.addRepairMapping = () => {
-    const el = document.getElementById("repairShopMappings");
-    el.insertAdjacentHTML("beforeend", `<div class="flex gap-2 items-center">
-      <input class="repair-site-ref flex-1 bg-white border border-gray-200 p-2 rounded-lg text-xs outline-none" placeholder="Site Ref (e.g. RBG)" value="">
-      <input class="repair-shop-name flex-1 bg-white border border-gray-200 p-2 rounded-lg text-xs outline-none" placeholder="Shop Name" value="">
-      <input class="repair-address flex-[2] bg-white border border-gray-200 p-2 rounded-lg text-xs outline-none" placeholder="Address" value="">
-      <button onclick="this.parentElement.remove()" class="text-rose-400 hover:text-rose-600 text-xs"><i class="fa-solid fa-trash"></i></button>
-    </div>`);
-  };
-
-  window.addIssueMapping = () => {
-    const el = document.getElementById("issueTypeMappings");
-    el.insertAdjacentHTML("beforeend", `<div class="flex gap-2 items-center">
-      <input class="issue-keyword flex-1 bg-white border border-gray-200 p-2 rounded-lg text-xs outline-none" placeholder="Keyword (e.g. headlight)" value="">
-      <input class="issue-prefix flex-1 bg-white border border-gray-200 p-2 rounded-lg text-xs outline-none" placeholder="Trip Name Prefix (e.g. Headlight repair)" value="">
-      <button onclick="this.parentElement.remove()" class="text-rose-400 hover:text-rose-600 text-xs"><i class="fa-solid fa-trash"></i></button>
-    </div>`);
-  };
-
-  window.saveAutomationSettings = () => {
-    const repairRows = document.querySelectorAll("#repairShopMappings > div");
-    const repairMappings = Array.from(repairRows).map(row => ({
-      siteRef: row.querySelector(".repair-site-ref").value.trim(),
-      shopName: row.querySelector(".repair-shop-name").value.trim(),
-      address: row.querySelector(".repair-address").value.trim()
-    })).filter(m => m.siteRef);
-
-    const issueRows = document.querySelectorAll("#issueTypeMappings > div");
-    const issueMappings = Array.from(issueRows).map(row => ({
-      keyword: row.querySelector(".issue-keyword").value.trim().toLowerCase(),
-      tripPrefix: row.querySelector(".issue-prefix").value.trim()
-    })).filter(m => m.keyword);
-
-    const settings = {
-      fleetioToken: document.getElementById("autoFleetioToken").value.trim(),
-      fleetioApiKey: document.getElementById("autoFleetioApiKey").value.trim(),
-      icabbiApiUrl: document.getElementById("autoIcabbiApiUrl").value.trim(),
-      icabbiApiKey: document.getElementById("autoIcabbiApiKey").value.trim(),
-      repairMappings,
-      issueMappings
-    };
-
-    localStorage.setItem("automation_settings", JSON.stringify(settings));
-
-    // Also save mappings to Firestore so the worker can read them
-    setDoc(doc(db, "organizations", SHARED_ORG_ID, "settings", "automation"), {
-      repairMappings,
-      issueMappings,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
-
-    document.getElementById("automationSettingsModal").classList.add("hidden");
-    window.showToast("Automation settings saved");
-  };
 
   // ── TRIP DATA VIEWER ──────────────────────────────────────────────────────
   let tdRows = [];
@@ -2632,7 +2314,6 @@ let activeReviewRegion = null;
               window.renderThreadList();
               if(store.activeThreadId && store.activeThread) document.getElementById("activeContactName").innerText = store.activeThread.name; 
           });
-          setupNotificationListener();
           setInterval(poll, 8000);
       });
       store.cannedReplies = JSON.parse(localStorage.getItem("canned")||"[]"); window.renderQuickReplies();
@@ -2655,6 +2336,14 @@ let activeReviewRegion = null;
       if(tagRow) tagRow.addEventListener("wheel", handleScroll);
       if(logTagRow) logTagRow.addEventListener("wheel", handleScroll);
       if(contactTagRow) contactTagRow.addEventListener("wheel", handleScroll);
+
+      document.addEventListener("click", (e) => {
+          const picker = document.getElementById("pinColorPicker");
+          const pinBtn = document.getElementById("headerPinBtn");
+          if (picker && !picker.classList.contains("hidden") && !picker.contains(e.target) && e.target !== pinBtn && !pinBtn?.contains(e.target)) {
+              picker.classList.add("hidden");
+          }
+      });
   })();
 
   // ── Driver Shift History ──────────────────────────────────────────────────
